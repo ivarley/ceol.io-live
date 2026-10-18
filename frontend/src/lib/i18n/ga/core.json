@@ -28,7 +28,7 @@
     "review": true
   },
   "Mazurka": {
-    "ga": "Mazurka",
+    "ga": "Masúrca",
     "review": true
   },
   "Polka": {
@@ -48,7 +48,7 @@
     "review": true
   },
   "Strathspey": {
-    "ga": "Strathspey",
+    "ga": "Sraithspé",
     "review": true
   },
   "Three-Two": {
@@ -96,7 +96,7 @@
     "review": true
   },
   "Harp": {
-    "ga": "Cláirseach",
+    "ga": "Cruit",
     "review": true
   },
   "Low Whistle": {
@@ -324,7 +324,7 @@
     "review": true
   },
   "Logs": {
-    "ga": "Logálacha",
+    "ga": "Logaí",
     "review": true
   },
   "Log": {
@@ -332,7 +332,7 @@
     "review": true
   },
   "Learning": {
-    "ga": "Á fhoghlaim",
+    "ga": "Á bhfoghlaim",
     "review": true
   },
   "Want to learn": {
@@ -360,7 +360,7 @@
     "review": true
   },
   "Home": {
-    "ga": "Tús",
+    "ga": "Baile",
     "review": true
   },
   "Me": {
@@ -408,7 +408,7 @@
     "review": false
   },
   "people|Attended": {
-    "ga": "Bhí i láthair",
+    "ga": "I láthair",
     "review": true
   },
   "Report": {

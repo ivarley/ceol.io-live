@@ -108,7 +108,7 @@
     "review": true
   },
   "Played With": {
-    "ga": "Seinnte le",
+    "ga": "Seinntear in éineacht le",
     "review": true
   },
   "Couldn't load this tune.": {
@@ -484,7 +484,7 @@
     "review": true
   },
   "Set {set}, Tune {position}": {
-    "ga": "Sraith {set}, Fonn {position}",
+    "ga": "Seit {set}, Fonn {position}",
     "review": true
   },
   "Setting: #{id}": {
@@ -508,11 +508,11 @@
     "review": true
   },
   "This tune has not been played in a set with any other tune at this session yet.": {
-    "ga": "Níor seinneadh an fonn seo i sraith le fonn ar bith eile ag an seisiún seo fós.",
+    "ga": "Níor seinneadh an fonn seo i seit le fonn ar bith eile ag an seisiún seo fós.",
     "review": true
   },
   "This tune has not been played in a set with any other tune yet.": {
-    "ga": "Níor seinneadh an fonn seo i sraith le fonn ar bith eile fós.",
+    "ga": "Níor seinneadh an fonn seo i seit le fonn ar bith eile fós.",
     "review": true
   },
   "played-with tunes": {
@@ -520,7 +520,7 @@
     "review": true
   },
   "No set history recorded yet.": {
-    "ga": "Níl stair sraitheanna taifeadta fós.",
+    "ga": "Níl stair seiteanna taifeadta fós.",
     "review": true
   },
   "Loading tunes…": {
@@ -564,7 +564,7 @@
     "review": true
   },
   "Set {set}, tune {position}": {
-    "ga": "Sraith {set}, fonn {position}",
+    "ga": "Seit {set}, fonn {position}",
     "review": true
   },
   "At My Sessions": {
@@ -741,11 +741,11 @@
   },
   "In the repertoire of {n} sessions": {
     "ga": {
-      "one": "Sa stór ceoil ag {n} seisiún",
-      "two": "Sa stór ceoil ag {n} sheisiún",
-      "few": "Sa stór ceoil ag {n} sheisiún",
-      "many": "Sa stór ceoil ag {n} seisiún",
-      "other": "Sa stór ceoil ag {n} seisiún"
+      "one": "Sa stór fonn ag {n} seisiún",
+      "two": "Sa stór fonn ag {n} sheisiún",
+      "few": "Sa stór fonn ag {n} sheisiún",
+      "many": "Sa stór fonn ag {n} seisiún",
+      "other": "Sa stór fonn ag {n} seisiún"
     },
     "review": true
   },

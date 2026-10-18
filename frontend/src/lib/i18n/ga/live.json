@@ -64,11 +64,11 @@
     "review": true
   },
   "Check in": {
-    "ga": "Marcáil i láthair",
+    "ga": "Seiceáil isteach",
     "review": true
   },
   "You're offline — Check in needs a connection.": {
-    "ga": "Tá tú as líne — teastaíonn ceangal chun duine a mharcáil i láthair.",
+    "ga": "Tá tú as líne — teastaíonn ceangal chun duine a sheiceáil isteach.",
     "review": true
   },
   "You're offline — Remove needs a connection.": {
@@ -88,11 +88,11 @@
     "review": true
   },
   "You're offline — naming this log needs a connection.": {
-    "ga": "Tá tú as líne — teastaíonn ceangal chun ainm a chur ar an logáil seo.",
+    "ga": "Tá tú as líne — teastaíonn ceangal chun ainm a chur ar an loga seo.",
     "review": true
   },
   "You're offline — marking complete needs a connection.": {
-    "ga": "Tá tú as líne — teastaíonn ceangal chun í a mharcáil críochnaithe.",
+    "ga": "Tá tú as líne — teastaíonn ceangal chun é a mharcáil críochnaithe.",
     "review": true
   },
   "You're offline — this needs a connection.": {
@@ -144,11 +144,11 @@
     "review": true
   },
   "Set break": {
-    "ga": "Briseadh sraithe",
+    "ga": "Briseadh seite",
     "review": true
   },
   "Set starter": {
-    "ga": "Tosaitheoir sraithe",
+    "ga": "Tosaitheoir seite",
     "review": true
   },
   "Edit notes": {
@@ -180,7 +180,7 @@
     "review": true
   },
   "This log is marked complete — use \"Mark as not complete\" in the header to edit it.": {
-    "ga": "Tá an logáil seo marcáilte críochnaithe — úsáid \"Marcáil neamhchríochnaithe\" sa cheanntásc chun í a chur in eagar.",
+    "ga": "Tá an loga seo marcáilte críochnaithe — úsáid \"Marcáil neamhchríochnaithe\" sa cheanntásc chun é a chur in eagar.",
     "review": true
   },
   "{n} synced": {
@@ -192,7 +192,7 @@
     "review": true
   },
   "Couldn't reach the live log. Retrying…": {
-    "ga": "Níorbh fhéidir an logáil bheo a bhaint amach. Ag triail arís…",
+    "ga": "Níorbh fhéidir an loga beo a bhaint amach. Ag triail arís…",
     "review": true
   },
   "Connection: {status}": {
@@ -256,7 +256,7 @@
     "review": true
   },
   "Traditional Irish Session Logs": {
-    "ga": "Logálacha Seisiún Ceoil Thraidisiúnta",
+    "ga": "Logaí Seisiún Ceoil Thraidisiúnta",
     "review": true
   },
   "(away)": {
@@ -264,7 +264,7 @@
     "review": true
   },
   "({n} devices)": {
-    "ga": "({n} feiste)",
+    "ga": "({n} gléas)",
     "review": true
   },
   "How to use the live logger": {
@@ -324,7 +324,7 @@
     "review": true
   },
   "new set": {
-    "ga": "sraith nua",
+    "ga": "seit nua",
     "review": true
   },
   "Started by {name}": {
@@ -336,7 +336,7 @@
     "review": true
   },
   "Play this set": {
-    "ga": "Seinn an tsraith seo",
+    "ga": "Seinn an tseit seo",
     "review": true
   },
   "Started by": {
@@ -356,7 +356,7 @@
     "review": true
   },
   "start of set": {
-    "ga": "tús na sraithe",
+    "ga": "tús na seite",
     "review": true
   },
   "(unnamed)": {
@@ -436,7 +436,7 @@
     "review": true
   },
   "Couldn't load this session's log.": {
-    "ga": "Níorbh fhéidir logáil an tseisiúin seo a lódáil.",
+    "ga": "Níorbh fhéidir loga an tseisiúin seo a lódáil.",
     "review": true
   },
   "No tunes yet — log one below.": {
@@ -540,7 +540,7 @@
     "review": true
   },
   "Viewing this session log": {
-    "ga": "Logáil an tseisiúin seo á féachaint",
+    "ga": "Ag féachaint ar loga an tseisiúin seo",
     "review": true
   },
   "Log in to edit": {
@@ -548,7 +548,7 @@
     "review": true
   },
   "Edit log": {
-    "ga": "Cuir an logáil in eagar",
+    "ga": "Cuir an loga in eagar",
     "review": true
   },
   "Tune #{id} from thesession.org…": {
@@ -596,7 +596,7 @@
     "review": true
   },
   "is already in this set — merged.": {
-    "ga": "sa tsraith seo cheana — cumascaithe.",
+    "ga": "sa tseit seo cheana — cumaiscthe.",
     "review": true
   },
   "Keep both": {
@@ -648,11 +648,11 @@
     "review": true
   },
   "End the current set": {
-    "ga": "Críochnaigh an tsraith reatha",
+    "ga": "Críochnaigh an tseit reatha",
     "review": true
   },
   "End set": {
-    "ga": "Críochnaigh an tsraith",
+    "ga": "Críochnaigh an tseit",
     "review": true
   },
   "Done logging — switch to read-only view": {
@@ -660,11 +660,11 @@
     "review": true
   },
   "Done with this set: back to the end of the log": {
-    "ga": "Críochnaithe leis an tsraith seo: ar ais go deireadh na logála",
+    "ga": "Críochnaithe leis an tseit seo: ar ais go deireadh an loga",
     "review": true
   },
   "Sets started by…": {
-    "ga": "Sraitheanna tosaithe ag…",
+    "ga": "Seiteanna tosaithe ag…",
     "review": true
   },
   "Filter players…": {
@@ -672,11 +672,11 @@
     "review": true
   },
   "No one checked in yet.": {
-    "ga": "Níl aon duine cláraithe isteach fós.",
+    "ga": "Níl aon duine seiceáilte isteach fós.",
     "review": true
   },
   "Couldn't load who's checked in.": {
-    "ga": "Níorbh fhéidir a lódáil cé atá cláraithe isteach.",
+    "ga": "Níorbh fhéidir a lódáil cé atá seiceáilte isteach.",
     "review": true
   },
   "Add a player": {
@@ -700,7 +700,7 @@
     "review": true
   },
   "You're viewing this log. Add": {
-    "ga": "Tá tú ag féachaint ar an logáil seo. Cuir",
+    "ga": "Tá tú ag féachaint ar an loga seo. Cuir",
     "review": true
   },
   "and switch to edit mode?": {
@@ -756,7 +756,7 @@
     "review": true
   },
   "No one checked in yet": {
-    "ga": "Níl aon duine cláraithe isteach fós",
+    "ga": "Níl aon duine seiceáilte isteach fós",
     "review": true
   },
   "Logging": {
@@ -788,7 +788,7 @@
     "review": true
   },
   "Mark this session log as completely logged?": {
-    "ga": "An logáil seisiúin seo a mharcáil logáilte go hiomlán?",
+    "ga": "An loga seisiúin seo a mharcáil logáilte go hiomlán?",
     "review": true
   },
   "This hides the editing controls.": {
@@ -800,11 +800,11 @@
     "review": true
   },
   "Re-open this session log for editing?": {
-    "ga": "An logáil seisiúin seo a athoscailt le haghaidh eagarthóireachta?",
+    "ga": "An loga seisiúin seo a athoscailt le haghaidh eagarthóireachta?",
     "review": true
   },
   "Re-open log": {
-    "ga": "Athoscail an logáil",
+    "ga": "Athoscail an loga",
     "review": true
   },
   "Re-opening…": {
@@ -816,7 +816,7 @@
     "review": true
   },
   "If you started logging after midnight, the log may be dated a day later than the session actually happened. Set it to the right night here.": {
-    "ga": "Má thosaigh tú ag logáil tar éis meán oíche, d'fhéadfadh dáta lá níos déanaí a bheith ar an logáil ná an lá a bhí an seisiún ann. Socraigh an oíche cheart anseo.",
+    "ga": "Má thosaigh tú ag logáil tar éis meán oíche, d'fhéadfadh dáta lá níos déanaí a bheith ar an loga ná an lá a bhí an seisiún ann. Socraigh an oíche cheart anseo.",
     "review": true
   },
   "Previous day": {
@@ -840,15 +840,15 @@
     "review": true
   },
   "Log name": {
-    "ga": "Ainm na logála",
+    "ga": "Ainm an loga",
     "review": true
   },
   "Several sessions share a day here, so the date on its own won't tell them apart. This name is what the log is called everywhere it's listed.": {
-    "ga": "Bíonn roinnt seisiún ar an lá céanna anseo, mar sin ní leor an dáta leis féin chun idirdhealú a dhéanamh eatarthu. Seo an t-ainm a bheidh ar an logáil i ngach áit a liostaítear í.",
+    "ga": "Bíonn roinnt seisiún ar an lá céanna anseo, mar sin ní leor an dáta leis féin chun idirdhealú a dhéanamh eatarthu. Seo an t-ainm a bheidh ar an loga i ngach áit a liostaítear é.",
     "review": true
   },
   "Most nights don't need one — the date says which session it was. Name this log when the date isn't enough: a night somewhere other than the usual place, or a second session on the same day.": {
-    "ga": "Ní theastaíonn ainm ar fhormhór na n-oícheanta — insíonn an dáta cén seisiún a bhí ann. Tabhair ainm ar an logáil seo nuair nach leor an dáta: oíche in áit eile seachas an gnátháit, nó an dara seisiún ar an lá céanna.",
+    "ga": "Ní theastaíonn ainm ar fhormhór na n-oícheanta — insíonn an dáta cén seisiún a bhí ann. Ainmnigh an loga seo nuair nach leor an dáta: oíche in áit eile seachas an gnátháit, nó an dara seisiún ar an lá céanna.",
     "review": true
   },
   "e.g. At Sarah's house": {
@@ -1232,7 +1232,7 @@
     "review": true
   },
   "Mazurkas": {
-    "ga": "Mazurkaí",
+    "ga": "Masúrcaí",
     "review": true
   },
   "Polkas": {
@@ -1252,7 +1252,7 @@
     "review": true
   },
   "Strathspeys": {
-    "ga": "Strathspeys",
+    "ga": "Sraithspéanna",
     "review": true
   },
   "Three-Twos": {
@@ -1277,11 +1277,11 @@
   },
   "{n} sets": {
     "ga": {
-      "one": "{n} sraith",
-      "two": "{n} shraith",
-      "few": "{n} shraith",
-      "many": "{n} sraith",
-      "other": "{n} sraith"
+      "one": "{n} seit",
+      "two": "{n} sheit",
+      "few": "{n} sheit",
+      "many": "{n} seit",
+      "other": "{n} seit"
     },
     "review": true
   },
@@ -1307,31 +1307,31 @@
   },
   "Assigned {n} sets to {name}": {
     "ga": {
-      "one": "Sannadh {n} sraith do {name}",
-      "two": "Sannadh {n} shraith do {name}",
-      "few": "Sannadh {n} shraith do {name}",
-      "many": "Sannadh {n} sraith do {name}",
-      "other": "Sannadh {n} sraith do {name}"
+      "one": "Sannadh {n} seit ar {name}",
+      "two": "Sannadh {n} sheit ar {name}",
+      "few": "Sannadh {n} sheit ar {name}",
+      "many": "Sannadh {n} seit ar {name}",
+      "other": "Sannadh {n} seit ar {name}"
     },
     "review": true
   },
   "Cleared the starter on {n} sets": {
     "ga": {
-      "one": "Glanadh an tosaitheoir ar {n} sraith",
-      "two": "Glanadh an tosaitheoir ar {n} shraith",
-      "few": "Glanadh an tosaitheoir ar {n} shraith",
-      "many": "Glanadh an tosaitheoir ar {n} sraith",
-      "other": "Glanadh an tosaitheoir ar {n} sraith"
+      "one": "Glanadh an tosaitheoir ar {n} seit",
+      "two": "Glanadh an tosaitheoir ar {n} sheit",
+      "few": "Glanadh an tosaitheoir ar {n} sheit",
+      "many": "Glanadh an tosaitheoir ar {n} seit",
+      "other": "Glanadh an tosaitheoir ar {n} seit"
     },
     "review": true
   },
   "{n} changes saved on this device": {
     "ga": {
-      "one": "{n} athrú sábháilte ar an bhfeiste seo",
-      "two": "{n} athrú sábháilte ar an bhfeiste seo",
-      "few": "{n} athrú sábháilte ar an bhfeiste seo",
-      "many": "{n} n-athrú sábháilte ar an bhfeiste seo",
-      "other": "{n} athrú sábháilte ar an bhfeiste seo"
+      "one": "{n} athrú sábháilte ar an ngléas seo",
+      "two": "{n} athrú sábháilte ar an ngléas seo",
+      "few": "{n} athrú sábháilte ar an ngléas seo",
+      "many": "{n} n-athrú sábháilte ar an ngléas seo",
+      "other": "{n} athrú sábháilte ar an ngléas seo"
     },
     "review": true
   },
@@ -1471,11 +1471,11 @@
   },
   "{actor} restored {n} tunes": {
     "ga": {
-      "one": "Thug {actor} {n} fhonn ar ais",
-      "two": "Thug {actor} {n} fhonn ar ais",
-      "few": "Thug {actor} {n} fhonn ar ais",
-      "many": "Thug {actor} {n} bhfonn ar ais",
-      "other": "Thug {actor} {n} fonn ar ais"
+      "one": "Chuir {actor} {n} fhonn ar ais",
+      "two": "Chuir {actor} {n} fhonn ar ais",
+      "few": "Chuir {actor} {n} fhonn ar ais",
+      "many": "Chuir {actor} {n} bhfonn ar ais",
+      "other": "Chuir {actor} {n} fonn ar ais"
     },
     "review": true
   },
@@ -1484,15 +1484,15 @@
     "review": true
   },
   "{actor} ended a set": {
-    "ga": "Chríochnaigh {actor} sraith",
+    "ga": "Chríochnaigh {actor} seit",
     "review": true
   },
   "{actor} set {person} as starting a set": {
-    "ga": "Mharcáil {actor} {person} mar thosaitheoir sraithe",
+    "ga": "Mharcáil {actor} {person} mar thosaitheoir seite",
     "review": true
   },
   "{actor} cleared a set starter": {
-    "ga": "Ghlan {actor} tosaitheoir sraithe",
+    "ga": "Ghlan {actor} tosaitheoir seite",
     "review": true
   },
   "{actor} confirmed {tune}": {
@@ -1500,7 +1500,7 @@
     "review": true
   },
   "{actor} checked in {person}": {
-    "ga": "Mharcáil {actor} {person} i láthair",
+    "ga": "Sheiceáil {actor} {person} isteach",
     "review": true
   },
   "{actor} updated attendance": {
@@ -1516,7 +1516,7 @@
     "review": true
   },
   "{actor} checked out {person}": {
-    "ga": "Bhain {actor} {person} ón tinreamh",
+    "ga": "Sheiceáil {actor} {person} amach",
     "review": true
   },
   "{actor} edited the notes": {
@@ -1524,31 +1524,31 @@
     "review": true
   },
   "{actor} re-dated this log to {date}, {time}": {
-    "ga": "D'athraigh {actor} dáta na logála seo go {date}, {time}",
+    "ga": "D'athraigh {actor} dáta an loga seo go {date}, {time}",
     "review": true
   },
   "{actor} re-dated this log to {date}": {
-    "ga": "D'athraigh {actor} dáta na logála seo go {date}",
+    "ga": "D'athraigh {actor} dáta an loga seo go {date}",
     "review": true
   },
   "{actor} set this log's time to {time}": {
-    "ga": "Shocraigh {actor} am na logála seo go {time}",
+    "ga": "Shocraigh {actor} am an loga seo go {time}",
     "review": true
   },
   "{actor} cleared this log's time": {
-    "ga": "Ghlan {actor} am na logála seo",
+    "ga": "Ghlan {actor} am an loga seo",
     "review": true
   },
   "{actor} re-dated this log": {
-    "ga": "D'athraigh {actor} dáta na logála seo",
+    "ga": "D'athraigh {actor} dáta an loga seo",
     "review": true
   },
   "{actor} named this log \"{name}\"": {
-    "ga": "Thug {actor} \"{name}\" mar ainm ar an logáil seo",
+    "ga": "Thug {actor} \"{name}\" mar ainm ar an loga seo",
     "review": true
   },
   "{actor} cleared this log's name": {
-    "ga": "Ghlan {actor} ainm na logála seo",
+    "ga": "Ghlan {actor} ainm an loga seo",
     "review": true
   },
   "played at your sessions": {

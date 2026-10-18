@@ -12,7 +12,7 @@
     "review": true
   },
   "Add Session Instance": {
-    "ga": "Cuir ócáid seisiúin leis",
+    "ga": "Cuir tarlú seisiúin leis",
     "review": true
   },
   "Couldn't look up the next usual date, so this is today. Check it before adding.": {
@@ -48,7 +48,7 @@
     "review": true
   },
   "Several sessions share a day at a festival, so the date alone won't tell them apart. This is what the log is called everywhere it's listed.": {
-    "ga": "Bíonn roinnt seisiún ar an lá céanna ag féile, mar sin ní leor an dáta lena n-aithint óna chéile. Seo an t-ainm a bheidh ar an logáil gach áit a liostaítear í.",
+    "ga": "Bíonn roinnt seisiún ar an lá céanna ag féile, mar sin ní leor an dáta lena n-aithint óna chéile. Seo an t-ainm a bheidh ar an loga gach áit a liostaítear é.",
     "review": true
   },
   "Comments:": {
@@ -68,7 +68,7 @@
     "review": true
   },
   "Add a log": {
-    "ga": "Cuir logáil leis",
+    "ga": "Cuir loga leis",
     "review": true
   },
   "Search for a tune": {
@@ -100,11 +100,11 @@
     "review": true
   },
   "No logs with {name}.": {
-    "ga": "Níl logáil ar bith ina bhfuil {name}.",
+    "ga": "Níl loga ar bith ina bhfuil {name}.",
     "review": true
   },
   "No logs yet.": {
-    "ga": "Níl logáil ar bith fós.",
+    "ga": "Níl loga ar bith fós.",
     "review": true
   },
   "Couldn't check which sessions are on now.": {
@@ -112,11 +112,11 @@
     "review": true
   },
   "Couldn't load the logs.": {
-    "ga": "Níorbh fhéidir na logálacha a lódáil.",
+    "ga": "Níorbh fhéidir na logaí a lódáil.",
     "review": true
   },
   "Loading logs...": {
-    "ga": "Logálacha á lódáil...",
+    "ga": "Logaí á lódáil...",
     "review": true
   },
   "Add your first session": {
@@ -124,7 +124,7 @@
     "review": true
   },
   "Add your first log": {
-    "ga": "Cuir do chéad logáil leis",
+    "ga": "Cuir do chéad loga leis",
     "review": true
   },
   "Couldn't add that person. Try again.": {
@@ -144,11 +144,11 @@
     "review": true
   },
   "Couldn't change whether they are archived. Try again.": {
-    "ga": "Níorbh fhéidir an chartlannú a athrú. Bain triail eile as.",
+    "ga": "Níorbh fhéidir iad a chur sa chartlann nó a bhaint aisti. Bain triail eile as.",
     "review": true
   },
   "Couldn't change whether they are archived. Check your connection and try again.": {
-    "ga": "Níorbh fhéidir an chartlannú a athrú. Seiceáil do cheangal agus bain triail eile as.",
+    "ga": "Níorbh fhéidir iad a chur sa chartlann nó a bhaint aisti. Seiceáil do cheangal agus bain triail eile as.",
     "review": true
   },
   "Couldn't change their relationship to this session. Try again.": {
@@ -204,7 +204,7 @@
     "review": true
   },
   "Nobody archived": {
-    "ga": "Níl duine ar bith cartlannaithe",
+    "ga": "Níl duine ar bith sa chartlann",
     "review": true
   },
   "No people in this session yet": {
@@ -272,7 +272,7 @@
     "review": true
   },
   "Archive {name} — hide them from lists (still findable by name)": {
-    "ga": "Cartlannaigh {name} — folaigh ó liostaí iad (is féidir iad a aimsiú de réir ainm fós)",
+    "ga": "Cuir {name} sa chartlann — folaigh ó liostaí iad (is féidir iad a aimsiú de réir ainm fós)",
     "review": true
   },
   "No location specified": {
@@ -416,7 +416,7 @@
     "review": true
   },
   "You'll stop seeing it on your home page and its tunes will no longer count as yours. Everything you logged there stays exactly where it is, and you can join again whenever you like.": {
-    "ga": "Ní fheicfidh tú ar do leathanach Tús é a thuilleadh agus ní áireofar a chuid fonn mar do chuid féin. Fanfaidh gach rud a logáil tú ann díreach mar atá, agus is féidir leat filleadh air am ar bith.",
+    "ga": "Ní fheicfidh tú ar do leathanach Baile é a thuilleadh agus ní áireofar a chuid fonn mar do chuid féin. Fanfaidh gach rud a logáil tú ann díreach mar atá, agus is féidir leat filleadh air am ar bith.",
     "review": true
   },
   "want to learn": {
@@ -424,7 +424,7 @@
     "review": true
   },
   "learning": {
-    "ga": "á fhoghlaim",
+    "ga": "á bhfoghlaim",
     "review": true
   },
   "learned": {
@@ -600,11 +600,11 @@
     "review": true
   },
   "Attended": {
-    "ga": "Bhí mé ann",
+    "ga": "D'fhreastail mé orthu",
     "review": true
   },
   "set {set}, tune {tune}": {
-    "ga": "sraith {set}, fonn {tune}",
+    "ga": "seit {set}, fonn {tune}",
     "review": true
   },
   "My Sessions": {
@@ -692,7 +692,7 @@
     "review": true
   },
   "Log for {name}, {when}": {
-    "ga": "Logáil do {name}, {when}",
+    "ga": "Loga do {name}, {when}",
     "review": true
   },
   "Live": {
@@ -771,11 +771,11 @@
   },
   "{n} logs with {name}": {
     "ga": {
-      "one": "{n} logáil ina bhfuil {name}",
-      "two": "{n} logáil ina bhfuil {name}",
-      "few": "{n} logáil ina bhfuil {name}",
-      "many": "{n} logáil ina bhfuil {name}",
-      "other": "{n} logáil ina bhfuil {name}"
+      "one": "{n} loga ina bhfuil {name}",
+      "two": "{n} loga ina bhfuil {name}",
+      "few": "{n} loga ina bhfuil {name}",
+      "many": "{n} loga ina bhfuil {name}",
+      "other": "{n} loga ina bhfuil {name}"
     },
     "review": true
   },
@@ -791,11 +791,11 @@
   },
   "{n} logs": {
     "ga": {
-      "one": "{n} logáil",
-      "two": "{n} logáil",
-      "few": "{n} logáil",
-      "many": "{n} logáil",
-      "other": "{n} logáil"
+      "one": "{n} loga",
+      "two": "{n} loga",
+      "few": "{n} loga",
+      "many": "{n} loga",
+      "other": "{n} loga"
     },
     "review": true
   },
@@ -994,7 +994,7 @@
     "review": true
   },
   "Regulars": {
-    "ga": "Gnáthsheinnteoirí",
+    "ga": "Seinnteoirí rialta",
     "review": true
   },
   "Last here": {

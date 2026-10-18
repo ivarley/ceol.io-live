@@ -196,7 +196,7 @@
     "review": true
   },
   "Deactivating {name} will prevent them from being added to any sessions, session instances, or tune sets.": {
-    "ga": "Má dhíghníomhachtaítear {name}, ní féidir iad a chur le haon seisiún, ócáid seisiúin ná sraith fonn.",
+    "ga": "Má dhíghníomhachtaítear {name}, ní féidir iad a chur le haon seisiún, tarlú seisiúin ná seit fonn.",
     "review": true
   },
   "Deactivating…": {
@@ -494,7 +494,7 @@
     "review": true
   },
   "Popularity": {
-    "ga": "Éileamh",
+    "ga": "Coitiantacht",
     "review": true
   },
   "Profile fields inherited from the duplicate": {
@@ -666,7 +666,7 @@
     "review": true
   },
   "They cannot be added to sessions, session instances, or tune sets.": {
-    "ga": "Ní féidir iad a chur le seisiúin, ócáidí seisiúin ná sraitheanna fonn.",
+    "ga": "Ní féidir iad a chur le seisiúin, tarluithe seisiúin ná seiteanna fonn.",
     "review": true
   },
   "This also disables their login and stops all emails to their account.": {
@@ -834,7 +834,7 @@
     "review": true
   },
   "Your name stays on the sessions you were part of, as it would for anyone a session admin adds, and the tunes logged at those sessions stay in their logs.": {
-    "ga": "Fanann d'ainm ar na seisiúin a raibh tú páirteach iontu, mar a d'fhanfadh do dhuine ar bith a chuireann bainisteoir seisiúin leis, agus fanann na foinn a logáladh ag na seisiúin sin ina gcuid logálacha.",
+    "ga": "Fanann d'ainm ar na seisiúin a raibh tú páirteach iontu, mar a d'fhanfadh do dhuine ar bith a chuireann bainisteoir seisiúin leis, agus fanann na foinn a logáladh ag na seisiúin sin ina gcuid logaí.",
     "review": true
   },
   "a curated list you set per tune. Starts empty; you add tunes to it one at a time.": {
@@ -1047,11 +1047,11 @@
   },
   "{n} set-starter attributions": {
     "ga": {
-      "one": "{n} sannadh tosaitheora sraithe",
-      "two": "{n} shannadh tosaitheora sraithe",
-      "few": "{n} shannadh tosaitheora sraithe",
-      "many": "{n} sannadh tosaitheora sraithe",
-      "other": "{n} sannadh tosaitheora sraithe"
+      "one": "{n} sannadh tosaitheora seite",
+      "two": "{n} shannadh tosaitheora seite",
+      "few": "{n} shannadh tosaitheora seite",
+      "many": "{n} sannadh tosaitheora seite",
+      "other": "{n} sannadh tosaitheora seite"
     },
     "review": true
   },

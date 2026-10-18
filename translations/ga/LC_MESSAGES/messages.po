@@ -468,7 +468,7 @@ msgstr "Níor aimsíodh an seisiún"
 #: recording_routes.py:128 web_routes.py:3814
 #, review
 msgid "Session instance not found"
-msgstr "Níor aimsíodh an ócáid seisiúin"
+msgstr "Níor aimsíodh an tarlú seisiúin"
 
 #: api_routes.py:218 api_routes.py:409
 #, python-format, review
@@ -533,12 +533,12 @@ msgstr "Ní féidir ach le bainisteoir seisiúin an seisiún seo a athrú"
 #: api_routes.py:1406
 #, python-format, review
 msgid "Did you mean %(name)s, %(area)s? Places are fixed on the Places page; ask a site admin."
-msgstr "An é %(name)s, %(area)s atá i gceist agat? Socraítear na háiteanna ar leathanach na nÁiteanna; iarr ar bhainisteoir an tsuímh."
+msgstr "An é %(name)s, %(area)s atá i gceist agat? Socraítear na láithreacha ar leathanach na Láithreacha; iarr ar bhainisteoir an tsuímh."
 
 #: api_routes.py:1412
 #, python-format, review
 msgid "Did you mean %(name)s? Places are fixed on the Places page; ask a site admin."
-msgstr "An é %(name)s atá i gceist agat? Socraítear na háiteanna ar leathanach na nÁiteanna; iarr ar bhainisteoir an tsuímh."
+msgstr "An é %(name)s atá i gceist agat? Socraítear na láithreacha ar leathanach na Láithreacha; iarr ar bhainisteoir an tsuímh."
 
 #: api_routes.py:1472
 #, python-format, review
@@ -769,17 +769,17 @@ msgstr "Cuir isteach dáta an tseisiúin"
 #: api_routes.py:3216 api_routes.py:12618
 #, review
 msgid "Failed to create session instance"
-msgstr "Theip ar chruthú na hócáide seisiúin"
+msgstr "Theip ar chruthú an tarlaithe seisiúin"
 
 #: api_routes.py:3241
 #, python-format, review
 msgid "Session instance for %(date)s created successfully!"
-msgstr "Cruthaíodh an ócáid seisiúin do %(date)s!"
+msgstr "Cruthaíodh an tarlú seisiúin do %(date)s!"
 
 #: api_routes.py:3254
 #, python-format, review
 msgid "Failed to create session instance: %(error)s"
-msgstr "Theip ar chruthú na hócáide seisiúin: %(error)s"
+msgstr "Theip ar chruthú an tarlaithe seisiúin: %(error)s"
 
 #: api_routes.py:3420
 #, python-format, review
@@ -789,52 +789,52 @@ msgstr "Theip ar mholadh a fháil: %(error)s"
 #: api_routes.py:3553
 #, review
 msgid "Session instance updated successfully!"
-msgstr "Nuashonraíodh an ócáid seisiúin!"
+msgstr "Nuashonraíodh an tarlú seisiúin!"
 
 #: api_routes.py:3561
 #, python-format, review
 msgid "Failed to update session instance: %(error)s"
-msgstr "Theip ar nuashonrú na hócáide seisiúin: %(error)s"
+msgstr "Theip ar nuashonrú an tarlaithe seisiúin: %(error)s"
 
 #: api_routes.py:3685
 #, python-format, review
 msgid "Session instance for %(date)s deleted successfully!"
-msgstr "Scriosadh an ócáid seisiúin do %(date)s!"
+msgstr "Scriosadh an tarlú seisiúin do %(date)s!"
 
 #: api_routes.py:3710
 #, python-format, review
 msgid "Failed to delete session instance: %(error)s"
-msgstr "Theip ar scriosadh na hócáide seisiúin: %(error)s"
+msgstr "Theip ar scriosadh an tarlaithe seisiúin: %(error)s"
 
 #: api_routes.py:3759
 #, review
 msgid "Session log is already marked as complete"
-msgstr "Tá logáil an tseisiúin marcáilte críochnaithe cheana"
+msgstr "Tá loga an tseisiúin marcáilte críochnaithe cheana"
 
 #: api_routes.py:3789
 #, review
 msgid "This session log has been marked as complete."
-msgstr "Marcáladh logáil an tseisiúin seo críochnaithe."
+msgstr "Marcáladh loga an tseisiúin seo críochnaithe."
 
 #: api_routes.py:3798
 #, python-format, review
 msgid "Failed to mark session log complete: %(error)s"
-msgstr "Theip ar logáil an tseisiúin a mharcáil críochnaithe: %(error)s"
+msgstr "Theip ar loga an tseisiúin a mharcáil críochnaithe: %(error)s"
 
 #: api_routes.py:3845
 #, review
 msgid "Session log is not marked as complete"
-msgstr "Níl logáil an tseisiúin marcáilte críochnaithe"
+msgstr "Níl loga an tseisiúin marcáilte críochnaithe"
 
 #: api_routes.py:3875
 #, review
 msgid "This session log has been marked as not complete."
-msgstr "Marcáladh logáil an tseisiúin seo neamhchríochnaithe."
+msgstr "Marcáladh loga an tseisiúin seo neamhchríochnaithe."
 
 #: api_routes.py:3884
 #, python-format, review
 msgid "Failed to mark session log as not complete: %(error)s"
-msgstr "Theip ar logáil an tseisiúin a mharcáil neamhchríochnaithe: %(error)s"
+msgstr "Theip ar loga an tseisiúin a mharcáil neamhchríochnaithe: %(error)s"
 
 #: api_routes.py:3920 api_routes.py:4118
 #, review
@@ -974,17 +974,17 @@ msgstr "Cuir isteach ainm foinn (nó ainmneacha)"
 #: api_routes.py:4887
 #, review
 msgid "Tune added to existing set successfully!"
-msgstr "Cuireadh an fonn leis an tsraith a bhí ann!"
+msgstr "Cuireadh an fonn leis an tseit a bhí ann!"
 
 #: api_routes.py:4890
 #, python-format, review
 msgid "%(num)d tune added to existing set successfully!"
 msgid_plural "%(num)d tunes added to existing set successfully!"
-msgstr[0] "Cuireadh %(num)d fonn leis an tsraith a bhí ann!"
-msgstr[1] "Cuireadh %(num)d fhonn leis an tsraith a bhí ann!"
-msgstr[2] "Cuireadh %(num)d fhonn leis an tsraith a bhí ann!"
-msgstr[3] "Cuireadh %(num)d bhfonn leis an tsraith a bhí ann!"
-msgstr[4] "Cuireadh %(num)d fonn leis an tsraith a bhí ann!"
+msgstr[0] "Cuireadh %(num)d fonn leis an tseit a bhí ann!"
+msgstr[1] "Cuireadh %(num)d fhonn leis an tseit a bhí ann!"
+msgstr[2] "Cuireadh %(num)d fhonn leis an tseit a bhí ann!"
+msgstr[3] "Cuireadh %(num)d bhfonn leis an tseit a bhí ann!"
+msgstr[4] "Cuireadh %(num)d fonn leis an tseit a bhí ann!"
 
 #: api_routes.py:4969
 #, review
@@ -995,16 +995,16 @@ msgstr "Cuireadh an fonn leis!"
 #, python-format, review
 msgid "Set of %(num)d tune added successfully!"
 msgid_plural "Set of %(num)d tunes added successfully!"
-msgstr[0] "Cuireadh sraith de %(num)d fonn leis!"
-msgstr[1] "Cuireadh sraith de %(num)d fhonn leis!"
-msgstr[2] "Cuireadh sraith de %(num)d fhonn leis!"
-msgstr[3] "Cuireadh sraith de %(num)d bhfonn leis!"
-msgstr[4] "Cuireadh sraith de %(num)d fonn leis!"
+msgstr[0] "Cuireadh seit de %(num)d fonn leis!"
+msgstr[1] "Cuireadh seit de %(num)d fhonn leis!"
+msgstr[2] "Cuireadh seit de %(num)d fhonn leis!"
+msgstr[3] "Cuireadh seit de %(num)d bhfonn leis!"
+msgstr[4] "Cuireadh seit de %(num)d fonn leis!"
 
 #: api_routes.py:4978
 #, python-format, review
 msgid "%(num)s tunes in %(sets)s sets added successfully!"
-msgstr "Cuireadh leis: %(num)s fonn i %(sets)s sraith!"
+msgstr "Cuireadh leis: %(num)s fonn i %(sets)s seit!"
 
 #: api_routes.py:4989
 #, python-format, review
@@ -1014,7 +1014,7 @@ msgstr "Theip ar an bhfonn (na foinn) a chur leis: %(error)s"
 #: api_routes.py:5073
 #, python-format, review
 msgid "%(tune_name)s deleted from the set."
-msgstr "Scriosadh %(tune_name)s den tsraith."
+msgstr "Scriosadh %(tune_name)s den tseit."
 
 #: api_routes.py:5082
 #, python-format, review
@@ -1179,32 +1179,32 @@ msgstr "Níor aimsíodh fonn"
 #: api_routes.py:6025
 #, review
 msgid "Tune set not found"
-msgstr "Níor aimsíodh an tsraith"
+msgstr "Níor aimsíodh an tseit"
 
 #: api_routes.py:6031
 #, review
 msgid "Cannot move first set up"
-msgstr "Ní féidir an chéad sraith a bhogadh suas"
+msgstr "Ní féidir an chéad seit a bhogadh suas"
 
 #: api_routes.py:6037
 #, review
 msgid "Cannot move last set down"
-msgstr "Ní féidir an tsraith dheireanach a bhogadh síos"
+msgstr "Ní féidir an tseit dheireanach a bhogadh síos"
 
 #: api_routes.py:6154
 #, review
 msgid "Set moved up successfully"
-msgstr "Bogadh an tsraith suas"
+msgstr "Bogadh an tseit suas"
 
 #: api_routes.py:6156
 #, review
 msgid "Set moved down successfully"
-msgstr "Bogadh an tsraith síos"
+msgstr "Bogadh an tseit síos"
 
 #: api_routes.py:6165
 #, python-format, review
 msgid "Failed to move set: %(error)s"
-msgstr "Theip ar an tsraith a bhogadh: %(error)s"
+msgstr "Theip ar an tseit a bhogadh: %(error)s"
 
 #: api_routes.py:6245
 #, review
@@ -1214,7 +1214,7 @@ msgstr "Ní féidir an chéad fhonn a bhogadh ar chlé"
 #: api_routes.py:6257
 #, review
 msgid "Cannot move tune left across set boundary"
-msgstr "Ní féidir fonn a bhogadh ar chlé thar theorainn sraithe"
+msgstr "Ní féidir fonn a bhogadh ar chlé thar theorainn seite"
 
 #: api_routes.py:6303
 #, review
@@ -1224,7 +1224,7 @@ msgstr "Ní féidir an fonn deireanach a bhogadh ar dheis"
 #: api_routes.py:6315
 #, review
 msgid "Cannot move tune right across set boundary"
-msgstr "Ní féidir fonn a bhogadh ar dheis thar theorainn sraithe"
+msgstr "Ní féidir fonn a bhogadh ar dheis thar theorainn seite"
 
 #: api_routes.py:6363
 #, review
@@ -1244,22 +1244,22 @@ msgstr "Theip ar an bhfonn a bhogadh: %(error)s"
 #: api_routes.py:6441
 #, review
 msgid "Tune added to set successfully!"
-msgstr "Cuireadh an fonn leis an tsraith!"
+msgstr "Cuireadh an fonn leis an tseit!"
 
 #: api_routes.py:6444
 #, python-format, review
 msgid "%(num)d tune added to set successfully!"
 msgid_plural "%(num)d tunes added to set successfully!"
-msgstr[0] "Cuireadh %(num)d fonn leis an tsraith!"
-msgstr[1] "Cuireadh %(num)d fhonn leis an tsraith!"
-msgstr[2] "Cuireadh %(num)d fhonn leis an tsraith!"
-msgstr[3] "Cuireadh %(num)d bhfonn leis an tsraith!"
-msgstr[4] "Cuireadh %(num)d fonn leis an tsraith!"
+msgstr[0] "Cuireadh %(num)d fonn leis an tseit!"
+msgstr[1] "Cuireadh %(num)d fhonn leis an tseit!"
+msgstr[2] "Cuireadh %(num)d fhonn leis an tseit!"
+msgstr[3] "Cuireadh %(num)d bhfonn leis an tseit!"
+msgstr[4] "Cuireadh %(num)d fonn leis an tseit!"
 
 #: api_routes.py:6455
 #, python-format, review
 msgid "Failed to add tunes to set: %(error)s"
-msgstr "Theip ar na foinn a chur leis an tsraith: %(error)s"
+msgstr "Theip ar na foinn a chur leis an tseit: %(error)s"
 
 #: api_routes.py:6546
 #, python-format, review
@@ -1304,7 +1304,7 @@ msgstr "Theip ar bhaill an tseisiúin a fháil: %(error)s"
 #: api_routes.py:6840
 #, python-format, review
 msgid "Failed to get session logs: %(error)s"
-msgstr "Theip ar logálacha an tseisiúin a fháil: %(error)s"
+msgstr "Theip ar logaí an tseisiúin a fháil: %(error)s"
 
 #: api_routes.py:6971
 #, python-format, review
@@ -1674,7 +1674,7 @@ msgstr "Ní mór do attendance a bheith ar cheann díobh seo: %(values)s"
 #: api_routes.py:10645
 #, python-format, review
 msgid "%(person_name)s is deactivated and cannot be checked in"
-msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a mharcáil i láthair"
+msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a sheiceáil isteach"
 
 #: api_routes.py:10684
 #, review
@@ -1734,7 +1734,7 @@ msgstr "Níor aimsíodh an uirlis don duine seo"
 #: api_routes.py:11362 database.py:1385
 #, review
 msgid "Person is not currently attending this session instance"
-msgstr "Níl an duine seo marcáilte i láthair ag an ócáid seisiúin seo"
+msgstr "Níl an duine seo seiceáilte isteach ag an tarlú seisiúin seo"
 
 #: api_routes.py:11400
 #, review
@@ -1834,7 +1834,7 @@ msgstr "Earráid agus na daoine á sábháil: %(error)s"
 #: api_routes.py:12528
 #, review
 msgid "No such place"
-msgstr "Níl a leithéid d'áit ann"
+msgstr "Níl a leithéid de láthair ann"
 
 #: api_routes.py:12895
 #, review
@@ -1914,7 +1914,7 @@ msgstr "Níl scanadh ar siúl le cealú."
 #: api_routes.py:13788
 #, review
 msgid "Tune not found in this session instance"
-msgstr "Níor aimsíodh an fonn san ócáid seisiúin seo"
+msgstr "Níor aimsíodh an fonn sa tarlú seisiúin seo"
 
 #: api_routes.py:13842
 #, review
@@ -1929,27 +1929,27 @@ msgstr "Nuashonraíodh sonraí an fhoinn"
 #: api_routes.py:13983
 #, python-format, review
 msgid "%(person_name)s is deactivated and cannot be set as 'Started By'"
-msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a shocrú mar thosaitheoir sraithe"
+msgstr "Tá %(person_name)s díghníomhachtaithe agus ní féidir é/í a shocrú mar thosaitheoir seite"
 
 #: api_routes.py:14029
 #, python-format, review
 msgid "Invalid set index: %(set_index)s"
-msgstr "Innéacs sraithe neamhbhailí: %(set_index)s"
+msgstr "Innéacs seite neamhbhailí: %(set_index)s"
 
 #: api_routes.py:14057
 #, python-format, review
 msgid "Updated %(num)d tune in set %(set_index)s"
 msgid_plural "Updated %(num)d tunes in set %(set_index)s"
-msgstr[0] "Nuashonraíodh %(num)d fonn i sraith %(set_index)s"
-msgstr[1] "Nuashonraíodh %(num)d fhonn i sraith %(set_index)s"
-msgstr[2] "Nuashonraíodh %(num)d fhonn i sraith %(set_index)s"
-msgstr[3] "Nuashonraíodh %(num)d bhfonn i sraith %(set_index)s"
-msgstr[4] "Nuashonraíodh %(num)d fonn i sraith %(set_index)s"
+msgstr[0] "Nuashonraíodh %(num)d fonn i seit %(set_index)s"
+msgstr[1] "Nuashonraíodh %(num)d fhonn i seit %(set_index)s"
+msgstr[2] "Nuashonraíodh %(num)d fhonn i seit %(set_index)s"
+msgstr[3] "Nuashonraíodh %(num)d bhfonn i seit %(set_index)s"
+msgstr[4] "Nuashonraíodh %(num)d fonn i seit %(set_index)s"
 
 #: api_routes.py:14075
 #, python-format, review
 msgid "Error updating set started_by: %(error)s"
-msgstr "Earráid agus tosaitheoir na sraithe á nuashonrú: %(error)s"
+msgstr "Earráid agus tosaitheoir na seite á nuashonrú: %(error)s"
 
 #: api_routes.py:14332
 #, review
@@ -2491,7 +2491,7 @@ msgstr "Bhain duine eile an fonn sin."
 #: live_logging_routes.py:327
 #, review
 msgid "That record is a set break."
-msgstr "Briseadh sraithe is ea an iontráil sin."
+msgstr "Briseadh seite is ea an iontráil sin."
 
 #: live_logging_routes.py:590
 #, python-format, review
@@ -2516,7 +2516,7 @@ msgstr "Ní raibh aon réimse le hathrú ag change_tune."
 #: live_logging_routes.py:1084
 #, review
 msgid "That record is not a set break."
-msgstr "Ní briseadh sraithe í an iontráil sin."
+msgstr "Ní briseadh seite í an iontráil sin."
 
 #: live_logging_routes.py:1096
 #, python-format, review
@@ -2536,12 +2536,12 @@ msgstr "Ní dáta bailí é sin (bain úsáid as YYYY-MM-DD)."
 #: live_logging_routes.py:1197 live_logging_routes.py:1274
 #, review
 msgid "This session log no longer exists."
-msgstr "Níl an logáil seisiúin seo ann a thuilleadh."
+msgstr "Níl an loga seisiúin seo ann a thuilleadh."
 
 #: live_logging_routes.py:1235
 #, python-format, review
 msgid "This session already has a log dated %(date)s."
-msgstr "Tá logáil ag an seisiún seo cheana dar dáta %(date)s."
+msgstr "Tá loga ag an seisiún seo cheana dar dáta %(date)s."
 
 #: live_logging_routes.py:1266
 #, review
@@ -2601,7 +2601,7 @@ msgstr "Níl an seisiún seo ag coinneáil tinrimh."
 #: live_logging_routes.py:1760
 #, review
 msgid "This session isn't tracking set starters."
-msgstr "Níl an seisiún seo ag coinneáil tosaitheoirí sraithe."
+msgstr "Níl an seisiún seo ag coinneáil tosaitheoirí seite."
 
 #: live_logging_routes.py:1777 live_logging_routes.py:1838
 #, python-format, review
@@ -2646,12 +2646,12 @@ msgstr "An iomarca iarratas ar nodaireacht. Bain triail eile as ar ball beag."
 #: place_routes.py:23
 #, review
 msgid "Only a site admin can change places"
-msgstr "Ní féidir ach le bainisteoir córais áiteanna a athrú"
+msgstr "Ní féidir ach le bainisteoir córais láithreacha a athrú"
 
 #: place_routes.py:37 places.py:617
 #, review
 msgid "That parent doesn't exist"
-msgstr "Níl an mháthairáit sin ann"
+msgstr "Níl an mháthairláthair sin ann"
 
 #: place_routes.py:74 places.py:637
 #, review
@@ -2661,7 +2661,7 @@ msgstr "Tá ainm riachtanach"
 #: place_routes.py:120 place_routes.py:157
 #, review
 msgid "Place not found"
-msgstr "Níor aimsíodh an áit"
+msgstr "Níor aimsíodh an láthair"
 
 #: places.py:255
 #, review
@@ -2671,17 +2671,17 @@ msgstr "Caithfidh litir nó uimhir a bheith in ainm an bhaile"
 #: places.py:347
 #, review
 msgid "That place no longer exists"
-msgstr "Níl an áit sin ann a thuilleadh"
+msgstr "Níl an láthair sin ann a thuilleadh"
 
 #: places.py:381 session_path.py:81
 #, review
 msgid "Path must have exactly two parts, a place and a name, like austin/mueller"
-msgstr "Caithfidh dhá chuid go díreach a bheith sa seoladh, áit agus ainm, mar shampla austin/mueller"
+msgstr "Caithfidh dhá chuid go díreach a bheith sa seoladh, láthair agus ainm, mar shampla austin/mueller"
 
 #: places.py:387
 #, python-format, review
 msgid "The first part of the path must be a place; there is no place \"%(prefix)s\""
-msgstr "Caithfidh áit a bheith sa chéad chuid den seoladh; níl áit ann darb ainm \"%(prefix)s\""
+msgstr "Caithfidh láthair a bheith sa chéad chuid den seoladh; níl láthair ann darb ainm \"%(prefix)s\""
 
 #: places.py:393
 #, python-format, review
@@ -2746,7 +2746,7 @@ msgstr "Tá \"%(slug)s\" in úsáid cheana"
 #: places.py:619
 #, review
 msgid "A parent must be a town or metro, not a festival"
-msgstr "Caithfidh máthairáit a bheith ina baile nó ina cathair, ní ina féile"
+msgstr "Caithfidh máthairláthair a bheith ina baile nó ina cathair, ní ina féile"
 
 #: places.py:624
 #, python-format, review
@@ -2901,17 +2901,17 @@ msgstr "Tá start_ms thar dheireadh an taifeadta"
 #: recording_routes.py:984
 #, review
 msgid "That tune belongs to a different session instance"
-msgstr "Baineann an fonn sin le hócáid seisiúin eile"
+msgstr "Baineann an fonn sin le tarlú seisiúin eile"
 
 #: recording_routes.py:994 recording_routes.py:1526
 #, review
 msgid "That record is a set break, not a tune"
-msgstr "Briseadh sraithe is ea an iontráil sin, ní fonn"
+msgstr "Briseadh seite is ea an iontráil sin, ní fonn"
 
 #: recording_routes.py:1004
 #, review
 msgid "That tune has been deleted from the log"
-msgstr "Scriosadh an fonn sin ón logáil"
+msgstr "Scriosadh an fonn sin ón loga"
 
 #: recording_routes.py:1157
 #, review
@@ -2921,7 +2921,7 @@ msgstr "Tosaíonn fonn ag an nóiméad sin cheana"
 #: recording_routes.py:1246
 #, review
 msgid "That row is no longer in the log"
-msgstr "Níl an iontráil sin sa logáil a thuilleadh"
+msgstr "Níl an iontráil sin sa loga a thuilleadh"
 
 #: recording_routes.py:1366
 #, review
@@ -2956,7 +2956,7 @@ msgstr "Gach %(day)s ó %(start)s go %(end)s"
 #: recurrence_utils.py:247
 #, python-format, review
 msgid "Every other %(day)s from %(start)s-%(end)s"
-msgstr "%(day)s gach re seachtain ó %(start)s go %(end)s"
+msgstr "%(day)s gach ré-sheachtain ó %(start)s go %(end)s"
 
 #: recurrence_utils.py:249
 #, python-format, review
@@ -3341,7 +3341,7 @@ msgstr "Foinn"
 #: templates/admin_activity.html:24 templates/help_base.html:349
 #, review
 msgid "Logs"
-msgstr "Logálacha"
+msgstr "Logaí"
 
 #: templates/admin_activity.html:26
 #, review
@@ -4074,7 +4074,7 @@ msgstr "ag éisteacht"
 #: templates/admin_listen_jobs.html:59
 #, review
 msgid "following the sets"
-msgstr "na sraitheanna á leanúint"
+msgstr "na seiteanna á leanúint"
 
 #: templates/admin_listen_jobs.html:60
 #, review
@@ -4089,7 +4089,7 @@ msgstr "an taifeadadh á fháil"
 #: templates/admin_listen_jobs.html:65
 #, python-format, review
 msgid "%(tunes)s tunes, %(sets)s sets, %(check)s to check"
-msgstr "foinn: %(tunes)s, sraitheanna: %(sets)s, le seiceáil: %(check)s"
+msgstr "foinn: %(tunes)s, seiteanna: %(sets)s, le seiceáil: %(check)s"
 
 #: templates/admin_listen_jobs.html:78 templates/offline.html:35
 #, review
@@ -4104,7 +4104,7 @@ msgstr "Riarachán - Daoine"
 #: templates/admin_places.html:4
 #, review
 msgid "Admin - Places"
-msgstr "Riarachán - Áiteanna"
+msgstr "Riarachán - Láithreacha"
 
 #: templates/admin_recordings.html:4
 #, review
@@ -4219,7 +4219,7 @@ msgstr "seisiún"
 #: templates/admin_recordings.html:174
 #, review
 msgid "No log yet — segmenting writes one, a tune per mark"
-msgstr "Níl logáil ann fós — scríobhann an deighilt ceann, fonn in aghaidh gach mairc"
+msgstr "Níl loga ann fós — scríobhann an deighilt ceann, fonn in aghaidh gach mairc"
 
 #: templates/admin_recordings.html:179 templates/admin_recordings.html:184
 #, python-format, review
@@ -4503,7 +4503,7 @@ msgstr "Baill"
 #: templates/admin_sessions_list.html:31 templates/admin_sessions_list.html:143
 #, review
 msgid "Instances"
-msgstr "Ócáidí"
+msgstr "Tarluithe"
 
 #: templates/admin_sessions_list.html:32 templates/admin_sessions_list.html:153
 #, review
@@ -4569,7 +4569,7 @@ msgstr "Cumasc Fonn"
 #: templates/admin_tabs.html:107
 #, review
 msgid "Places"
-msgstr "Áiteanna"
+msgstr "Láithreacha"
 
 #: templates/admin_tabs.html:17 templates/admin_tabs.html:77
 #: templates/admin_tabs.html:119
@@ -4661,7 +4661,7 @@ msgstr "Cuir duine nua nach bhfuil i dtábla na ndaoine leis an seisiún (m.sh.,
 #: templates/admin_test_links.html:46
 #, review
 msgid "Session Logs"
-msgstr "Logálacha an tseisiúin"
+msgstr "Logaí an tseisiúin"
 
 #: templates/admin_test_links.html:48
 #, review
@@ -4691,7 +4691,7 @@ msgstr "Oíche seisiúin (%(date)s)"
 #: templates/admin_test_links.html:64
 #, review
 msgid "Type a tune name and press Enter to add to log"
-msgstr "Clóscríobh ainm foinn agus brúigh Enter chun é a chur leis an logáil"
+msgstr "Clóscríobh ainm foinn agus brúigh Enter chun é a chur leis an loga"
 
 #: templates/admin_test_links.html:65
 #, review
@@ -4731,7 +4731,7 @@ msgstr "Cóipeáil/greamaigh foinn le Ctrl+C/Ctrl+V"
 #: templates/admin_test_links.html:72
 #, review
 msgid "Click set number label to set \"Started By\" person"
-msgstr "Cliceáil ar uimhir na sraithe chun an duine a thosaigh í a shocrú"
+msgstr "Cliceáil ar uimhir na seite chun an duine a thosaigh í a shocrú"
 
 #: templates/admin_test_links.html:73
 #, review
@@ -4746,12 +4746,12 @@ msgstr "Ceoltóirí na hoíche seisiúin (%(date)s)"
 #: templates/admin_test_links.html:79
 #, review
 msgid "Check in an existing person (search by name)"
-msgstr "Cláraigh láithreacht duine atá ann cheana (cuardaigh de réir ainm)"
+msgstr "Seiceáil isteach duine atá ann cheana (cuardaigh de réir ainm)"
 
 #: templates/admin_test_links.html:80
 #, review
 msgid "Create and check in a new person"
-msgstr "Cruthaigh duine nua agus cláraigh a láithreacht"
+msgstr "Cruthaigh duine nua agus seiceáil isteach é"
 
 #: templates/admin_test_links.html:81
 #, review
@@ -4926,7 +4926,7 @@ msgstr "Bain duine de bhaill an tseisiúin"
 #: templates/admin_test_links.html:157
 #, review
 msgid "Session Admin - Logs"
-msgstr "Riarachán seisiúin - Logálacha"
+msgstr "Riarachán seisiúin - Logaí"
 
 #: templates/admin_test_links.html:159
 #, python-format, review
@@ -5036,7 +5036,7 @@ msgstr "Liosta Mo chuid fonn"
 #: templates/admin_test_links.html:211
 #, review
 msgid "Filter tunes by status (Want to Learn / Learning / Learned)"
-msgstr "Scag foinn de réir stádais (le foghlaim / á fhoghlaim / ar eolas)"
+msgstr "Scag foinn de réir stádais (le foghlaim / á bhfoghlaim / ar eolas)"
 
 #: templates/admin_test_links.html:212
 #, review
@@ -5046,7 +5046,7 @@ msgstr "Cliceáil ar fhonn chun a shonraí a fheiceáil/a athrú"
 #: templates/admin_test_links.html:213
 #, review
 msgid "Change tune status (Want to Learn → Learning → Learned)"
-msgstr "Athraigh stádas foinn (le foghlaim → á fhoghlaim → ar eolas)"
+msgstr "Athraigh stádas foinn (le foghlaim → á bhfoghlaim → ar eolas)"
 
 #: templates/admin_test_links.html:214
 #, review
@@ -5146,7 +5146,7 @@ msgstr "Faigh an lucht freastail"
 #: templates/admin_test_links.html:248
 #, review
 msgid "Check in"
-msgstr "Cláraigh láithreacht"
+msgstr "Seiceáil isteach"
 
 #: templates/admin_test_links.html:249
 #, review
@@ -5346,7 +5346,7 @@ msgstr "Ailiasanna Fonn Seisiúin"
 #: templates/admin_tune_merge.html:601
 #, review
 msgid "Session Log Entries"
-msgstr "Iontrálacha Logála Seisiúin"
+msgstr "Iontrálacha Loga Seisiúin"
 
 #: templates/admin_tune_merge.html:602
 #, review
@@ -5397,11 +5397,11 @@ msgstr[4] "{n} taifead ar stór fonn seisiúin"
 #, python-brace-format, review
 msgid "{n} log entry"
 msgid_plural "{n} log entries"
-msgstr[0] "{n} iontráil logála"
-msgstr[1] "{n} iontráil logála"
-msgstr[2] "{n} iontráil logála"
-msgstr[3] "{n} n-iontráil logála"
-msgstr[4] "{n} iontráil logála"
+msgstr[0] "{n} iontráil loga"
+msgstr[1] "{n} iontráil loga"
+msgstr[2] "{n} iontráil loga"
+msgstr[3] "{n} n-iontráil loga"
+msgstr[4] "{n} iontráil loga"
 
 #: templates/admin_tune_merge.html:610
 #, python-brace-format, review
@@ -5441,7 +5441,7 @@ msgstr "Cumascadh fonn #{old} le #{new}"
 #: templates/admin_tune_merge.html:615
 #, review
 msgid "Tune settings merged"
-msgstr "Leaganacha fonn cumasctha"
+msgstr "Leaganacha fonn cumaiscthe"
 
 #: templates/admin_tune_merge.html:616
 #, review
@@ -5451,7 +5451,7 @@ msgstr "Foinn seisiúin nuashonraithe"
 #: templates/admin_tune_merge.html:617
 #, python-brace-format, review
 msgid "{n} merged"
-msgstr "{n} cumasctha"
+msgstr "{n} cumaiscthe"
 
 #: templates/admin_tune_merge.html:618
 #, review
@@ -5461,7 +5461,7 @@ msgstr "Ailiasanna fonn seisiúin nuashonraithe"
 #: templates/admin_tune_merge.html:619
 #, review
 msgid "Session log entries updated"
-msgstr "Iontrálacha logála seisiúin nuashonraithe"
+msgstr "Iontrálacha loga seisiúin nuashonraithe"
 
 #: templates/admin_tune_merge.html:620
 #, review
@@ -5611,7 +5611,7 @@ msgstr "Ag rith — tosaithe {when}"
 #: templates/admin_tune_merge.html:647
 #, python-brace-format, review
 msgid "{checked} / {total} checked — {merged} merged ({applied} applied), {deleted} deleted, {errors}"
-msgstr "{checked} / {total} seiceáilte — {merged} cumasctha ({applied} curtha i bhfeidhm), {deleted} scriosta, {errors}"
+msgstr "{checked} / {total} seiceáilte — {merged} cumaiscthe ({applied} curtha i bhfeidhm), {deleted} scriosta, {errors}"
 
 #: templates/admin_tune_merge.html:648
 #, review
@@ -5656,7 +5656,7 @@ msgstr "a-z"
 #: templates/admin_tunes.html:46
 #, review
 msgid "popularity"
-msgstr "éileamh"
+msgstr "coitiantacht"
 
 #: templates/admin_tunes.html:47
 #, review
@@ -5686,7 +5686,7 @@ msgstr "Liostaí Fonn"
 #: templates/admin_tunes.html:75
 #, review
 msgid "Popularity"
-msgstr "Éileamh"
+msgstr "Coitiantacht"
 
 #: templates/admin_tunes.html:338
 #, review
@@ -5706,7 +5706,7 @@ msgstr "Níor aimsíodh fonn a fhreagraíonn do \"{query}\""
 #: templates/admin_tunes.html:344
 #, python-brace-format, review
 msgid "Merged into tune #{id}"
-msgstr "Cumascthe le fonn #{id}"
+msgstr "Cumaiscthe le fonn #{id}"
 
 #: templates/auth/change_password.html:4 templates/auth/change_password.html:13
 #, review
@@ -6170,7 +6170,7 @@ msgstr "lógó"
 #: templates/base.html:414
 #, review
 msgid "Traditional Irish Session Logs"
-msgstr "Logálacha Seisiún Traidisiúnta"
+msgstr "Logaí Seisiún Traidisiúnta"
 
 #: templates/base.html:436
 #, review
@@ -6245,7 +6245,7 @@ msgstr "Níl aon fhoinn i bpáirt fós"
 #: templates/common_tunes.html:309
 #, python-format, review
 msgid "You and %(name)s don't have any tunes marked as \"learned\" or \"learning\" in common."
-msgstr "Níl aon fhoinn marcáilte \"ar eolas\" nó \"á fhoghlaim\" i bpáirt agatsa agus ag %(name)s."
+msgstr "Níl aon fhoinn marcáilte \"ar eolas\" nó \"á bhfoghlaim\" i bpáirt agatsa agus ag %(name)s."
 
 #: templates/common_tunes.html:317 templates/tunes.html:124
 #, review
@@ -6270,7 +6270,7 @@ msgstr "Máirseáil"
 #: templates/common_tunes.html:319 templates/tunes.html:126
 #, review
 msgid "Mazurka"
-msgstr "Mazurka"
+msgstr "Masúrca"
 
 #: templates/common_tunes.html:319 templates/tunes.html:126
 #, review
@@ -6295,7 +6295,7 @@ msgstr "Port luascach"
 #: templates/common_tunes.html:321 templates/tunes.html:128
 #, review
 msgid "Strathspey"
-msgstr "Strathspey"
+msgstr "Sraithspé"
 
 #: templates/common_tunes.html:322 templates/tunes.html:129
 #, review
@@ -6644,7 +6644,7 @@ msgstr "Cuardaigh agus cuir daoine leis..."
 #: templates/session_instance_players.html:163
 #, review
 msgid "Check In"
-msgstr "Marcáil i láthair"
+msgstr "Seiceáil isteach"
 
 #: templates/partials/attendance_tab.html:25
 #, review
@@ -6895,13 +6895,13 @@ msgstr "Deimhnithe"
 #: templates/session_admin_person.html:200
 #, review
 msgid "Lets them see this session's <strong>people list and attendance records</strong>. Nothing else grants that — joining a session doesn't, and neither does being checked in."
-msgstr "Ligeann sé dóibh <strong>liosta daoine agus taifid tinrimh</strong> an tseisiúin seo a fheiceáil. Ní thugann aon rud eile é sin — ní thugann dul isteach i seisiún é, ná a bheith marcáilte i láthair."
+msgstr "Ligeann sé dóibh <strong>liosta daoine agus taifid tinrimh</strong> an tseisiúin seo a fheiceáil. Ní thugann aon rud eile é sin — ní thugann dul isteach i seisiún é, ná a bheith seiceáilte isteach."
 
 #: templates/session_admin_person.html:207
 #: templates/session_admin_person.html:669
 #, review
 msgid "Archived"
-msgstr "Cartlannaithe"
+msgstr "Sa chartlann"
 
 #: templates/session_admin_person.html:210
 #, review
@@ -6926,7 +6926,7 @@ msgstr "Bainistigh taifeadtaí"
 #: templates/session_admin_person.html:234
 #, review
 msgid "Lets them upload this session's audio and add tune timestamps to it, from the Recordings section of any of its logs. Also lets them <strong>delete</strong> a recording and the timestamps placed on it. Only takes effect for a Session Admin, and applies to this session alone."
-msgstr "Ligeann sé dóibh fuaim an tseisiúin seo a uaslódáil agus stampaí ama na bhfonn a chur leis, ó chuid na dTaifeadtaí in aon cheann dá logálacha. Ligeann sé dóibh freisin taifeadadh agus na stampaí ama air a <strong>scriosadh</strong>. Ní bhíonn éifeacht leis ach do Bhainisteoir seisiúin, agus baineann sé leis an seisiún seo amháin."
+msgstr "Ligeann sé dóibh fuaim an tseisiúin seo a uaslódáil agus stampaí ama na bhfonn a chur leis, ó chuid na dTaifeadtaí in aon cheann dá logaí. Ligeann sé dóibh freisin taifeadadh agus na stampaí ama air a <strong>scriosadh</strong>. Ní bhíonn éifeacht leis ach do Bhainisteoir seisiúin, agus baineann sé leis an seisiún seo amháin."
 
 #: templates/session_admin_person.html:244
 #, review
@@ -7416,7 +7416,7 @@ msgstr "%(name)s - Sonraí an tSeisiúin Cheoil"
 #: templates/session_detail.html:51
 #, review
 msgid "Open Today's Session Log"
-msgstr "Oscail Logáil an tSeisiúin Inniu"
+msgstr "Oscail Loga an tSeisiúin Inniu"
 
 #: templates/session_detail.html:60
 #, review
@@ -7502,17 +7502,17 @@ msgstr "Níl uirlis ar bith liostaithe"
 #: templates/session_instance_players.html:170
 #, review
 msgid "Checking In ..."
-msgstr "Á mharcáil i láthair ..."
+msgstr "Á sheiceáil isteach ..."
 
 #: templates/session_instance_players.html:171
 #, review
 msgid "Checked in successfully!"
-msgstr "Marcáladh i láthair thú!"
+msgstr "Seiceáladh isteach thú!"
 
 #: templates/session_instance_players.html:172
 #, review
 msgid "Error checking in"
-msgstr "Earráid agus tú á mharcáil i láthair"
+msgstr "Earráid agus tú á sheiceáil isteach"
 
 #: templates/session_instance_players.html:173
 #, python-brace-format, review
@@ -7650,8 +7650,9 @@ msgid "QR Code"
 msgstr "Cód QR"
 
 #: templates/tab_bar.html:34
+#, review
 msgid "Home"
-msgstr "Tús"
+msgstr "Baile"
 
 #: templates/tunes.html:84
 #, review
@@ -7751,17 +7752,17 @@ msgstr "Níor aimsíodh an seisiún: %(path)s"
 #: web_routes.py:566 web_routes.py:758
 #, python-format, review
 msgid "Session instance not found: %(path)s on %(date)s"
-msgstr "Níor aimsíodh an ócáid seisiúin: %(path)s ar %(date)s"
+msgstr "Níor aimsíodh an tarlú seisiúin: %(path)s ar %(date)s"
 
 #: web_routes.py:572 web_routes.py:764
 #, python-format, review
 msgid "Session instance not found: ID %(id)s for session %(path)s"
-msgstr "Níor aimsíodh an ócáid seisiúin: aitheantas %(id)s don seisiún %(path)s"
+msgstr "Níor aimsíodh an tarlú seisiúin: aitheantas %(id)s don seisiún %(path)s"
 
 #: web_routes.py:670
 #, review
 msgid "Players tab requires a specific session instance. Please select a date from the session page."
-msgstr "Teastaíonn ócáid seisiúin ar leith don chluaisín Ceoltóirí. Roghnaigh dáta ó leathanach an tseisiúin."
+msgstr "Teastaíonn tarlú seisiúin ar leith don chluaisín Ceoltóirí. Roghnaigh dáta ó leathanach an tseisiúin."
 
 #: web_routes.py:983
 #, review

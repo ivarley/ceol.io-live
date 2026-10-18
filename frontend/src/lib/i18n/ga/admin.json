@@ -28,7 +28,7 @@
     "review": true
   },
   "The live-logging screen preloads a list of tunes onto each device so typed tune names match instantly — even offline. It holds the": {
-    "ga": "Lódálann scáileán na logála beo liosta fonn ar gach feiste roimh ré, ionas go meaitseálann ainmneacha fonn láithreach — fiú as líne. Coinníonn sé na",
+    "ga": "Lódálann scáileán na logála beo liosta fonn ar gach gléas roimh ré, ionas go meaitseálann ainmneacha fonn láithreach — fiú as líne. Coinníonn sé na",
     "review": true
   },
   "most-played tunes from this session, plus the": {
@@ -36,7 +36,7 @@
     "review": true
   },
   "most globally-popular tunes not already in that set. Bigger numbers match more tunes without a network call, but make each device download a little more.": {
-    "ga": "fonn is coitianta ar fud an domhain nach bhfuil sa tacar sin cheana. Meaitseálann uimhreacha níos mó tuilleadh fonn gan glao líonra, ach íoslódálann gach feiste beagán níos mó.",
+    "ga": "fonn is coitianta ar fud an domhain nach bhfuil sa tacar sin cheana. Meaitseálann uimhreacha níos mó tuilleadh fonn gan glao líonra, ach íoslódálann gach gléas beagán níos mó.",
     "review": true
   },
   "this session's top tunes": {
@@ -160,7 +160,7 @@
     "review": true
   },
   "Monthly patterns must have at least one occurrence selected": {
-    "ga": "Caithfear ócáid amháin ar a laghad a roghnú do phátrún míosúil",
+    "ga": "Caithfear tarlú amháin ar a laghad a roghnú do phátrún míosúil",
     "review": true
   },
   "Invalid JSON format. Please check your recurrence pattern.": {
@@ -220,7 +220,7 @@
     "review": true
   },
   "A festival runs between its first and last dates instead of recurring: the public page leads with the \"Sessions\" tab, grouped by day, and its instances may overlap.": {
-    "ga": "Bíonn féile ar siúl idir a céad dáta agus a dáta deiridh in ionad athfhilleadh: is é an cluaisín \"Seisiúin\", grúpáilte de réir lae, atá chun tosaigh ar an leathanach poiblí, agus féadfaidh a hócáidí forluí.",
+    "ga": "Bíonn féile ar siúl idir a céad dáta agus a dáta deiridh in ionad athfhilleadh: is é an cluaisín \"Seisiúin\", grúpáilte de réir lae, atá chun tosaigh ar an leathanach poiblí, agus féadfaidh a tarluithe forluí.",
     "review": true
   },
   "A regular session recurs on the schedule below. Choose Festival for a multi-day event whose sessions are listed by day.": {
@@ -292,7 +292,7 @@
     "review": true
   },
   "Which occurrences?": {
-    "ga": "Cé na hócáidí?",
+    "ga": "Cé na tarluithe?",
     "review": true
   },
   "Start Time": {
@@ -304,19 +304,19 @@
     "review": true
   },
   "Next 5 Occurrences:": {
-    "ga": "Na 5 ócáid eile:",
+    "ga": "Na 5 tharlú eile:",
     "review": true
   },
   "Auto-Create Instances": {
-    "ga": "Cruthaigh ócáidí go huathoibríoch",
+    "ga": "Cruthaigh tarluithe go huathoibríoch",
     "review": true
   },
   "Automatically create session instances ahead of time": {
-    "ga": "Cruthaigh ócáidí seisiúin roimh ré go huathoibríoch",
+    "ga": "Cruthaigh tarluithe seisiúin roimh ré go huathoibríoch",
     "review": true
   },
   "Create instances": {
-    "ga": "Cruthaigh ócáidí",
+    "ga": "Cruthaigh tarluithe",
     "review": true
   },
   "hours ahead": {
@@ -324,7 +324,7 @@
     "review": true
   },
   "When enabled, the system will automatically create upcoming session instances based on the recurrence pattern. This runs every 15 minutes.": {
-    "ga": "Nuair atá sé seo ar siúl, cruthóidh an córas ócáidí seisiúin atá le teacht go huathoibríoch de réir an phátrúin athfhilltigh. Ritheann sé gach 15 nóiméad.",
+    "ga": "Nuair atá sé seo ar siúl, cruthóidh an córas tarluithe seisiúin atá le teacht go huathoibríoch de réir an phátrúin athfhilltigh. Ritheann sé gach 15 nóiméad.",
     "review": true
   },
   "Active Window": {
@@ -344,7 +344,7 @@
     "review": true
   },
   "Drives the \"Live\" badge, the live-logging screen, and which instance the session page opens on.": {
-    "ga": "Socraíonn sé seo an suaitheantas \"Beo\", scáileán na logála beo, agus an ócáid a osclaíonn leathanach an tseisiúin uirthi.",
+    "ga": "Socraíonn sé seo an suaitheantas \"Beo\", scáileán na logála beo, agus an tarlú a osclaíonn leathanach an tseisiúin air.",
     "review": true
   },
   "People Tracking": {
@@ -360,7 +360,7 @@
     "review": true
   },
   "Allows you to record who started each set. Visible only to members.": {
-    "ga": "Ligeann sé duit taifead a choinneáil ar cé a thosaigh gach sraith. Ní fheiceann ach baill é.",
+    "ga": "Ligeann sé duit taifead a choinneáil ar cé a thosaigh gach seit. Ní fheiceann ach baill é.",
     "review": true
   },
   "Comments": {
@@ -416,27 +416,27 @@
     "review": true
   },
   "Couldn't delete this session instance. Try again.": {
-    "ga": "Níorbh fhéidir an ócáid seisiúin seo a scriosadh. Bain triail eile as.",
+    "ga": "Níorbh fhéidir an tarlú seisiúin seo a scriosadh. Bain triail eile as.",
     "review": true
   },
   "Couldn't delete this session instance. Check your connection and try again.": {
-    "ga": "Níorbh fhéidir an ócáid seisiúin seo a scriosadh. Seiceáil do cheangal, ansin bain triail eile as.",
+    "ga": "Níorbh fhéidir an tarlú seisiúin seo a scriosadh. Seiceáil do cheangal, ansin bain triail eile as.",
     "review": true
   },
   "Deleting instance...": {
-    "ga": "An ócáid á scriosadh...",
+    "ga": "An tarlú á scriosadh...",
     "review": true
   },
   "Loading instance details...": {
-    "ga": "Sonraí na hócáide á lódáil...",
+    "ga": "Sonraí an tarlaithe á lódáil...",
     "review": true
   },
   "This session instance no longer exists.": {
-    "ga": "Níl an ócáid seisiúin seo ann a thuilleadh.",
+    "ga": "Níl an tarlú seisiúin seo ann a thuilleadh.",
     "review": true
   },
   "Couldn't load this session instance.": {
-    "ga": "Níorbh fhéidir an ócáid seisiúin seo a lódáil.",
+    "ga": "Níorbh fhéidir an tarlú seisiúin seo a lódáil.",
     "review": true
   },
   "Time:": {
@@ -464,15 +464,15 @@
     "review": true
   },
   "View Full Log": {
-    "ga": "Féach ar an logáil iomlán",
+    "ga": "Féach ar an loga iomlán",
     "review": true
   },
   "Edit Log": {
-    "ga": "Cuir an logáil in eagar",
+    "ga": "Cuir an loga in eagar",
     "review": true
   },
   "Delete This Instance": {
-    "ga": "Scrios an ócáid seo",
+    "ga": "Scrios an tarlú seo",
     "review": true
   },
   "Confirm Deletion": {
@@ -480,7 +480,7 @@
     "review": true
   },
   "Are you sure you want to delete this session instance?": {
-    "ga": "An bhfuil tú cinnte gur mian leat an ócáid seisiúin seo a scriosadh?",
+    "ga": "An bhfuil tú cinnte gur mian leat an tarlú seisiúin seo a scriosadh?",
     "review": true
   },
   "This will remove:": {
@@ -492,19 +492,19 @@
     "review": true
   },
   "Yes, Delete Instance": {
-    "ga": "Scrios an ócáid",
+    "ga": "Scrios an tarlú",
     "review": true
   },
   "Couldn't add the session instance. Try again.": {
-    "ga": "Níorbh fhéidir an ócáid seisiúin a chur leis. Bain triail eile as.",
+    "ga": "Níorbh fhéidir an tarlú seisiúin a chur leis. Bain triail eile as.",
     "review": true
   },
   "Couldn't add the session instance. Check your connection and try again.": {
-    "ga": "Níorbh fhéidir an ócáid seisiúin a chur leis. Seiceáil do cheangal, ansin bain triail eile as.",
+    "ga": "Níorbh fhéidir an tarlú seisiúin a chur leis. Seiceáil do cheangal, ansin bain triail eile as.",
     "review": true
   },
   "Session Instance History": {
-    "ga": "Stair ócáidí an tseisiúin",
+    "ga": "Stair tarluithe an tseisiúin",
     "review": true
   },
   "Couldn't load the session history.": {
@@ -516,7 +516,7 @@
     "review": true
   },
   "No session instances found.": {
-    "ga": "Níor aimsíodh ócáid seisiúin ar bith.",
+    "ga": "Níor aimsíodh tarlú seisiúin ar bith.",
     "review": true
   },
   "Players": {
@@ -556,7 +556,7 @@
     "review": true
   },
   "Archive": {
-    "ga": "Cartlannaigh",
+    "ga": "Cuir sa chartlann",
     "review": true
   },
   "Restored": {
@@ -588,7 +588,7 @@
     "review": true
   },
   "User · Confirmed · Member · Visitor · Archived · Session admin · System admin": {
-    "ga": "Úsáideoir · Deimhnithe · Ball · Cuairteoir · Cartlannaithe · Bainisteoir seisiúin · Bainisteoir córais",
+    "ga": "Úsáideoir · Deimhnithe · Ball · Cuairteoir · Sa chartlann · Bainisteoir seisiúin · Bainisteoir córais",
     "review": true
   },
   "Last Attended": {
@@ -648,11 +648,11 @@
     "review": true
   },
   "Archived — hidden from default lists": {
-    "ga": "Cartlannaithe — i bhfolach ó na gnáthliostaí",
+    "ga": "Sa chartlann — i bhfolach ó na gnáthliostaí",
     "review": true
   },
   "Not archived": {
-    "ga": "Gan chartlannú",
+    "ga": "Níl sa chartlann",
     "review": true
   },
   "Not a session admin": {
@@ -720,11 +720,11 @@
     "review": true
   },
   "Search places": {
-    "ga": "Cuardaigh áiteanna",
+    "ga": "Cuardaigh láithreacha",
     "review": true
   },
   "Add a place": {
-    "ga": "Cuir áit leis",
+    "ga": "Cuir láthair leis",
     "review": true
   },
   "Address": {
@@ -768,7 +768,7 @@
     "review": true
   },
   "Add place": {
-    "ga": "Cuir áit leis",
+    "ga": "Cuir láthair leis",
     "review": true
   },
   "Delete {name}": {
@@ -780,11 +780,11 @@
     "review": true
   },
   "Nothing uses this place, so nothing else changes.": {
-    "ga": "Níl aon rud ag úsáid na háite seo, mar sin ní athraíonn aon rud eile.",
+    "ga": "Níl aon rud ag úsáid na láithreach seo, mar sin ní athraíonn aon rud eile.",
     "review": true
   },
   "Delete place": {
-    "ga": "Scrios an áit",
+    "ga": "Scrios an láthair",
     "review": true
   },
   "Updates": {
@@ -796,7 +796,7 @@
     "review": true
   },
   "Checked In": {
-    "ga": "Cláraithe isteach",
+    "ga": "Seiceáilte isteach",
     "review": true
   },
   "Latest Session": {
@@ -972,11 +972,11 @@
     "review": true
   },
   "Synced, but could not refresh the log: {error}": {
-    "ga": "Sioncrónaíodh, ach níorbh fhéidir an logáil a athnuachan: {error}",
+    "ga": "Sioncrónaíodh, ach níorbh fhéidir an loga a athnuachan: {error}",
     "review": true
   },
   "Saved the {label} encode on this device ({n} MB) — the tool now works offline": {
-    "ga": "Sábháladh an t-ionchódú {label} ar an bhfeiste seo ({n} MB) — oibríonn an uirlis as líne anois",
+    "ga": "Sábháladh an t-ionchódú {label} ar an ngléas seo ({n} MB) — oibríonn an uirlis as líne anois",
     "review": true
   },
   "Download cancelled": {
@@ -1056,7 +1056,7 @@
     "review": true
   },
   "{name} at {time} — tap it in the log to name it": {
-    "ga": "{name} ag {time} — tapáil é sa logáil chun ainm a thabhairt air",
+    "ga": "{name} ag {time} — tapáil é sa loga chun ainm a thabhairt air",
     "review": true
   },
   "Logging a new tune needs a connection.": {
@@ -1068,7 +1068,7 @@
     "review": true
   },
   "Removed \"{name}\" from the log": {
-    "ga": "Baineadh \"{name}\" den logáil",
+    "ga": "Baineadh \"{name}\" den loga",
     "review": true
   },
   "Could not remove \"{name}\": {error}": {
@@ -1076,7 +1076,7 @@
     "review": true
   },
   "Start a new set with…": {
-    "ga": "Tosaigh sraith nua le…",
+    "ga": "Tosaigh seit nua le…",
     "review": true
   },
   "Add a tune": {
@@ -1124,7 +1124,7 @@
     "review": true
   },
   "Saved on this device ({n} MB) — plays with no connection": {
-    "ga": "Sábháilte ar an bhfeiste seo ({n} MB) — seinneann gan cheangal",
+    "ga": "Sábháilte ar an ngléas seo ({n} MB) — seinneann gan cheangal",
     "review": true
   },
   "saved": {
@@ -1136,7 +1136,7 @@
     "review": true
   },
   "Download this encode to the device so the tool works with no connection": {
-    "ga": "Íoslódáil an t-ionchódú seo chuig an bhfeiste ionas go n-oibríonn an uirlis gan cheangal",
+    "ga": "Íoslódáil an t-ionchódú seo chuig an ngléas ionas go n-oibríonn an uirlis gan cheangal",
     "review": true
   },
   "save offline": {
@@ -1172,7 +1172,7 @@
     "review": true
   },
   "Open this night's log in edit mode — you'll come back here, at this moment in the audio": {
-    "ga": "Oscail logáil na hoíche seo le cur in eagar — fillfidh tú anseo, ag an nóiméad seo san fhuaim",
+    "ga": "Oscail loga na hoíche seo le cur in eagar — fillfidh tú anseo, ag an nóiméad seo san fhuaim",
     "review": true
   },
   "Fix": {
@@ -1180,7 +1180,7 @@
     "review": true
   },
   "Fix the log": {
-    "ga": "Ceartaigh an logáil",
+    "ga": "Ceartaigh an loga",
     "review": true
   },
   "export": {
@@ -1204,7 +1204,7 @@
     "review": true
   },
   "end of set {n}": {
-    "ga": "deireadh shraith {n}",
+    "ga": "deireadh sheit {n}",
     "review": true
   },
   "M marks where it stopped": {
@@ -1216,11 +1216,11 @@
     "review": true
   },
   "set {n}": {
-    "ga": "sraith {n}",
+    "ga": "seit {n}",
     "review": true
   },
   "last of set": {
-    "ga": "deireadh na sraithe",
+    "ga": "deireadh na seite",
     "review": true
   },
   "log a tune": {
@@ -1228,7 +1228,7 @@
     "review": true
   },
   "M logs a new tune starting here · E ends the set": {
-    "ga": "Logálann M fonn nua ag tosú anseo · Críochnaíonn E an tsraith",
+    "ga": "Logálann M fonn nua ag tosú anseo · Críochnaíonn E an tseit",
     "review": true
   },
   "−15s": {
@@ -1252,7 +1252,7 @@
     "review": true
   },
   "end of set": {
-    "ga": "deireadh na sraithe",
+    "ga": "deireadh na seite",
     "review": true
   },
   "new tune": {
@@ -1260,7 +1260,7 @@
     "review": true
   },
   "End of set": {
-    "ga": "Deireadh na sraithe",
+    "ga": "Deireadh na seite",
     "review": true
   },
   "Log a tune": {
@@ -1312,7 +1312,7 @@
     "review": true
   },
   "explicit end (end of a set)": {
-    "ga": "deireadh sainráite (deireadh sraithe)",
+    "ga": "deireadh sainráite (deireadh seite)",
     "review": true
   },
   "undo the last mark": {
@@ -1324,7 +1324,7 @@
     "review": true
   },
   "move the cursor in the log": {
-    "ga": "bog an cúrsóir sa logáil",
+    "ga": "bog an cúrsóir sa loga",
     "review": true
   },
   "go to the cursor tune's mark": {
@@ -1356,7 +1356,7 @@
     "review": true
   },
   "The audio could not be loaded. Offline, the tool needs a copy saved on this device (\"save offline\" while connected); online, the signed URL may have expired — reload the page.": {
-    "ga": "Níorbh fhéidir an fhuaim a lódáil. As líne, teastaíonn cóip atá sábháilte ar an bhfeiste seo ón uirlis (\"sábháil as líne\" agus tú ceangailte); ar líne, b’fhéidir go bhfuil an URL sínithe as feidhm — athlódáil an leathanach.",
+    "ga": "Níorbh fhéidir an fhuaim a lódáil. As líne, teastaíonn cóip atá sábháilte ar an ngléas seo ón uirlis (\"sábháil as líne\" agus tú ceangailte); ar líne, b’fhéidir go bhfuil an URL sínithe as feidhm — athlódáil an leathanach.",
     "review": true
   },
   "The audio file could not be loaded. The signed URL may have expired — reload the page.": {
@@ -1364,7 +1364,7 @@
     "review": true
   },
   "Set {n}": {
-    "ga": "Sraith {n}",
+    "ga": "Seit {n}",
     "review": true
   },
   "Not linked to a tune yet — tap to search for it": {
@@ -1392,11 +1392,11 @@
     "review": true
   },
   "Last tune of the set — needs an explicit end": {
-    "ga": "Fonn deiridh na sraithe — teastaíonn deireadh sainráite",
+    "ga": "Fonn deiridh na seite — teastaíonn deireadh sainráite",
     "review": true
   },
   "Jump to {time} — saved on this device, waiting to sync": {
-    "ga": "Léim go {time} — sábháilte ar an bhfeiste seo, ag fanacht le sioncrónú",
+    "ga": "Léim go {time} — sábháilte ar an ngléas seo, ag fanacht le sioncrónú",
     "review": true
   },
   "Jump to {time}": {
@@ -1404,7 +1404,7 @@
     "review": true
   },
   "Remove this tune from the log": {
-    "ga": "Bain an fonn seo den logáil",
+    "ga": "Bain an fonn seo den loga",
     "review": true
   },
   "Unplace this tune": {
@@ -1416,11 +1416,11 @@
     "review": true
   },
   "Start a new set here": {
-    "ga": "Tosaigh sraith nua anseo",
+    "ga": "Tosaigh seit nua anseo",
     "review": true
   },
   "This session instance has no logged tunes, so there is nothing to place.": {
-    "ga": "Níl fonn logáilte ag an ócáid seisiúin seo, mar sin níl aon rud le suí.",
+    "ga": "Níl fonn logáilte ag an tarlú seisiúin seo, mar sin níl aon rud le suí.",
     "review": true
   },
   "Log the first tune": {
@@ -1509,11 +1509,11 @@
   },
   "{n} places": {
     "ga": {
-      "one": "{n} áit",
-      "two": "{n} áit",
-      "few": "{n} áit",
-      "many": "{n} n-áit",
-      "other": "{n} áit"
+      "one": "{n} láthair",
+      "two": "{n} láthair",
+      "few": "{n} láthair",
+      "many": "{n} láthair",
+      "other": "{n} láthair"
     },
     "review": true
   },
@@ -1628,7 +1628,7 @@
     "review": true
   },
   "Could not reload the log: {error}": {
-    "ga": "Níorbh fhéidir an logáil a athlódáil: {error}",
+    "ga": "Níorbh fhéidir an loga a athlódáil: {error}",
     "review": true
   },
   "{n} s": {
@@ -1652,7 +1652,7 @@
     "review": true
   },
   "following the sets": {
-    "ga": "na sraitheanna á leanúint",
+    "ga": "na seiteanna á leanúint",
     "review": true
   },
   "putting the tunes in": {
@@ -1733,11 +1733,11 @@
   },
   "in {n} sets": {
     "ga": {
-      "one": "i {n} sraith",
-      "two": "i {n} shraith",
-      "few": "i {n} sraith",
-      "many": "i {n} sraith",
-      "other": "i {n} sraith"
+      "one": "i {n} seit",
+      "two": "i {n} sheit",
+      "few": "i {n} seit",
+      "many": "i {n} seit",
+      "other": "i {n} seit"
     },
     "review": true
   },

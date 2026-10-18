@@ -36,7 +36,7 @@
     "review": true
   },
   "Who started this set?": {
-    "ga": "Cé a thosaigh an tsraith seo?",
+    "ga": "Cé a thosaigh an tseit seo?",
     "review": true
   },
   "Attendance": {
@@ -52,7 +52,7 @@
     "review": true
   },
   "Archived": {
-    "ga": "Cartlannaithe",
+    "ga": "Sa chartlann",
     "review": true
   },
   "Back to list": {
@@ -100,7 +100,7 @@
     "review": true
   },
   "archived": {
-    "ga": "cartlannaithe",
+    "ga": "sa chartlann",
     "review": true
   },
   "visitor": {
@@ -108,11 +108,11 @@
     "review": true
   },
   "Check out": {
-    "ga": "Bain ón tinreamh",
+    "ga": "Seiceáil amach",
     "review": true
   },
   "Check out {name}": {
-    "ga": "Bain {name} ón tinreamh",
+    "ga": "Seiceáil {name} amach",
     "review": true
   },
   "No one here by that name.": {
@@ -196,7 +196,7 @@
     "review": true
   },
   "Path must have exactly two parts, a place and a name, like austin/mueller": {
-    "ga": "Caithfidh dhá chuid go díreach a bheith sa seoladh, áit agus ainm, mar shampla austin/mueller",
+    "ga": "Caithfidh dhá chuid go díreach a bheith sa seoladh, láthair agus ainm, mar shampla austin/mueller",
     "review": true
   },
   "Path can't contain an empty part (//)": {
@@ -328,7 +328,7 @@
     "review": true
   },
   "Every other {day} from {start}-{end}": {
-    "ga": "{day} gach re seachtain ó {start} go {end}",
+    "ga": "{day} gach ré-sheachtain ó {start} go {end}",
     "review": true
   },
   "Every {n} weeks on {day} from {start}-{end}": {
@@ -604,11 +604,11 @@
     "review": true
   },
   "Record set starters": {
-    "ga": "Taifead cé a thosaíonn sraitheanna",
+    "ga": "Taifead cé a thosaíonn seiteanna",
     "review": true
   },
   "Record who started each set. Visible only to members.": {
-    "ga": "Taifead cé a thosaigh gach sraith. Ní fheiceann ach baill é.",
+    "ga": "Taifead cé a thosaigh gach seit. Ní fheiceann ach baill é.",
     "review": true
   },
   "Requires attendance.": {
@@ -628,7 +628,7 @@
     "review": true
   },
   "No, a new place (/{slug})": {
-    "ga": "Ní hea, áit nua (/{slug})",
+    "ga": "Ní hea, láthair nua (/{slug})",
     "review": true
   },
   "Use /{slug}": {

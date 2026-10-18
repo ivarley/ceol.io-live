@@ -23,6 +23,9 @@ The terms come in three levels:
 - **Coined:** drafted while translating the app's roughly 3,000 strings, mostly for
   screen and technical vocabulary. These need the most scrutiny.
 
+A native speaker reviewed the list on 2026-10-17, and the product owner adopted their
+suggestions; the rows they changed say "Changed in review (2026-10-17)".
+
 ## Agreed terms
 
 | English | Irish | Usage notes |
@@ -38,22 +41,22 @@ The terms come in three levels:
 | waltz | válsa | |
 | barndance | damhsa sciobóil | |
 | air / slow air | fonn mall | |
-| set (tunes played together) | sraith | Two or three tunes played back to back. Used constantly in the live logger ("start a new set", "set starter"). |
+| set (tunes played together) | seit (gen. seite, pl. seiteanna) | Two or three tunes played back to back. Used constantly in the live logger ("start a new set", "set starter"). Changed in review (2026-10-17): was "sraith". |
 | setting (a version of a tune) | leagan | From thesession.org: one tune has many written settings. |
 | key (D, Ador …) | gléas | The key names themselves stay as written. |
 | session | seisiún (pl. seisiúin) | A regular gathering where people play. |
 | Sessions (the tab) | Seisiúin | |
 | session leader | ceannaire seisiúin | |
 | festival | féile | A festival is shown as a set of sessions per year. |
-| log (a night's list of tunes) | logáil | Noun and verb are the same word. Plural on a tab: Logálacha (proposed below). |
-| to log (a tune) | logáil | "Logáil 'X' mar atá" = log "X" as typed. |
+| log (a night's list of tunes) | loga (pl. logaí) | The thing: "an loga seo", "Cuir an loga in eagar". Changed in review (2026-10-17): was "logáil"; Irish doesn't like to use the verbal noun for the thing. |
+| to log (a tune), logging | logáil | The verb and the activity only: "Logáil 'X' mar atá" = log "X" as typed; "ag logáil" = logging. |
 | member | ball | Of a session's roster. |
 | visitor | cuairteoir | Someone who came once, not a regular. |
-| place | áit | A town, metro or festival in the session directory. |
-| town | baile | |
+| place | láthair (gen. láithreach, pl. láithreacha) | A town, metro or festival in the session directory. Changed in review (2026-10-17): was "áit". "áit" stays for plain "where" ("i ngach áit", "an áit ar stop tú"). |
+| town | baile | Also the Home tab (below); context tells them apart. |
 | My Tunes | Mo chuid fonn | The page listing a person's tunes. |
 | want to learn | le foghlaim | One of three learning statuses. |
-| learning | á fhoghlaim | |
+| learning | á bhfoghlaim | Changed in review (2026-10-17): was "á fhoghlaim", to say that many tunes are being learned. A sentence about one tune keeps "á fhoghlaim". |
 | learned / know it | ar eolas | |
 | instrument | uirlis | |
 | fiddle | fidil | |
@@ -66,7 +69,7 @@ The terms come in three levels:
 | guitar | giotár | |
 | bouzouki | búsúcaí | |
 | bodhrán | bodhrán | |
-| Home (the tab) | Tús | First tab of the app. |
+| Home (the tab) | Baile | First tab of the app. Changed in review (2026-10-17): was "Tús", which sounds odd; most apps say "Baile". |
 | Me (the tab) | Mise | Your profile and settings. |
 | About (the tab) | Eolas | |
 | admin (a person) | bainisteoir | A session's admin, or the badge "BAINISTEOIR". |
@@ -84,27 +87,27 @@ Drafted for words the first round didn't cover, and already used in the interfac
 | English | Irish | Usage notes |
 |---|---|---|
 | march | máirseáil | Tune type. |
-| mazurka | mazurka | Usually left as is. |
-| strathspey | strathspey | Scottish tune type; usually left as is. |
+| mazurka | masúrca | Per tearma.ie. Changed in review (2026-10-17). |
+| strathspey | sraithspé | Scottish tune type, per tearma.ie. Changed in review (2026-10-17). |
 | three-two | trí-dó | Tune type (3/2 time). Often left in English. |
-| harp | cláirseach | |
+| harp | cruit | Changed in review (2026-10-17): a "cruit" is the harp of Gaelic music, a "cláirseach" the classical harp, and Irish musicians would say "cruit". |
 | low whistle | feadóg íseal | |
 | mandolin | maindilín | |
 | piano | pianó | |
 | piano accordion | cairdín pianó | |
-| Logs (a tab, plural) | Logálacha | The tab listing a session's nights. Plural of logáil; does it read naturally? |
+| Logs (a tab, plural) | Logaí | The tab listing a session's nights. Changed in review (2026-10-17): was "Logálacha". |
 | On Now | Ar siúl anois | Sessions happening right now. |
 | tunebook (on thesession.org) | leabhar fonn | How many thesession.org members have saved a tune. |
-| repertoire | stór ceoil | One older page said "stór fonn"; we settled on stór ceoil. |
-| session instance (one night) | ócáid seisiúin | One dated occurrence of a recurring session. |
-| check in / checked in | marcáil i láthair / i láthair | Marking yourself present at tonight's session. Not "cláraigh", which is register. |
-| check out | bain ón tinreamh | |
+| repertoire | stór fonn | Changed in review (2026-10-17): was "stór ceoil". |
+| session instance (one night) | tarlú seisiúin (pl. tarluithe) | One dated occurrence of a recurring session. Changed in review (2026-10-17): was "ócáid", which means a grand event. The reviewer isn't happy with "tarlú" (lit. happening) either, but it is the best so far. |
+| check in / checked in | seiceáil isteach / seiceáilte isteach | Marking yourself present at tonight's session. A status reads "I láthair". Not "cláraigh", which is register. Changed in review (2026-10-17): was "marcáil i láthair". |
+| check out | seiceáil amach | Changed in review (2026-10-17): was "bain ón tinreamh". |
 | attendance | tinreamh | |
-| Attended (people present) | Bhí i láthair | A list of who was there. |
-| Attended (nights I went to) | Bhí mé ann | A filter on your own logs. Same English word as the row above, different Irish. |
+| Attended (people present) | I láthair | A list of who was there. Changed in review (2026-10-17): the "Bhí" was unnecessary. |
+| Attended (nights I went to) | D'fhreastail mé orthu | A filter on your own logs. Same English word as the row above, different Irish. Changed in review (2026-10-17): was "Bhí mé ann". The iOS app has one string for both, so it says "I láthair" for now. |
 | register | cláraigh | |
 | path / web address | seoladh / seoladh gréasáin | A session's address on the site, e.g. ceol.app/sessions/austin/mueller. See "Words with two meanings". |
-| device | feiste | Not "gléas", which is key. |
+| device | gléas | Changed in review (2026-10-17): was "feiste". Also the word for key; context tells them apart. |
 | sync | sioncrónaigh / sioncrónú | Offline changes sent when the connection returns. |
 | recording | taifeadadh (pl. taifeadtaí) | Audio of a session. "Ag taifeadadh" = recording now. |
 | notation | nodaireacht | ABC sheet-music notation. |
@@ -113,22 +116,22 @@ Drafted for words the first round didn't cover, and already used in the interfac
 | venue | ionad | The pub or hall. |
 | time zone | crios ama | |
 | schedule | sceideal | |
-| archived / archive | cartlannaithe / cartlannaigh | |
+| archived / archive | sa chartlann / cuir sa chartlann | Changed in review (2026-10-17): was "cartlannaithe / cartlannaigh", which is comprehensible but less natural. |
 | merge | cumaisc / cumasc | Combining two duplicate tunes or people. |
 | password | pasfhocal | |
 | email | ríomhphost | |
 | username | ainm úsáideora | |
 | account | cuntas | |
 | system admin / session admin | bainisteoir córais / bainisteoir seisiúin | |
-| set starter | tosaitheoir sraithe | The person who started a set. |
+| set starter | tosaitheoir seite | The person who started a set. |
 | live logger | logálaí beo | The screen several people use to log a session as it happens. |
 | Live / Live now | Beo / Beo anois | |
-| log details | sonraí na logála | |
+| log details | sonraí an loga | |
 | insert / insertion point | cuir isteach / pointe ionsáite | Where the next logged tune will go. |
 | queued (waiting to sync) | sa scuaine | "⏳ 3 athrú sa scuaine" |
 | connecting / reconnecting | ag ceangal / ag athcheangal | |
 | sort / sort and filter | sórtáil / sórtáil agus scag | |
-| every other week | gach re seachtain | In schedule summaries. |
+| every other week | gach ré-sheachtain | In schedule summaries. Changed in review (2026-10-17). |
 | ID | aitheantas | Mostly in error messages. |
 | redirect | atreorú / atreoraíonn | thesession.org merged tune pages. |
 | cache | taisce / cuir sa taisce | |
@@ -137,7 +140,7 @@ Drafted for words the first round didn't cover, and already used in the interfac
 | field | réimse | A form field. |
 | parameter | paraiméadar | Developer-facing messages only. |
 | deactivated / reactivated | díghníomhachtaithe / athghníomhachtaíodh | |
-| parent place | máthairáit | E.g. Austin is the parent of Round Rock. |
+| parent place | máthairláthair | E.g. Austin is the parent of Round Rock. Changed in review (2026-10-17), following "láthair". |
 | metro | cathair | A metro area grouping towns. |
 | recording segment | mír | One tune's stretch of a recording. |
 | timestamp | stampa ama | |
@@ -150,26 +153,26 @@ Words the translation needed that neither list covered, grouped by where they ap
 
 | English | Irish | Usage notes |
 |---|---|---|
-| new set | sraith nua | Label shown as "SRAITH NUA" in the logger. |
-| start of the set | tús na sraithe | "＋ tús na sraithe" |
-| finish the set | Críochnaigh an tsraith | Button. |
+| new set | seit nua | Label shown as "SEIT NUA" in the logger. |
+| start of the set | tús na seite | "＋ tús na seite" |
+| finish the set | Críochnaigh an tseit | Button. |
 | Not this one | Ní hé seo é | Rejecting a suggested tune match. |
 | Pick one above | Roghnaigh ceann thuas | |
 | tune name | ainm an fhoinn | Placeholder in the typing box. |
-| merged with X | cumascaithe le X | When a typed tune turned out to be one already in the set. |
-| assigned X to Y | Sannadh X do Y | Toast after choosing who started a set. |
-| moved / restored | Bhog / Thug … ar ais | "Bhog Sarah an fonn" |
+| merged with X | cumaiscthe le X | When a typed tune turned out to be one already in the set. Changed in review (2026-10-17): the spelling. |
+| assigned X to Y | Sannadh X ar Y | Toast after choosing who started a set. Changed in review (2026-10-17). |
+| moved / restored | Bhog / Chuir … ar ais | "Bhog Sarah an fonn". Changed in review (2026-10-17). |
 | split / join | Scoilt / Ceangail | Splitting one set in two, or joining two sets. |
 | seams (between sets) | uamanna | |
-| set tray | tráidire na sraithe | |
+| set tray | tráidire na seite | |
 | drop zones / drop target | limistéir scaoilte / sprioc scaoilte | Drag and drop. |
 | entry (a row in a log) | iontráil | |
 | Start time / End time | Am tosaigh / Am deiridh | |
 | Starts / Ends | Tosaíonn / Críochnaíonn | "Tosaíonn 19:00" on a card. |
 | Change the date | Athraigh an dáta | |
-| Give this log a name | Tabhair ainm ar an logáil seo | |
+| Give this log a name | Ainmnigh an loga seo | Changed in review (2026-10-17): shorter. |
 | Mark finished | Marcáil críochnaithe | Closing a night's log. |
-| Played with | Seinnte le | Tunes most often played in the same set. |
+| Played with | Seinntear in éineacht le | Tunes most often played in the same set. Changed in review (2026-10-17): clearer, and avoids the verbal adjective. |
 | Any type | Cineál ar bith | Search filter. |
 | Both | An dá cheann | |
 | on your list | ar do liosta | "★ ar do liosta" |
@@ -204,7 +207,7 @@ Words the translation needed that neither list covered, grouped by where they ap
 | Sort / Added | SÓRTÁIL / CURTHA LEIS | Section labels on filter sheets. |
 | Sorting downward / upward | Ag sórtáil anuas / aníos | Accessibility labels. |
 | alphabetical | De réir aibítre | |
-| Popular here / everywhere | Éileamh anseo / i ngach áit | Sort options. |
+| Popular here / everywhere | Coitianta anseo / i ngach áit | Sort options. "Popularity" is "Coitiantacht". Changed in review (2026-10-17): was "Éileamh". |
 | per instrument | De réir uirlise | Learning status per instrument. |
 | automatic / manual | Uathoibríoch / De láimh | |
 | Optional email | Ríomhphost (roghnach) | Form placeholder. |
@@ -217,12 +220,12 @@ Words the translation needed that neither list covered, grouped by where they ap
 | Tonight | Anocht | "Mueller · Anocht" |
 | Came N nights | Bhí i láthair N oíche | With plural forms. |
 | Keep attendance | Coinnigh tinreamh | Session setting. |
-| Track who starts sets | Coinnigh cé a thosaíonn sraitheanna | |
+| Track who starts sets | Coinnigh cé a thosaíonn seiteanna | |
 | Festival (several sessions on one date) | Féile (roinnt seisiún ar an dáta céanna) | |
-| Every week / every other week / monthly | Gach seachtain / Gach re seachtain / Gach mí | Schedule summaries. |
+| Every week / every other week / monthly | Gach seachtain / Gach ré-sheachtain / Gach mí | Schedule summaries. |
 | first, second … last (Sunday) | an chéad, an dara, an tríú, an ceathrú, an ceann deireanach | "An chéad Domhnach den mhí" |
 | No regular schedule | Gan sceideal rialta | |
-| regulars | gnáthsheinnteoirí | |
+| regulars | seinnteoirí rialta | Changed in review (2026-10-17). |
 | player | seinnteoir | |
 | roster | rolla | |
 | relationship (member/visitor) | gaol | |
@@ -250,7 +253,7 @@ which. Added 2026-10-10, not yet reviewed.
 | Log automatically at 100% | Logáil go huathoibríoch ag 100% | A switch on the meter: when it is sure of a tune, it logs it without a tap. |
 | Options | Roghanna | The meter's folded-away section holding its two switches. |
 | Upload the recording to Ceol | Uaslódáil an taifeadadh chuig Ceol | A switch: off, a night's recording stays on the phone. |
-| Kept on this phone | Coinnithe ar an bhfón seo | A recording's status when it wasn't uploaded. |
+| Kept on this phone | Á choinneáil ar an bhfón seo | A recording's status when it wasn't uploaded. Changed in review (2026-10-17). |
 | Start Listening | Tosaigh ag éisteacht | The big button that starts recording a night and listening to it. |
 | Starting up… | Ag tosú… | The meter's state until the listener first answers, a few seconds in. |
 | No tune playing | Níl fonn á sheinm | The meter's state when it hears talk, tuning or silence. |
@@ -276,7 +279,7 @@ Mostly in messages people see only when something goes wrong.
 | upload | uaslódáil | |
 | waveform | tonnchruth | Audio display. |
 | encode | ionchódú | |
-| meter log | loga méadair | Kept apart from logáil. |
+| meter log | loga méadair | The listening meter's own record, not a night's log. |
 | integer / positive number / negative | slánuimhir / uimhir dheimhneach / diúltach | |
 | search query | téarma cuardaigh | |
 | string (text value) | teaghrán | Developer-facing. |
@@ -296,7 +299,7 @@ Choices that apply across the whole interface, not to one word.
 | Convention | What Ceol does | Example |
 |---|---|---|
 | Plurals | Five forms, by the plural rules for Irish: one, two, few (3–6), many (7–10), other. | 1 fonn, 2 fhonn, 5 fhonn, 8 bhfonn, 20 fonn |
-| Counts in labels where a plural form was awkward | Label, colon, number. | "Foinn: 12 · Sraitheanna: 4" |
+| Counts in labels where a plural form was awkward | Label, colon, number. | "Foinn: 12 · Seiteanna: 4" |
 | Clock | 24-hour on every Irish page and screen. | 19:00–22:00 |
 | Dates | Irish day and month names from the standard locale data. | Dé hAoine 23 Deireadh Fómhair |
 | Capitals | No title case on Irish labels: sentence case only. | "Mo chuid fonn", not "Mo Chuid Fonn" |
@@ -310,23 +313,24 @@ Choices that apply across the whole interface, not to one word.
 - **seoladh** is used for a session's web address (path), and in one message for
   "sending" ("Theip ar an seoladh" = sending failed). Is that confusing, and should
   sending use another word?
-- **gléas** means a musical key here, so a phone or tablet is **feiste**.
+- **gléas** means both a musical key and a phone or tablet (since the 2026-10-17
+  review); context tells them apart.
+- **baile** is both a town and the Home tab.
+- **láthair** is a place in the directory, and "i láthair" is present (attendance).
 - **Admin** is two words: **bainisteoir** for a person, **Riarachán** for the admin area.
-- **Attended** is two phrases: **Bhí i láthair** (who was present) and **Bhí mé ann**
-  (nights I went to).
+- **Attended** is two phrases: **I láthair** (who was present) and **D'fhreastail mé
+  orthu** (nights I went to).
 - **taifeadadh** is kept for audio recordings; attendance records are **cuntas tinrimh**.
 
 ## Open questions for the reviewer
 
-- Does **Logálacha** read naturally as the plural of logáil, for a tab listing a
-  session's nights?
 - **fonn** for any tune and **port** only for a jig: is that how players speak, or would
   players say "port" for any tune?
 - Is the 24-hour clock right for an Irish-language interface, or would 12-hour with
   "i.n." / "r.n." read better?
-- Tune types like **mazurka**, **strathspey** and **three-two** are left mostly as is.
-  Are there settled Irish names?
-- **stór ceoil** for repertoire: natural, or is there a word players use?
+- **three-two** is left mostly as is. Is there a settled Irish name?
+- **tarlú** for a session instance: the reviewer's best so far, but not a happy fit.
+  Is there something better?
 - For screen vocabulary (toast, drawer, badge, swipe), is there a usual Irish choice,
   for example from Irish-language phone settings, that would be more familiar?
 - Register: is the tone friendly enough? Messages use the imperative ("Cliceáil an nasc

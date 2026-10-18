@@ -96,7 +96,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Mharcáil %@ %@ i láthair"
+            "value": "Sheiceáil %@ %@ isteach"
           }
         }
       }
@@ -112,7 +112,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Bhain %@ %@ ón tinreamh"
+            "value": "Sheiceáil %@ %@ amach"
           }
         }
       }
@@ -122,7 +122,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ghlan %@ tosaitheoir sraithe"
+            "value": "Ghlan %@ tosaitheoir seite"
           }
         }
       }
@@ -132,7 +132,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ghlan %@ ainm na logála seo"
+            "value": "Ghlan %@ ainm an loga seo"
           }
         }
       }
@@ -142,7 +142,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ghlan %@ am na logála seo"
+            "value": "Ghlan %@ am an loga seo"
           }
         }
       }
@@ -194,7 +194,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Chríochnaigh %@ sraith"
+            "value": "Chríochnaigh %@ seit"
           }
         }
       }
@@ -230,7 +230,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tá %@ ar siúl anois: oscail logáil na hoíche anocht"
+            "value": "Tá %@ ar siúl anois: oscail loga na hoíche anocht"
           }
         }
       }
@@ -262,7 +262,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Thug %@ \"%@\" mar ainm ar an logáil seo"
+            "value": "Thug %@ \"%@\" mar ainm ar an loga seo"
           }
         }
       }
@@ -272,7 +272,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "D'athraigh %@ dáta na logála seo"
+            "value": "D'athraigh %@ dáta an loga seo"
           }
         }
       }
@@ -288,7 +288,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "D'athraigh %@ dáta na logála seo go %@"
+            "value": "D'athraigh %@ dáta an loga seo go %@"
           }
         }
       }
@@ -304,7 +304,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "D'athraigh %@ dáta na logála seo go %@, %@"
+            "value": "D'athraigh %@ dáta an loga seo go %@, %@"
           }
         }
       }
@@ -346,7 +346,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Thug %@ %@ ar ais"
+            "value": "Chuir %@ %@ ar ais"
           }
         }
       }
@@ -362,7 +362,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Mharcáil %@ %@ mar thosaitheoir sraithe"
+            "value": "Mharcáil %@ %@ mar thosaitheoir seite"
           }
         }
       }
@@ -378,7 +378,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Shocraigh %@ am na logála seo go %@"
+            "value": "Shocraigh %@ am an loga seo go %@"
           }
         }
       }
@@ -896,31 +896,31 @@
               "few": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld logáil"
+                  "value": "%lld loga"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld logáil"
+                  "value": "%lld loga"
                 }
               },
               "one": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld logáil"
+                  "value": "%lld loga"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld logáil"
+                  "value": "%lld loga"
                 }
               },
               "two": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld logáil"
+                  "value": "%lld loga"
                 }
               }
             }
@@ -1043,7 +1043,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "%lld as %lld sraith"
+            "value": "%lld as %lld seit"
           }
         }
       }
@@ -1332,31 +1332,31 @@
               "few": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld shraith"
+                  "value": "%lld sheit"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld sraith"
+                  "value": "%lld seit"
                 }
               },
               "one": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld sraith"
+                  "value": "%lld seit"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld sraith"
+                  "value": "%lld seit"
                 }
               },
               "two": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld shraith"
+                  "value": "%lld sheit"
                 }
               }
             }
@@ -1455,7 +1455,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Foinn: %1$lld · Sraitheanna: %2$lld"
+            "value": "Foinn: %1$lld · Seiteanna: %2$lld"
           }
         }
       }
@@ -1468,31 +1468,31 @@
               "few": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld fhonn i sraith amháin"
+                  "value": "%lld fhonn i seit amháin"
                 }
               },
               "many": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld bhfonn i sraith amháin"
+                  "value": "%lld bhfonn i seit amháin"
                 }
               },
               "one": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld fhonn i sraith amháin"
+                  "value": "%lld fhonn i seit amháin"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld fonn i sraith amháin"
+                  "value": "%lld fonn i seit amháin"
                 }
               },
               "two": {
                 "stringUnit": {
                   "state": "needs_review",
-                  "value": "%lld fhonn i sraith amháin"
+                  "value": "%lld fhonn i seit amháin"
                 }
               }
             }
@@ -1625,7 +1625,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "(%lld feiste)"
+            "value": "(%lld gléas)"
           }
         }
       }
@@ -1696,7 +1696,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "1 logáil"
+            "value": "1 loga"
           }
         }
       }
@@ -1766,7 +1766,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "1 sraith"
+            "value": "1 seit"
           }
         }
       }
@@ -1786,7 +1786,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "1 fhonn i sraith amháin"
+            "value": "1 fhonn i seit amháin"
           }
         }
       }
@@ -2510,7 +2510,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Cartlannaigh %@ — folaigh ó liostaí iad (is féidir iad a aimsiú de réir ainm fós)"
+            "value": "Cuir %@ sa chartlann — folaigh ó liostaí iad (is féidir iad a aimsiú de réir ainm fós)"
           }
         }
       }
@@ -2520,7 +2520,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Cartlannaithe"
+            "value": "Sa chartlann"
           }
         }
       }
@@ -2576,7 +2576,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sannadh %@ do %@"
+            "value": "Sannadh %@ ar %@"
           }
         }
       }
@@ -2626,7 +2626,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Bhí i láthair"
+            "value": "I láthair"
           }
         }
       }
@@ -2768,7 +2768,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Brabhsáil logálacha seisiún"
+            "value": "Brabhsáil logaí seisiún"
           }
         }
       }
@@ -2928,7 +2928,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ceol, téigh chuig Tús"
+            "value": "Ceol, téigh chuig Baile"
           }
         }
       }
@@ -2978,7 +2978,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Níorbh fhéidir an duine a mharcáil i láthair."
+            "value": "Níorbh fhéidir an duine a sheiceáil isteach."
           }
         }
       }
@@ -2988,7 +2988,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Bain %@ ón tinreamh"
+            "value": "Seiceáil %@ amach"
           }
         }
       }
@@ -3316,7 +3316,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Níorbh fhéidir an chartlannú a athrú. Bain triail eile as."
+            "value": "Níorbh fhéidir iad a chur sa chartlann nó a bhaint aisti. Bain triail eile as."
           }
         }
       }
@@ -3919,7 +3919,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Cuir an logáil in eagar"
+            "value": "Cuir an loga in eagar"
           }
         }
       }
@@ -3999,7 +3999,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Críochnaigh an tsraith"
+            "value": "Críochnaigh an tseit"
           }
         }
       }
@@ -4009,7 +4009,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Críochnaigh an tsraith"
+            "value": "Críochnaigh an tseit"
           }
         }
       }
@@ -4096,7 +4096,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "%@ gach re seachtain"
+            "value": "%@ gach ré-sheachtain"
           }
         }
       }
@@ -4186,7 +4186,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aimsigh fonn sa logáil"
+            "value": "Aimsigh fonn sa loga"
           }
         }
       }
@@ -4196,7 +4196,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aimsigh foinn a bhfuil éileamh orthu"
+            "value": "Aimsigh foinn choitianta"
           }
         }
       }
@@ -4306,7 +4306,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Cláirseach"
+            "value": "Cruit"
           }
         }
       }
@@ -4316,7 +4316,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Níor marcáladh i láthair anseo fós iad"
+            "value": "Níor seiceáladh isteach anseo fós iad"
           }
         }
       }
@@ -4427,7 +4427,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tús"
+            "value": "Baile"
           }
         }
       }
@@ -4748,7 +4748,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Coinnithe ar an bhfón seo"
+            "value": "Á choinneáil ar an bhfón seo"
           }
         }
       }
@@ -4859,7 +4859,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Á fhoghlaim"
+            "value": "Á bhfoghlaim"
           }
         }
       }
@@ -5169,7 +5169,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sonraí na logála"
+            "value": "Sonraí an loga"
           }
         }
       }
@@ -5249,7 +5249,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Logálacha"
+            "value": "Logaí"
           }
         }
       }
@@ -5349,7 +5349,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "An logáil seisiúin seo a mharcáil logáilte go hiomlán?"
+            "value": "An loga seisiúin seo a mharcáil logáilte go hiomlán?"
           }
         }
       }
@@ -5359,7 +5359,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Mazurka"
+            "value": "Masúrca"
           }
         }
       }
@@ -5369,7 +5369,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Mazurkaí"
+            "value": "Masúrcaí"
           }
         }
       }
@@ -5430,7 +5430,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Cumascaithe le %@ atá sa tsraith seo cheana"
+            "value": "Cumaiscthe le %@ atá sa tseit seo cheana"
           }
         }
       }
@@ -5551,7 +5551,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "SRAITH NUA"
+            "value": "SEIT NUA"
           }
         }
       }
@@ -5601,7 +5601,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tabhair ainm ar an logáil seo"
+            "value": "Ainmnigh an loga seo"
           }
         }
       }
@@ -5701,7 +5701,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Níl duine ar bith cartlannaithe."
+            "value": "Níl duine ar bith sa chartlann."
           }
         }
       }
@@ -5821,7 +5821,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Níl aon duine cláraithe isteach fós"
+            "value": "Níl aon duine seiceáilte isteach fós"
           }
         }
       }
@@ -5831,7 +5831,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Níl aon duine cláraithe isteach fós."
+            "value": "Níl aon duine seiceáilte isteach fós."
           }
         }
       }
@@ -6673,7 +6673,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Gach re seachtain"
+            "value": "Gach ré-sheachtain"
           }
         }
       }
@@ -6789,7 +6789,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Caithfidh dhá chuid go díreach a bheith sa seoladh, áit agus ainm, mar shampla austin/mueller"
+            "value": "Caithfidh dhá chuid go díreach a bheith sa seoladh, láthair agus ainm, mar shampla austin/mueller"
           }
         }
       }
@@ -6859,7 +6859,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Áit"
+            "value": "Láthair"
           }
         }
       }
@@ -6889,7 +6889,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Seinn an tsraith seo"
+            "value": "Seinn an tseit seo"
           }
         }
       }
@@ -6989,7 +6989,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Éileamh"
+            "value": "Coitianta"
           }
         }
       }
@@ -6999,7 +6999,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Éileamh"
+            "value": "Coitiantacht"
           }
         }
       }
@@ -7009,7 +7009,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Éileamh i ngach áit"
+            "value": "Coitianta i ngach áit"
           }
         }
       }
@@ -7019,7 +7019,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Éileamh anseo"
+            "value": "Coitianta anseo"
           }
         }
       }
@@ -7160,7 +7160,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Athoscail an logáil"
+            "value": "Athoscail an loga"
           }
         }
       }
@@ -7170,7 +7170,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "An logáil seisiúin seo a athoscailt le haghaidh eagarthóireachta?"
+            "value": "An loga seisiúin seo a athoscailt le haghaidh eagarthóireachta?"
           }
         }
       }
@@ -7292,7 +7292,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Gnáthsheinnteoirí"
+            "value": "Seinnteoirí rialta"
           }
         }
       }
@@ -7941,7 +7941,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sraith %1$lld · %2$@"
+            "value": "Seit %1$lld · %2$@"
           }
         }
       }
@@ -7957,7 +7957,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sraith %1$lld, fonn %2$lld"
+            "value": "Seit %1$lld, fonn %2$lld"
           }
         }
       }
@@ -7977,7 +7977,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Briseadh sraithe"
+            "value": "Briseadh seite"
           }
         }
       }
@@ -7987,7 +7987,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tosaitheoir sraithe"
+            "value": "Tosaitheoir seite"
           }
         }
       }
@@ -7997,7 +7997,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sraitheanna tosaithe ag…"
+            "value": "Seiteanna tosaithe ag…"
           }
         }
       }
@@ -8659,7 +8659,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Strathspey"
+            "value": "Sraithspé"
           }
         }
       }
@@ -8669,7 +8669,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Strathspeys"
+            "value": "Sraithspéanna"
           }
         }
       }
@@ -9183,7 +9183,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Coinnigh cé a thosaíonn sraitheanna"
+            "value": "Coinnigh cé a thosaíonn seiteanna"
           }
         }
       }
@@ -9273,7 +9273,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ainm an fhoinn — tosaíonn sé sraith nua"
+            "value": "Ainm an fhoinn — tosaíonn sé seit nua"
           }
         }
       }
@@ -9967,7 +9967,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Cé a thosaigh an tsraith seo?"
+            "value": "Cé a thosaigh an tseit seo?"
           }
         }
       }
@@ -10119,7 +10119,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tá tú as líne — teastaíonn ceangal chun duine a mharcáil i láthair."
+            "value": "Tá tú as líne — teastaíonn ceangal chun duine a sheiceáil isteach."
           }
         }
       }
@@ -10129,7 +10129,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tá tú as líne — teastaíonn ceangal chun í a mharcáil críochnaithe."
+            "value": "Tá tú as líne — teastaíonn ceangal chun é a mharcáil críochnaithe."
           }
         }
       }
@@ -10139,7 +10139,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tá tú as líne — teastaíonn ceangal chun ainm a chur ar an logáil seo."
+            "value": "Tá tú as líne — teastaíonn ceangal chun ainm a chur ar an loga seo."
           }
         }
       }
@@ -10219,7 +10219,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Fanann d'ainm ar na seisiúin a raibh tú páirteach iontu, mar a d'fhanfadh do dhuine ar bith a chuireann bainisteoir seisiúin leis, agus fanann na foinn a logáladh ag na seisiúin sin ina gcuid logálacha."
+            "value": "Fanann d'ainm ar na seisiúin a raibh tú páirteach iontu, mar a d'fhanfadh do dhuine ar bith a chuireann bainisteoir seisiúin leis, agus fanann na foinn a logáladh ag na seisiúin sin ina gcuid logaí."
           }
         }
       }
@@ -10349,7 +10349,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "cartlannaithe"
+            "value": "sa chartlann"
           }
         }
       }
@@ -10537,7 +10537,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sraith nua"
+            "value": "seit nua"
           }
         }
       }
@@ -11133,7 +11133,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "＋ sraith nua"
+            "value": "＋ seit nua"
           }
         }
       }
@@ -11143,7 +11143,7 @@
         "ga": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "＋ tús na sraithe"
+            "value": "＋ tús na seite"
           }
         }
       }
