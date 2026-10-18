@@ -77,12 +77,15 @@ def update_active_sessions() -> Dict[str, any]:
                 search_start = (now_local - timedelta(days=1)).date()
                 search_end = (now_local + timedelta(days=2)).date()
 
+                # Instances already active are always loaded, whatever their date or
+                # cancelled state: one moved out of the range (set_date) or cancelled
+                # while on now must still be seen here, or nothing ever turns it off.
                 cur.execute("""
                     SELECT session_instance_id, date, start_time, end_time, is_active, is_cancelled
                     FROM session_instance
                     WHERE session_id = %s
-                      AND date BETWEEN %s AND %s
-                      AND is_cancelled = FALSE
+                      AND ((date BETWEEN %s AND %s AND is_cancelled = FALSE)
+                           OR is_active = TRUE)
                     ORDER BY date, start_time
                 """, (session_id, search_start, search_end))
 
@@ -99,8 +102,9 @@ def update_active_sessions() -> Dict[str, any]:
                     if is_active:
                         currently_active_instances.add(inst_id)
 
-                    # Skip instances without defined times (can't determine active window)
-                    if start_time is None or end_time is None:
+                    # Skip cancelled instances and those without defined times (can't
+                    # determine active window)
+                    if is_cancelled or start_time is None or end_time is None:
                         continue
 
                     # Combine date and time to get full datetimes in session timezone

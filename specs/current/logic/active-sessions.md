@@ -66,7 +66,7 @@ Real-time tracking of which sessions are happening now and which people are atte
 
 **Time Changes**: Active window recalculates on next cron (within 15 min)
 
-**Cancelled**: Never marked active (`WHERE is_cancelled=FALSE`)
+**Cancelled**: Never marked active; one cancelled while active is turned off on the next run
 
 **Manual Override**: Admin can set `is_active`, may be reverted by cron
 
@@ -76,7 +76,7 @@ Real-time tracking of which sessions are happening now and which people are atte
 - `idx_session_instance_is_active` WHERE is_active=TRUE
 - `idx_person_active_session` WHERE active_session_instance_id IS NOT NULL
 
-**Query Scope**: Only ±2 days from current date
+**Query Scope**: Yesterday to 2 days ahead, plus every instance already `is_active` whatever its date or cancelled state — so a night moved out of the range (`set_date`) or cancelled while on is still turned off
 
 **Updates**: Batch committed per session
 
