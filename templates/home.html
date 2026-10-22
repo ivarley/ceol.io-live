@@ -62,7 +62,7 @@
     /* Ceol for iPhone: the TestFlight beta, on both the signed-in and signed-out page. */
     .ios-beta {
         max-width: 520px;
-        margin: 1.5rem auto 2rem;
+        margin: 1.25rem auto 0;
         padding: 0.9rem 1.1rem;
         display: flex;
         align-items: center;
@@ -71,8 +71,8 @@
         border-radius: var(--r-lg);
         background: var(--header-bg);
     }
-    /* Signed in, it sits in the page's column like the sections above it. */
-    .ios-beta.in-page { max-width: none; margin: 1.5rem 0 2rem; }
+    /* Signed in, it spans the page's column like the sections below it. */
+    .ios-beta.in-page { max-width: none; margin: 1.25rem 0 0; }
     .ios-beta-text { flex: 1; min-width: 0; }
     .ios-beta-title { font-weight: 600; color: var(--text-color); }
     .ios-beta-sub { font-size: 0.875rem; color: var(--text-muted); }
@@ -108,6 +108,30 @@
 {% block content %}
 <div class="landing-page" style="display: block;">
 
+{# Ceol for iPhone. Until the beta is approved (TESTFLIGHT_BETA_OPEN unset), the
+   button opens a note saying it's coming and how to get TestFlight ready. #}
+<div class="ios-beta{% if current_user.is_authenticated %} in-page{% endif %}">
+    <div class="ios-beta-text">
+        <div class="ios-beta-title">{{ _('Ceol for iPhone') }}</div>
+        <div class="ios-beta-sub">{{ _("Try the beta. You'll need Apple's free TestFlight app.") }}</div>
+    </div>
+    {% if beta_open %}
+    <a class="ios-beta-btn" href="https://testflight.apple.com/join/1hWVVEyc">{{ _('Join the Beta') }}</a>
+    {% else %}
+    <a class="ios-beta-btn" href="https://testflight.apple.com/join/1hWVVEyc" onclick="document.getElementById('iosBetaSoon').showModal(); return false;">{{ _('Join the Beta') }}</a>
+    {% endif %}
+</div>
+{% if not beta_open %}
+<dialog id="iosBetaSoon" class="ios-beta-dialog" aria-labelledby="iosBetaSoonTitle">
+    <h3 id="iosBetaSoonTitle">{{ _('Ceol for iPhone') }}</h3>
+    {% set testflight_link %}<a href="https://apps.apple.com/app/testflight/id899247664">{{ _('TestFlight installed') }}</a>{% endset %}
+    <p>{{ _('The beta is coming soon. To get ready, make sure you have %(link)s.', link=testflight_link) }}</p>
+    <div class="ios-beta-actions">
+        <form method="dialog"><button class="ios-beta-close">{{ _('Close') }}</button></form>
+    </div>
+</dialog>
+{% endif %}
+
 {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
         {% for category, message in messages %}
@@ -141,30 +165,6 @@
     <p class="anon-browse">{{ _("Don't want an account? You can still %(link)s.", link=browse_link) }}</p>
 </div>
 
-{% endif %}
-
-{# Ceol for iPhone. Until the beta is approved (TESTFLIGHT_BETA_OPEN unset), the
-   button opens a note saying it's coming and how to get TestFlight ready. #}
-<div class="ios-beta{% if current_user.is_authenticated %} in-page{% endif %}">
-    <div class="ios-beta-text">
-        <div class="ios-beta-title">{{ _('Ceol for iPhone') }}</div>
-        <div class="ios-beta-sub">{{ _("Try the beta. You'll need Apple's free TestFlight app.") }}</div>
-    </div>
-    {% if beta_open %}
-    <a class="ios-beta-btn" href="https://testflight.apple.com/join/1hWVVEyc">{{ _('Join the Beta') }}</a>
-    {% else %}
-    <a class="ios-beta-btn" href="https://testflight.apple.com/join/1hWVVEyc" onclick="document.getElementById('iosBetaSoon').showModal(); return false;">{{ _('Join the Beta') }}</a>
-    {% endif %}
-</div>
-{% if not beta_open %}
-<dialog id="iosBetaSoon" class="ios-beta-dialog" aria-labelledby="iosBetaSoonTitle">
-    <h3 id="iosBetaSoonTitle">{{ _('Ceol for iPhone') }}</h3>
-    {% set testflight_link %}<a href="https://apps.apple.com/app/testflight/id899247664">{{ _('TestFlight installed') }}</a>{% endset %}
-    <p>{{ _('The beta is coming soon. To get ready, make sure you have %(link)s.', link=testflight_link) }}</p>
-    <div class="ios-beta-actions">
-        <form method="dialog"><button class="ios-beta-close">{{ _('Close') }}</button></form>
-    </div>
-</dialog>
 {% endif %}
 
 </div>
