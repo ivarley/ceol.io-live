@@ -40,7 +40,8 @@ class TestHomeRoute:
               "session_instance_id": 101, "date": datetime(2023, 8, 15).date(),
               "start_time": None, "end_time": None, "location_name": "The Pub",
               "log_complete_date": None, "is_active": False,
-              "tunes_logged": 0, "people_here": 0}],  # upcoming sessions
+              "tunes_logged": 0, "people_here": 0,
+              "session_type": "regular"}],  # upcoming sessions
             [{"name": "Mueller Session", "path": "austin/mueller", "session_id": 2,
               "session_instance_id": 102, "date": datetime(2023, 8, 10).date(),
               "last_edit": datetime(2023, 8, 12)}],  # in-progress logs
@@ -74,6 +75,7 @@ class TestHomeRoute:
         assert payload["learning_count"] == 3
         assert payload["want_to_learn_count"] == 2
         assert payload["upcoming_sessions"][0]["name"] == "Austin Session"
+        assert payload["upcoming_sessions"][0]["session_type"] == "regular"
         assert payload["in_progress_logs"][0]["name"] == "Mueller Session"
         assert payload["in_progress_recordings"][0]["placed"] == 4
         assert payload["in_progress_recordings"][0]["tune_count"] == 11

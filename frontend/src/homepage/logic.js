@@ -37,6 +37,39 @@ export function sessionStatus(session) {
   return 'upcoming'
 }
 
+/**
+ * A festival's rows lead with the instance, as the Logs tab does: at a retreat the
+ * thing you need to know is "Lively Session with Richard Hearn at the Alamo Lobby,
+ * 9:30pm", and which retreat it is goes without saying. So a festival row's title is
+ * the time and the instance's label, and its second line is the festival's name —
+ * the reverse of a regular session, whose name is its title.
+ */
+export function isFestival(session) {
+  return (session?.session_type || 'regular') === 'festival'
+}
+
+/** The time and the place of an instance, as a row's parts. */
+function timeAndPlace(session) {
+  const parts = []
+  const when = instanceTimeLabel(session)
+  if (when) parts.push(when)
+  if (session.location_name) parts.push(session.location_name)
+  return parts
+}
+
+/** A home row's title: the session's name, or at a festival the instance itself. */
+export function homeTitle(session) {
+  if (!session) return ''
+  if (!isFestival(session)) return session.name || ''
+  return timeAndPlace(session).join(' · ') || session.name || ''
+}
+
+/** The opening parts of a home row's second line: where and when, or at a festival
+ *  (where the title already says that) the festival's name. */
+function whereAndWhen(session) {
+  return isFestival(session) ? [session.name].filter(Boolean) : timeAndPlace(session)
+}
+
 /** The status chip's words. "Starts 7:00pm" needs a time; without one, "Today". */
 export function statusLabel(session) {
   const status = sessionStatus(session)
@@ -53,10 +86,7 @@ export function statusLabel(session) {
  */
 export function todaySubtitle(session) {
   if (!session) return ''
-  const parts = []
-  const when = instanceTimeLabel(session)
-  if (when) parts.push(when)
-  if (session.location_name) parts.push(session.location_name)
+  const parts = whereAndWhen(session)
   if (sessionStatus(session) === 'live') {
     const n = session.people_here || 0
     if (n > 0) parts.push(tn(n, '{n} person here', '{n} people here'))
@@ -84,10 +114,7 @@ export function sessionInstanceHref(session) {
 
 /** A week row's second line: the time, and whether you have been yet. */
 export function weekSubtitle(session, todayStr) {
-  const parts = []
-  const when = instanceTimeLabel(session)
-  if (when) parts.push(when)
-  if (session.location_name) parts.push(session.location_name)
+  const parts = whereAndWhen(session)
   if (session.log_complete_date) parts.push(t('logged'))
   else if (todayStr && session.date < todayStr) parts.push(t('not logged'))
   return parts.join(' · ')

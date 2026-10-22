@@ -203,7 +203,7 @@ components:
           items:
             type: object
             required: [name, path, session_id, session_instance_id, date, start_time, log_complete_date,
-                       end_time, location_name, is_active, tunes_logged, people_here]
+                       end_time, location_name, is_active, tunes_logged, people_here, session_type]
             properties:
               name: { type: string }
               path: { type: string }
@@ -217,6 +217,10 @@ components:
               is_active: { type: boolean }
               tunes_logged: { type: integer }
               people_here: { type: integer }
+              # 'regular' or 'festival'. A festival row leads with the instance (its time
+              # and `location_name`, the room-and-leader label) and carries the festival's
+              # `name` as its second line; a regular row leads with `name`.
+              session_type: { type: string, enum: [regular, festival] }
         in_progress_logs:
           type: array
           items:

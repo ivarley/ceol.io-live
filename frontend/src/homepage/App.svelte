@@ -22,6 +22,7 @@
     continueItems,
     editedLabel,
     adjustedCounts,
+    homeTitle,
   } from './logic.js'
 
   let { payload } = $props()
@@ -115,7 +116,7 @@
             <a
               class="week-open"
               href={`/sessions/${session.path}/${session.date}`}
-              aria-label={t('Log for {name}, {when}', { name: session.name, when: weekSubtitle(session, todayStr) })}
+              aria-label={t('Log for {name}, {when}', { name: homeTitle(session), when: weekSubtitle(session, todayStr) })}
             ></a>
             <div class="session-date">
               <div class="session-date-day">{dowOf(session.date)}</div>
@@ -123,7 +124,7 @@
             </div>
           {/snippet}
           {#snippet titleContent()}
-            <a class="session-name" href={`/sessions/${session.path}`}>{session.name}</a>
+            <a class="session-name" href={`/sessions/${session.path}`}>{homeTitle(session)}</a>
           {/snippet}
           {#snippet trailing()}
             {#if session.date === todayStr}

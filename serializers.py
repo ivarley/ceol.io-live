@@ -2717,6 +2717,7 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
         SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date, si.start_time,
                si.end_time, si.log_complete_date, si.is_active,
                COALESCE(si.location_override, s.location_name) AS location_name,
+               COALESCE(s.session_type, 'regular') AS session_type,
                (SELECT COUNT(*) FROM session_instance_tune sit
                  WHERE sit.session_instance_id = si.session_instance_id
                    AND sit.deleted = FALSE
@@ -2743,6 +2744,7 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
             "start_time": row["start_time"],
             "end_time": row["end_time"],
             "location_name": row["location_name"],
+            "session_type": row["session_type"],
             "log_complete_date": row["log_complete_date"],
             "is_active": row["is_active"],
             "tunes_logged": row["tunes_logged"],

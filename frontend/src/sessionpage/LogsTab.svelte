@@ -110,6 +110,12 @@
 
   const isFestival = $derived(data && (data.session_type || 'regular') === 'festival')
 
+  // An unlogged night of a regular session is dimmed: the list is a history, and a
+  // night with nothing on it is a gap in it. A festival's list is its SCHEDULE, read
+  // mostly before anything is logged, so dimming there would grey out the whole
+  // programme and make the one logged room look like the only one that exists.
+  const dimmed = (instance) => !isFestival && isEmptyLog(instance)
+
   function addClick(e) {
     e.preventDefault()
     onAddInstance()
@@ -266,7 +272,7 @@
   <a
     href="/sessions/{sessionPath}/{instanceUrlId(instance)}"
     data-instance-id={instance.session_instance_id}
-    class={isEmptyLog(instance) ? 'empty-log' : ''}>
+    class={dimmed(instance) ? 'empty-log' : ''}>
     {#if activeInstanceIds.includes(instance.session_instance_id)}
       <span class="session-instance-link"><span>{label}</span><span class="active-now-badge"></span></span>
     {:else}{label}{/if}
@@ -473,7 +479,7 @@
                   <Row
                     as="div"
                     styled={false}
-                    rowClass="logs-row year-content-row{isEmptyLog(instance) ? ' empty-log' : ''}"
+                    rowClass="logs-row year-content-row{dimmed(instance) ? ' empty-log' : ''}"
                     data-year={groupKey}
                     data-instance-id={instance.session_instance_id}>
                     {#snippet lead()}
@@ -491,7 +497,7 @@
                         <a
                           href="/sessions/{sessionPath}/{instanceUrlId(instance)}"
                           data-instance-id={instance.session_instance_id}
-                          class="logs-row-title{isEmptyLog(instance) ? ' empty-log' : ''}">
+                          class="logs-row-title{dimmed(instance) ? ' empty-log' : ''}">
                           {#if live}
                             <span class="session-instance-link"><span>{titleOf(instance)}</span><span class="active-now-badge"></span></span>
                           {:else}{titleOf(instance)}{/if}

@@ -18,6 +18,8 @@ import {
   continueItems,
   editedLabel,
   adjustedCounts,
+  homeTitle,
+  isFestival,
 } from '../src/homepage/logic.js'
 
 const night = (over = {}) => ({
@@ -107,6 +109,53 @@ describe('todaySubtitle', () => {
   it('renders an open-ended night rather than dropping the time', () => {
     // The after-hours session that runs until it stops (the festival case in the seed).
     expect(todaySubtitle(night({ end_time: null }))).toContain('7:00pm - ?')
+  })
+})
+
+describe('festival rows', () => {
+  // A festival's row is the reverse of a regular one: the instance (time, then the
+  // room-and-leader label the Logs tab shows) is the title, the festival's name the
+  // second line. Which retreat you are at goes without saying; which room does not.
+  const retreat = (over = {}) =>
+    night({
+      name: "O'Flaherty's Irish Music Retreat 2026",
+      path: 'oflahertys/2026',
+      session_type: 'festival',
+      start_time: '21:30',
+      end_time: '23:00',
+      location_name: 'Lively Session with Richard Hearn at the Alamo Lobby',
+      ...over,
+    })
+
+  it('knows a festival from a regular session, and defaults to regular', () => {
+    expect(isFestival(retreat())).toBe(true)
+    expect(isFestival(night())).toBe(false)
+    expect(isFestival(night({ session_type: 'regular' }))).toBe(false)
+  })
+
+  it('titles a regular row with its name', () => {
+    expect(homeTitle(night())).toBe('Mueller Session')
+  })
+
+  it('titles a festival row with the instance and puts the festival name below', () => {
+    expect(homeTitle(retreat())).toBe('9:30pm-11:00pm · Lively Session with Richard Hearn at the Alamo Lobby')
+    expect(todaySubtitle(retreat())).toBe("O'Flaherty's Irish Music Retreat 2026")
+    expect(weekSubtitle(retreat(), '2026-09-22')).toBe("O'Flaherty's Irish Music Retreat 2026")
+  })
+
+  it('keeps the live head count and the logged state on the second line', () => {
+    expect(todaySubtitle(retreat({ is_active: true, people_here: 3 }))).toBe(
+      "O'Flaherty's Irish Music Retreat 2026 · 3 people here",
+    )
+    expect(weekSubtitle(retreat({ log_complete_date: 'x' }), '2026-10-25')).toBe(
+      "O'Flaherty's Irish Music Retreat 2026 · logged",
+    )
+  })
+
+  it('falls back to the festival name as the title when the instance has no time or room', () => {
+    expect(homeTitle(retreat({ start_time: null, end_time: null, location_name: null }))).toBe(
+      "O'Flaherty's Irish Music Retreat 2026",
+    )
   })
 })
 

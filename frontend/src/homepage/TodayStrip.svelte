@@ -11,7 +11,7 @@
   // Both, because the card is the bigger target on a phone and the button is the
   // one people look for. The button stops propagation so a tap is one navigation,
   // not two.
-  import { statusLabel, todaySubtitle, tallyLabel, sessionStatus, sessionInstanceHref } from './logic.js'
+  import { statusLabel, todaySubtitle, tallyLabel, sessionStatus, sessionInstanceHref, homeTitle } from './logic.js'
   import { t } from '../lib/index.js'
 
   let { sessions = [] } = $props()
@@ -51,13 +51,13 @@
           class="today-card"
           data-status={status}
           role="group"
-          aria-label={session.name}
+          aria-label={homeTitle(session)}
           onclick={(e) => open(session, e)}>
           <div class="today-top">
             <span class="today-eyebrow">{t('Today')}</span>
             <span class="today-chip" data-status={status}>{statusLabel(session)}</span>
           </div>
-          <div class="today-name">{session.name}</div>
+          <div class="today-name">{homeTitle(session)}</div>
           <div class="today-sub">{todaySubtitle(session)}</div>
           <div class="today-tally" class:muted={!session.tunes_logged}>{tallyLabel(session)}</div>
           <div class="today-actions">
