@@ -80,8 +80,11 @@ def home():
     """The home page. Signed in, it renders serializers.build_home_payload — the
     same dict GET /api/home returns (spec 052 A2) — so the two can't drift."""
     try:
+        # Until Apple approves the TestFlight beta, its link on the home page opens a
+        # "coming soon" note instead; set TESTFLIGHT_BETA_OPEN=1 once it is approved.
+        beta_open = os.environ.get("TESTFLIGHT_BETA_OPEN") == "1"
         if not current_user.is_authenticated:
-            return render_template("home.html")
+            return render_template("home.html", beta_open=beta_open)
         from serializers import build_home_payload
 
         conn = get_db_connection()
@@ -92,7 +95,7 @@ def home():
         # One `payload` rather than **payload: the shell embeds it whole as
         # __PAGE_DATA__ for the Svelte bundle (spec 052 §B8 Stage 4) instead of
         # picking the keys apart in Jinja.
-        return render_template("home.html", payload=payload)
+        return render_template("home.html", payload=payload, beta_open=beta_open)
     except Exception:
         return _page_error()
 

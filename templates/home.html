@@ -59,6 +59,49 @@
         font-size: 0.95rem;
         opacity: 0.65;
     }
+    /* Ceol for iPhone: the TestFlight beta, on both the signed-in and signed-out page. */
+    .ios-beta {
+        max-width: 520px;
+        margin: 1.5rem auto 2rem;
+        padding: 0.9rem 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--r-lg);
+        background: var(--header-bg);
+    }
+    /* Signed in, it sits in the page's column like the sections above it. */
+    .ios-beta.in-page { max-width: none; margin: 1.5rem 0 2rem; }
+    .ios-beta-text { flex: 1; min-width: 0; }
+    .ios-beta-title { font-weight: 600; color: var(--text-color); }
+    .ios-beta-sub { font-size: 0.875rem; color: var(--text-muted); }
+    .ios-beta-btn {
+        flex-shrink: 0;
+        padding: 0.45rem 1rem;
+        border-radius: var(--r-pill);
+        background: var(--primary-fill);
+        color: #fff;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .ios-beta-btn:hover { background: var(--primary-fill-hover); color: #fff; text-decoration: none; }
+    .ios-beta-dialog {
+        max-width: min(420px, calc(100vw - 32px));
+        padding: 1.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--r-lg);
+        background: var(--header-bg);
+        color: var(--text-color);
+    }
+    .ios-beta-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+    .ios-beta-dialog h3 { font-size: 1.15rem; margin: 0 0 0.75rem; }
+    .ios-beta-dialog p { margin: 0 0 1.25rem; line-height: 1.55; }
+    .ios-beta-dialog .ios-beta-actions { display: flex; justify-content: flex-end; gap: 0.75rem; align-items: center; }
+    .ios-beta-dialog .ios-beta-close {
+        background: none; border: 1px solid var(--border-color); color: var(--text-color);
+        border-radius: var(--r-pill); padding: 0.4rem 1rem;
+    }
 </style>
 {% endblock %}
 
@@ -98,6 +141,30 @@
     <p class="anon-browse">{{ _("Don't want an account? You can still %(link)s.", link=browse_link) }}</p>
 </div>
 
+{% endif %}
+
+{# Ceol for iPhone. Until the beta is approved (TESTFLIGHT_BETA_OPEN unset), the
+   button opens a note saying it's coming and how to get TestFlight ready. #}
+<div class="ios-beta{% if current_user.is_authenticated %} in-page{% endif %}">
+    <div class="ios-beta-text">
+        <div class="ios-beta-title">{{ _('Ceol for iPhone') }}</div>
+        <div class="ios-beta-sub">{{ _("Try the beta. You'll need Apple's free TestFlight app.") }}</div>
+    </div>
+    {% if beta_open %}
+    <a class="ios-beta-btn" href="https://testflight.apple.com/join/1hWVVEyc">{{ _('Join the Beta') }}</a>
+    {% else %}
+    <a class="ios-beta-btn" href="https://testflight.apple.com/join/1hWVVEyc" onclick="document.getElementById('iosBetaSoon').showModal(); return false;">{{ _('Join the Beta') }}</a>
+    {% endif %}
+</div>
+{% if not beta_open %}
+<dialog id="iosBetaSoon" class="ios-beta-dialog" aria-labelledby="iosBetaSoonTitle">
+    <h3 id="iosBetaSoonTitle">{{ _('Ceol for iPhone') }}</h3>
+    {% set testflight_link %}<a href="https://apps.apple.com/app/testflight/id899247664">{{ _('TestFlight installed') }}</a>{% endset %}
+    <p>{{ _('The beta is coming soon. To get ready, make sure you have %(link)s.', link=testflight_link) }}</p>
+    <div class="ios-beta-actions">
+        <form method="dialog"><button class="ios-beta-close">{{ _('Close') }}</button></form>
+    </div>
+</dialog>
 {% endif %}
 
 </div>
