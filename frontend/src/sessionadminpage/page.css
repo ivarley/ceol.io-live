@@ -422,6 +422,22 @@
     color: #f8d7da;
 }
 
+/* The link beside the badge that flips it: Cancel it / Reinstate. */
+.instance-status-toggle {
+    background: none;
+    border: 0;
+    padding: 0;
+    margin-left: 10px;
+    font-size: 13px;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.instance-status-toggle:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
 /* Info section */
 .instance-info-section {
     display: flex;

@@ -851,6 +851,20 @@ a.empty-log {
     opacity: 0.5;
 }
 
+/* A cancelled night: struck through, and named as such in the line beneath. It
+   stays on the list (and keeps whatever was logged before the call came). */
+.cancelled-log .logs-row-title {
+    text-decoration: line-through;
+}
+
+.log-cancelled {
+    color: var(--danger, #e5534b);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.4px;
+}
+
 .logs-row-sub {
     font-size: 0.85rem;
     color: var(--text-muted, #6c757d);

@@ -49,7 +49,7 @@ WHERE (termination_date IS NULL OR termination_date >= CURRENT_DATE)
 ## Instance States
 
 - Future/Past/Today: Based on `date` field
-- Cancelled: `is_cancelled = TRUE` (still visible, strikethrough in UI)
+- Cancelled: `is_cancelled = TRUE` (still visible and editable; struck through on the Logs tab and the night's own screen; left out of Home; never marked active)
 - Active: `is_active = TRUE` (managed by `active_session_manager.py` cron)
 - Complete: `log_complete_date` IS NOT NULL (tune log finalized)
 
@@ -79,4 +79,5 @@ WHERE (termination_date IS NULL OR termination_date >= CURRENT_DATE)
 
 **Auto-create**: `POST /api/session/<id>/auto_create_instances`
 
-**Cancellation**: `PUT /api/session_instance/<id>` with `{"is_cancelled": true}`
+**Cancellation**: the live op `set_cancelled` `{cancelled: true|false}` on `POST /api/live/instances/<id>/ops`
+(see [Live Logging](live-logging.md), "Cancelling a night"); offered in the night's header on every surface and in the admin instance sheet

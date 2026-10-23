@@ -99,6 +99,7 @@ beforeEach(() => {
     },
     '/next_instance_suggestion': { success: true, date: '2026-07-14', start_time: '19:00', end_time: '22:00' },
     '/add_instance': { success: true, message: 'Instance added' },
+    '/ops': { success: true, is_cancelled: true, previous_cancelled: false },
     '/terminate': { success: true },
     '/reactivate': { success: true },
   }
@@ -513,6 +514,34 @@ describe('session admin page view', () => {
     // Sheet closed + logs re-fetched (initial load, the instance sheet's detail
     // fetch, then the reload after adding).
     expect(document.querySelector('#session-date-input')).toBeNull()
+    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/admin/sessions/austin/mueller/logs')).length).toBe(3)
+  })
+
+  it('logs tab: the instance sheet cancels a night through the live op and refreshes the table', async () => {
+    const { container } = renderApp(payload(), ctx({ activeTab: 'logs' }))
+    await waitFor(() => {
+      expect(container.querySelectorAll('#logs-table .log-row')).toHaveLength(2)
+    })
+    await fireEvent.click(container.querySelector('.log-row[data-instance-id="11"]'))
+    await waitFor(() => {
+      expect(document.querySelector('.instance-status-badge')).toBeTruthy()
+    })
+    expect(document.querySelector('.instance-status-badge').textContent.trim()).toBe('Held')
+    expect(document.querySelector('.instance-status-toggle').textContent.trim()).toBe('Cancel it')
+    await fireEvent.click(document.querySelector('.instance-status-toggle'))
+    await waitFor(() => {
+      expect(document.querySelector('.instance-status-badge').textContent.trim()).toBe('Cancelled')
+    })
+    // The same op the night's own header sends, to the same endpoint.
+    const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/live/instances/11/ops'))
+    expect(call).toBeTruthy()
+    expect(call[1].method).toBe('POST')
+    const body = JSON.parse(call[1].body)
+    expect(body.op_type).toBe('set_cancelled')
+    expect(body.cancelled).toBe(true)
+    expect(typeof body.op_id).toBe('string')
+    expect(document.querySelector('.instance-status-toggle').textContent.trim()).toBe('Reinstate')
+    // The table's chip comes from the logs endpoint, so it is fetched again.
     expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/admin/sessions/austin/mueller/logs')).length).toBe(3)
   })
 

@@ -25,19 +25,21 @@ from fractional_indexing import generate_append_position, generate_position_betw
 pytestmark = pytest.mark.integration
 
 # High, unlikely-to-collide ids for the throwaway fixtures.
-SID = 9300          # session
-INST = 9390         # session_instance
-REEL = 9301         # "The Test Reel"        (linked add / matching)
-MAID = 9302         # "The Maid Behind the Bar"
-COOLEY = 9303       # "Cooleys"
-NEWT = 9304         # "The Unenrolled Jig"   (canonical, NOT pre-enrolled in session_tune)
-MERGED = 9305       # "The Merged Reel"      (redirects to REEL; must never enroll)
-IMPORT_ID = 9399001     # a tune NOT in the DB, "imported" from thesession.org (mocked fetch)
+SID = 9300  # session
+INST = 9390  # session_instance
+REEL = 9301  # "The Test Reel"        (linked add / matching)
+MAID = 9302  # "The Maid Behind the Bar"
+COOLEY = 9303  # "Cooleys"
+NEWT = 9304  # "The Unenrolled Jig"   (canonical, NOT pre-enrolled in session_tune)
+MERGED = 9305  # "The Merged Reel"      (redirects to REEL; must never enroll)
+IMPORT_ID = (
+    9399001  # a tune NOT in the DB, "imported" from thesession.org (mocked fetch)
+)
 IMPORT_SETTING = 9399501  # its default setting id
-SET_LOCAL = 9301501     # REEL's already-imported DEFAULT setting (fixture row, lowest id)
-SET_LOCAL2 = 9301502    # REEL's second local setting (fixture row, non-default)
-SET_REMOTE = 9301503    # REEL setting that exists only on thesession.org (mocked fetch)
-SET_NEWT = 9304501      # NEWT's only setting (fixture row) — enrollment defaults to it
+SET_LOCAL = 9301501  # REEL's already-imported DEFAULT setting (fixture row, lowest id)
+SET_LOCAL2 = 9301502  # REEL's second local setting (fixture row, non-default)
+SET_REMOTE = 9301503  # REEL setting that exists only on thesession.org (mocked fetch)
+SET_NEWT = 9304501  # NEWT's only setting (fixture row) — enrollment defaults to it
 
 # Canned thesession.org tune JSON for the mocked importer (spec 026).
 FAKE_TS_TUNE = {
@@ -70,60 +72,111 @@ def live_instance():
     conn = get_db_connection()
     conn.autocommit = False
     cur = conn.cursor()
-    cur.execute("INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s)",
-                (SID, "Live Ops Test", "liveops-test"))
-    for tid, name in [(REEL, "The Test Reel"), (MAID, "The Maid Behind the Bar"), (COOLEY, "Cooleys")]:
-        cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')", (tid, name))
+    cur.execute(
+        "INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s)",
+        (SID, "Live Ops Test", "liveops-test"),
+    )
+    for tid, name in [
+        (REEL, "The Test Reel"),
+        (MAID, "The Maid Behind the Bar"),
+        (COOLEY, "Cooleys"),
+    ]:
+        cur.execute(
+            "INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')",
+            (tid, name),
+        )
         # manually_added: these three model the session's CURATED repertoire (someone
         # put them there on purpose), so the play-delete auto-cleanup (spec 045) must
         # leave them alone. NEWT below is the auto-enrollment subject.
-        cur.execute("INSERT INTO session_tune (session_id, tune_id, manually_added) VALUES (%s, %s, TRUE)",
-                    (SID, tid))
+        cur.execute(
+            "INSERT INTO session_tune (session_id, tune_id, manually_added) VALUES (%s, %s, TRUE)",
+            (SID, tid),
+        )
     # COOLEY gets a session alias (the override-only name tests exercise the alias arm
     # of normalize_override_name; display coalesces sit.name -> st.alias -> t.name).
-    cur.execute("UPDATE session_tune SET alias = 'The Tumbling Cooley' WHERE session_id = %s AND tune_id = %s",
-                (SID, COOLEY))
+    cur.execute(
+        "UPDATE session_tune SET alias = 'The Tumbling Cooley' WHERE session_id = %s AND tune_id = %s",
+        (SID, COOLEY),
+    )
     # REEL's locally-cached settings (the chosen-setting tests, spec 032): SET_LOCAL is
     # the default (lowest id), SET_LOCAL2 a non-default alternative.
-    cur.execute("INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Dmaj', 'ABCd efga|')",
-                (SET_LOCAL, REEL))
-    cur.execute("INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Gmaj', 'GABc defg|')",
-                (SET_LOCAL2, REEL))
+    cur.execute(
+        "INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Dmaj', 'ABCd efga|')",
+        (SET_LOCAL, REEL),
+    )
+    cur.execute(
+        "INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Gmaj', 'GABc defg|')",
+        (SET_LOCAL2, REEL),
+    )
     # NEWT: a canonical tune deliberately NOT enrolled, so enrollment on add is observable.
-    cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Jig')", (NEWT, "The Unenrolled Jig"))
-    cur.execute("INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Edor', 'E2B BAB|')",
-                (SET_NEWT, NEWT))
+    cur.execute(
+        "INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Jig')",
+        (NEWT, "The Unenrolled Jig"),
+    )
+    cur.execute(
+        "INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Edor', 'E2B BAB|')",
+        (SET_NEWT, NEWT),
+    )
     # MERGED: a redirect/merged tune -- must never be enrolled (mirrors the old logger).
-    cur.execute("INSERT INTO tune (tune_id, name, tune_type, redirect_to_tune_id) VALUES (%s, %s, 'Reel', %s)",
-                (MERGED, "The Merged Reel", REEL))
-    cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
-                (INST, SID, "2026-02-01"))
+    cur.execute(
+        "INSERT INTO tune (tune_id, name, tune_type, redirect_to_tune_id) VALUES (%s, %s, 'Reel', %s)",
+        (MERGED, "The Merged Reel", REEL),
+    )
+    cur.execute(
+        "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
+        (INST, SID, "2026-02-01"),
+    )
     # A real person for started_by (FK -> person); reuse a seeded one, don't create/delete.
     cur.execute("SELECT person_id FROM person ORDER BY person_id LIMIT 1")
     person_id = cur.fetchone()[0]
     conn.commit()
 
-    yield {"session_id": SID, "instance_id": INST, "reel": REEL, "maid": MAID,
-           "cooley": COOLEY, "newt": NEWT, "merged": MERGED, "person_id": person_id}
+    yield {
+        "session_id": SID,
+        "instance_id": INST,
+        "reel": REEL,
+        "maid": MAID,
+        "cooley": COOLEY,
+        "newt": NEWT,
+        "merged": MERGED,
+        "person_id": person_id,
+    }
 
     # Teardown: children before the instance (session_instance_tune has no ON DELETE
     # CASCADE from session_instance; session_event/corroboration do). History tables
     # have no FKs — clear them too so runs don't accumulate audit rows.
-    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (INST,))
+    cur.execute(
+        "DELETE FROM session_instance_tune WHERE session_instance_id = %s", (INST,)
+    )
     cur.execute("DELETE FROM session_event WHERE session_instance_id = %s", (INST,))
-    cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = %s", (INST,))
-    cur.execute("DELETE FROM session_instance_tune_history WHERE session_instance_id = %s", (INST,))
-    cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (INST,))
+    cur.execute(
+        "DELETE FROM session_instance_person WHERE session_instance_id = %s", (INST,)
+    )
+    cur.execute(
+        "DELETE FROM session_instance_tune_history WHERE session_instance_id = %s",
+        (INST,),
+    )
+    cur.execute(
+        "DELETE FROM session_instance_history WHERE session_instance_id = %s", (INST,)
+    )
     cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (INST,))
     cur.execute("DELETE FROM session_tune_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_tune WHERE session_id = %s", (SID,))
     # Chosen-setting imports write tune_setting_history (the settings themselves cascade
     # with the tune deletes below).
-    cur.execute("DELETE FROM tune_setting_history WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT, MERGED],))
-    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT, MERGED],))
+    cur.execute(
+        "DELETE FROM tune_setting_history WHERE tune_id = ANY(%s)",
+        ([REEL, MAID, COOLEY, NEWT, MERGED],),
+    )
+    cur.execute(
+        "DELETE FROM tune_history WHERE tune_id = ANY(%s)",
+        ([REEL, MAID, COOLEY, NEWT, MERGED],),
+    )
     # MERGED references REEL via redirect_to_tune_id, so drop it before the tune it points to.
     cur.execute("DELETE FROM tune WHERE tune_id = %s", (MERGED,))
-    cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT],))
+    cur.execute(
+        "DELETE FROM tune WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT],)
+    )
     # A tune imported from thesession.org during a test (spec 026); tune_setting cascades.
     cur.execute("DELETE FROM tune_setting_history WHERE tune_id = %s", (IMPORT_ID,))
     cur.execute("DELETE FROM tune_history WHERE tune_id = %s", (IMPORT_ID,))
@@ -144,9 +197,11 @@ def _op(client, inst, **payload):
 
 def _records(cur, inst, *, include_deleted=False):
     """Live records for an instance, in order_position order."""
-    q = ("SELECT session_instance_tune_id, tune_id, name, record_type, deleted, "
-         "confidence, started_by_person_id, order_position "
-         "FROM session_instance_tune WHERE session_instance_id = %s")
+    q = (
+        "SELECT session_instance_tune_id, tune_id, name, record_type, deleted, "
+        "confidence, started_by_person_id, order_position "
+        "FROM session_instance_tune WHERE session_instance_id = %s"
+    )
     if not include_deleted:
         q += " AND deleted = FALSE"
     q += " ORDER BY order_position"
@@ -156,8 +211,10 @@ def _records(cur, inst, *, include_deleted=False):
 
 def _repertoire_count(cur, session_id, tune_id):
     """How many session_tune rows enroll this tune in this session (0 or 1)."""
-    cur.execute("SELECT COUNT(*) FROM session_tune WHERE session_id = %s AND tune_id = %s",
-                (session_id, tune_id))
+    cur.execute(
+        "SELECT COUNT(*) FROM session_tune WHERE session_id = %s AND tune_id = %s",
+        (session_id, tune_id),
+    )
     return cur.fetchone()[0]
 
 
@@ -165,10 +222,13 @@ def _repertoire_count(cur, session_id, tune_id):
 # add_tune
 # --------------------------------------------------------------------------- #
 
+
 def test_add_tune_by_id(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        resp, body = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"]
+        )
     assert resp.status_code == 200
     assert body["success"] is True
     assert body["record"]["tune_id"] == live_instance["reel"]
@@ -179,28 +239,41 @@ def test_add_tune_by_id(client, authenticated_user, live_instance, db_cursor):
     assert len(rows) == 1
     assert rows[0][1] == live_instance["reel"]
     # feed row appended
-    db_cursor.execute("SELECT COUNT(*) FROM session_event WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_event WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0] == 1
 
 
-def test_add_tune_by_name_matches_catalog(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_by_name_matches_catalog(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A raw name that matches a session tune links to it (tune_id set, not unlinked)."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", name="The Maid Behind the Bar")
+        resp, body = _op(
+            client, inst, op_type="add_tune", name="The Maid Behind the Bar"
+        )
     assert body["success"] is True
     assert body["record"]["tune_id"] == live_instance["maid"]
 
 
-def test_add_tune_linked_stores_null_name(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_linked_stores_null_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """name is override-only: a typeahead-style add ships the display name alongside
     tune_id, but the redundant copy is not persisted — the row falls back to the
     catalog name (so it follows later alias/name changes). The response still carries
     the display name via the server-side coalesce."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["reel"], name="The Test Reel")
+        _, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            name="The Test Reel",
+        )
     assert body["success"] is True
     assert body["record"]["name"] == "The Test Reel"
     rows = _records(db_cursor, inst)
@@ -208,7 +281,9 @@ def test_add_tune_linked_stores_null_name(client, authenticated_user, live_insta
     assert rows[0][2] is None
 
 
-def test_add_tune_by_name_match_stores_null_name(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_by_name_match_stores_null_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A typed name that links (even as a case variant of the catalog name) stores
     NULL — normalization is case/accent/quote-insensitive."""
     inst = live_instance["instance_id"]
@@ -219,60 +294,92 @@ def test_add_tune_by_name_match_stores_null_name(client, authenticated_user, liv
     assert rows[0][2] is None
 
 
-def test_add_tune_alias_variant_stores_null_name(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_alias_variant_stores_null_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A display name matching the session alias is just as redundant as the catalog
     name — the coalesce falls back to session_tune.alias."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["cooley"], name="The Tumbling Cooley")
+        _, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["cooley"],
+            name="The Tumbling Cooley",
+        )
     assert body["record"]["name"] == "The Tumbling Cooley"
     rows = _records(db_cursor, inst)
     assert rows[0][1] == live_instance["cooley"]
     assert rows[0][2] is None
 
 
-def test_add_tune_by_id_never_stores_the_shipped_name(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_by_id_never_stores_the_shipped_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """An add by tune_id records the id only: a name shipped alongside is the client's
     label (the live listener sent thesession.org setting names like "Holly Bush, The"),
     so the row shows the name hierarchy instead."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["reel"], name="Test Reel, The")
+        _, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            name="Test Reel, The",
+        )
     assert body["record"]["name"] == "The Test Reel"
     rows = _records(db_cursor, inst)
     assert rows[0][2] is None
 
 
-def test_add_tune_by_id_shows_the_session_alias(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_by_id_shows_the_session_alias(
+    client, authenticated_user, live_instance, db_cursor
+):
     """With the shipped label dropped, a tune with a session alias shows the alias."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["cooley"], name="Cooley's Reel")
+        _, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["cooley"],
+            name="Cooley's Reel",
+        )
     assert body["record"]["name"] == "The Tumbling Cooley"
     rows = _records(db_cursor, inst)
     assert rows[0][2] is None
 
 
-def test_add_merged_tune_keeps_the_merged_tunes_name(client, authenticated_user, live_instance, db_cursor):
+def test_add_merged_tune_keeps_the_merged_tunes_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A remapped add (merged-away tune_id) keeps the merged tune's own catalog name --
     what the logger saw -- whatever label the client shipped (spec 030)."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="add_tune",
-                      tune_id=live_instance["merged"], name="Merged Reel, The")
+        _, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["merged"],
+            name="Merged Reel, The",
+        )
     assert body["record"]["tune_id"] == live_instance["reel"]
     rows = _records(db_cursor, inst)
     assert rows[0][2] == "The Merged Reel"
 
 
-def test_add_tune_by_name_unlinked_when_unknown(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_by_name_unlinked_when_unknown(
+    client, authenticated_user, live_instance, db_cursor
+):
     """An unmatchable name stays unlinked: raw name kept, tune_id NULL."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", name="Zzqx Not A Real Tune 4711")
+        resp, body = _op(
+            client, inst, op_type="add_tune", name="Zzqx Not A Real Tune 4711"
+        )
     assert body["success"] is True
     assert body["record"]["tune_id"] is None
     assert body["record"]["name"] == "Zzqx Not A Real Tune 4711"
@@ -287,33 +394,52 @@ def test_add_tune_requires_id_or_name(client, authenticated_user, live_instance)
     assert body["reason"] == "invalid"
 
 
-def test_add_tune_positioning_with_anchors(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_positioning_with_anchors(
+    client, authenticated_user, live_instance, db_cursor
+):
     """after/before anchors produce a correct authoritative order (§C)."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])       # append
-        _, b = _op(client, inst, op_type="add_tune", tune_id=live_instance["maid"])       # append after A
+        _, a = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"]
+        )  # append
+        _, b = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["maid"]
+        )  # append after A
         # insert C between A and B via after_record_id = A
-        _, c = _op(client, inst, op_type="add_tune", tune_id=live_instance["cooley"],
-                   after_record_id=a["record"]["session_instance_tune_id"])
+        _, c = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["cooley"],
+            after_record_id=a["record"]["session_instance_tune_id"],
+        )
     ids_in_order = [r[0] for r in _records(db_cursor, inst)]
-    assert ids_in_order == [a["record"]["session_instance_tune_id"],
-                            c["record"]["session_instance_tune_id"],
-                            b["record"]["session_instance_tune_id"]]
+    assert ids_in_order == [
+        a["record"]["session_instance_tune_id"],
+        c["record"]["session_instance_tune_id"],
+        b["record"]["session_instance_tune_id"],
+    ]
 
 
 # --------------------------------------------------------------------------- #
 # corroboration (duplicate-in-open-set collapse, §H30)
 # --------------------------------------------------------------------------- #
 
-def test_duplicate_append_collapses_to_corroborate(client, authenticated_user, live_instance, db_cursor):
+
+def test_duplicate_append_collapses_to_corroborate(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, first = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         _, second = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
     # The second append does not create a row — it corroborates the first.
     assert second["op_type"] == "corroborate"
-    assert second["record"]["session_instance_tune_id"] == first["record"]["session_instance_tune_id"]
+    assert (
+        second["record"]["session_instance_tune_id"]
+        == first["record"]["session_instance_tune_id"]
+    )
     assert second["record"]["confidence"] == 100
     assert len(_records(db_cursor, inst)) == 1
 
@@ -322,7 +448,13 @@ def test_no_merge_keeps_both(client, authenticated_user, live_instance, db_curso
     inst = live_instance["instance_id"]
     with authenticated_user:
         _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
-        _, second = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"], no_merge=True)
+        _, second = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            no_merge=True,
+        )
     assert second["op_type"] == "add_tune"
     assert len(_records(db_cursor, inst)) == 2
 
@@ -331,13 +463,21 @@ def test_no_merge_keeps_both(client, authenticated_user, live_instance, db_curso
 # set_break
 # --------------------------------------------------------------------------- #
 
-def test_set_break_insert_splits_sets(client, authenticated_user, live_instance, db_cursor):
+
+def test_set_break_insert_splits_sets(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         _, b = _op(client, inst, op_type="add_tune", tune_id=live_instance["maid"])
-        _, brk = _op(client, inst, op_type="set_break", action="insert",
-                     after_record_id=a["record"]["session_instance_tune_id"])
+        _, brk = _op(
+            client,
+            inst,
+            op_type="set_break",
+            action="insert",
+            after_record_id=a["record"]["session_instance_tune_id"],
+        )
     rows = _records(db_cursor, inst)
     types = [r[3] for r in rows]
     assert types == ["tune", "break", "tune"]  # A | break | B
@@ -347,10 +487,20 @@ def test_set_break_remove(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
-        _, brk = _op(client, inst, op_type="set_break", action="insert",
-                     after_record_id=a["record"]["session_instance_tune_id"])
-        _, rem = _op(client, inst, op_type="set_break", action="remove",
-                     record_id=brk["record"]["session_instance_tune_id"])
+        _, brk = _op(
+            client,
+            inst,
+            op_type="set_break",
+            action="insert",
+            after_record_id=a["record"]["session_instance_tune_id"],
+        )
+        _, rem = _op(
+            client,
+            inst,
+            op_type="set_break",
+            action="remove",
+            record_id=brk["record"]["session_instance_tune_id"],
+        )
     assert rem["removed"] is True
     assert all(r[3] != "break" for r in _records(db_cursor, inst, include_deleted=True))
 
@@ -359,8 +509,13 @@ def test_set_break_remove_rejects_non_break(client, authenticated_user, live_ins
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
-        _, rem = _op(client, inst, op_type="set_break", action="remove",
-                     record_id=a["record"]["session_instance_tune_id"])
+        _, rem = _op(
+            client,
+            inst,
+            op_type="set_break",
+            action="remove",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert rem["success"] is False
     assert rem["reason"] == "wrong_record_type"
 
@@ -368,6 +523,7 @@ def test_set_break_remove_rejects_non_break(client, authenticated_user, live_ins
 # --------------------------------------------------------------------------- #
 # remove_tune (soft tombstone)
 # --------------------------------------------------------------------------- #
+
 
 def test_remove_tune_soft_deletes(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
@@ -395,18 +551,25 @@ def test_remove_tune_idempotent(client, authenticated_user, live_instance):
 # change_tune
 # --------------------------------------------------------------------------- #
 
-def test_change_tune_rename_and_unlink(client, authenticated_user, live_instance, db_cursor):
+
+def test_change_tune_rename_and_unlink(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         rid = a["record"]["session_instance_tune_id"]
-        _, ren = _op(client, inst, op_type="change_tune", record_id=rid, name="Renamed Tune")
+        _, ren = _op(
+            client, inst, op_type="change_tune", record_id=rid, name="Renamed Tune"
+        )
         assert ren["record"]["name"] == "Renamed Tune"
         _, unl = _op(client, inst, op_type="change_tune", record_id=rid, unlink=True)
     assert unl["record"]["tune_id"] is None
 
 
-def test_change_tune_unlink_keeps_the_shown_name(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_unlink_keeps_the_shown_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A linked row stores no name of its own (it shows the tune's). Unlinking it must
     keep the name it was showing: a row with neither a name nor a tune breaks the
     table's check, and the unlink failed with a database error."""
@@ -423,20 +586,32 @@ def test_change_tune_unlink_keeps_the_shown_name(client, authenticated_user, liv
     assert rows[0][1] is None and rows[0][2] == shown
 
 
-def test_change_tune_relinks_to_a_thesession_tune(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relinks_to_a_thesession_tune(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Deep search while editing can pick a thesession.org tune: change_tune takes its
     thesession_id, finds (or would import) the tune, and relinks the row to it."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, a = _op(client, inst, op_type="add_tune", name="Something Odd", no_match=True)
+        _, a = _op(
+            client, inst, op_type="add_tune", name="Something Odd", no_match=True
+        )
         rid = a["record"]["session_instance_tune_id"]
         # The catalogue already has this one: no import needed.
-        _, rel = _op(client, inst, op_type="change_tune", record_id=rid, thesession_id=live_instance["reel"])
+        _, rel = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            thesession_id=live_instance["reel"],
+        )
     assert rel["success"] is True, rel
     assert rel["record"]["tune_id"] == live_instance["reel"]
 
 
-def test_change_tune_refuses_a_failed_import(client, authenticated_user, live_instance, monkeypatch):
+def test_change_tune_refuses_a_failed_import(
+    client, authenticated_user, live_instance, monkeypatch
+):
     import live_logging_routes as llr
 
     def fail(cur, ts_id, user_id):
@@ -447,11 +622,15 @@ def test_change_tune_refuses_a_failed_import(client, authenticated_user, live_in
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         rid = a["record"]["session_instance_tune_id"]
-        _, rel = _op(client, inst, op_type="change_tune", record_id=rid, thesession_id=999999999)
+        _, rel = _op(
+            client, inst, op_type="change_tune", record_id=rid, thesession_id=999999999
+        )
     assert rel["success"] is False and rel["reason"] == "import_failed"
 
 
-def test_change_tune_relink_clears_redundant_name(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relink_clears_redundant_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Relink ships the new tune's display name alongside tune_id (the client always
     does); the redundant copy stores as NULL — which also clears any stale override
     the row carried while unlinked."""
@@ -459,69 +638,129 @@ def test_change_tune_relink_clears_redundant_name(client, authenticated_user, li
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", name="mystery reel xyz")
         rid = a["record"]["session_instance_tune_id"]
-        _, rel = _op(client, inst, op_type="change_tune", record_id=rid,
-                     tune_id=live_instance["reel"], name="The Test Reel")
+        _, rel = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            tune_id=live_instance["reel"],
+            name="The Test Reel",
+        )
     assert rel["record"]["tune_id"] == live_instance["reel"]
     assert rel["record"]["name"] == "The Test Reel"
-    db_cursor.execute("SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    db_cursor.execute(
+        "SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s",
+        (rid,),
+    )
     assert db_cursor.fetchone()[0] is None
 
 
-def test_change_tune_relink_never_stores_the_shipped_name(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relink_never_stores_the_shipped_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A relink records the id only, as an add does: a divergent label shipped with the
     tune_id is dropped too, not kept as an override."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", name="mystery reel xyz")
         rid = a["record"]["session_instance_tune_id"]
-        _, rel = _op(client, inst, op_type="change_tune", record_id=rid,
-                     tune_id=live_instance["reel"], name="Test Reel, The")
+        _, rel = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            tune_id=live_instance["reel"],
+            name="Test Reel, The",
+        )
     assert rel["record"]["name"] == "The Test Reel"
-    db_cursor.execute("SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    db_cursor.execute(
+        "SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s",
+        (rid,),
+    )
     assert db_cursor.fetchone()[0] is None
 
 
-def test_change_tune_rename_stores_override(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_rename_stores_override(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A rename that differs from the fallbacks persists as a genuine per-row override."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         rid = a["record"]["session_instance_tune_id"]
-        _, ren = _op(client, inst, op_type="change_tune", record_id=rid, name="Renamed Tune")
+        _, ren = _op(
+            client, inst, op_type="change_tune", record_id=rid, name="Renamed Tune"
+        )
     assert ren["record"]["name"] == "Renamed Tune"
-    db_cursor.execute("SELECT name, tune_id FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    db_cursor.execute(
+        "SELECT name, tune_id FROM session_instance_tune WHERE session_instance_tune_id = %s",
+        (rid,),
+    )
     assert db_cursor.fetchone() == ("Renamed Tune", live_instance["reel"])
 
 
-def test_change_tune_relink_drops_the_old_tunes_setting(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relink_drops_the_old_tunes_setting(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A setting belongs to one tune: relinking a night's row to another tune must not
     carry the old tune's setting along, or the new tune shows the old one's notation."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         rid = a["record"]["session_instance_tune_id"]
-        _, s = _op(client, inst, op_type="change_tune", record_id=rid, setting_override=SET_LOCAL2)
+        _, s = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            setting_override=SET_LOCAL2,
+        )
         assert s["record"]["setting_override"] == SET_LOCAL2
-        _, same = _op(client, inst, op_type="change_tune", record_id=rid, tune_id=live_instance["reel"])
+        _, same = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            tune_id=live_instance["reel"],
+        )
         assert same["record"]["setting_override"] == SET_LOCAL2  # same tune: kept
-        _, rel = _op(client, inst, op_type="change_tune", record_id=rid, tune_id=live_instance["newt"])
+        _, rel = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            tune_id=live_instance["newt"],
+        )
     assert rel["record"]["tune_id"] == live_instance["newt"]
     assert rel["record"]["setting_override"] is None
 
 
-def test_change_tune_refuses_another_tunes_setting(client, authenticated_user, live_instance, db_cursor, monkeypatch):
+def test_change_tune_refuses_another_tunes_setting(
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """Setting ids are numbered across all of thesession.org: NEWT's setting is not one
     of REEL's, so it can't be the setting of a REEL row."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL)
+    )
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         rid = a["record"]["session_instance_tune_id"]
-        _, bad = _op(client, inst, op_type="change_tune", record_id=rid, setting_override=SET_NEWT)
+        _, bad = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            setting_override=SET_NEWT,
+        )
     assert bad["success"] is False and bad["reason"] == "invalid"
     db_cursor.execute(
-        "SELECT setting_override FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+        "SELECT setting_override FROM session_instance_tune WHERE session_instance_tune_id = %s",
+        (rid,),
+    )
     assert db_cursor.fetchone()[0] is None
 
 
@@ -529,8 +768,12 @@ def test_change_tune_no_fields_rejected(client, authenticated_user, live_instanc
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
-        _, resp = _op(client, inst, op_type="change_tune",
-                      record_id=a["record"]["session_instance_tune_id"])
+        _, resp = _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert resp["success"] is False
     assert resp["reason"] == "invalid"
 
@@ -539,9 +782,16 @@ def test_change_tune_no_fields_rejected(client, authenticated_user, live_instanc
 # session_tune (repertoire) enrollment (spec 025)
 # --------------------------------------------------------------------------- #
 
-def test_add_linked_tune_enrolls_in_repertoire(client, authenticated_user, live_instance, db_cursor):
+
+def test_add_linked_tune_enrolls_in_repertoire(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Adding a linked tune that isn't yet in the session's repertoire enrolls it."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     assert _repertoire_count(db_cursor, sid, newt) == 0
     with authenticated_user:
         _op(client, inst, op_type="add_tune", tune_id=newt)
@@ -549,13 +799,20 @@ def test_add_linked_tune_enrolls_in_repertoire(client, authenticated_user, live_
     # And a history row was recorded for the enrollment.
     db_cursor.execute(
         "SELECT COUNT(*) FROM session_tune_history WHERE session_id = %s AND tune_id = %s AND operation = 'INSERT'",
-        (sid, newt))
+        (sid, newt),
+    )
     assert db_cursor.fetchone()[0] == 1
 
 
-def test_add_tune_enrollment_idempotent(client, authenticated_user, live_instance, db_cursor):
+def test_add_tune_enrollment_idempotent(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A second add of the same tune doesn't create a duplicate repertoire row or error."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         _op(client, inst, op_type="add_tune", tune_id=newt)
         # Second add lands in a different set so it isn't collapsed into a corroboration.
@@ -565,7 +822,9 @@ def test_add_tune_enrollment_idempotent(client, authenticated_user, live_instanc
     assert _repertoire_count(db_cursor, sid, newt) == 1
 
 
-def test_add_unlinked_tune_does_not_enroll(client, authenticated_user, live_instance, db_cursor):
+def test_add_unlinked_tune_does_not_enroll(
+    client, authenticated_user, live_instance, db_cursor
+):
     """An unmatchable (unlinked) add creates no session_tune row."""
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     with authenticated_user:
@@ -575,9 +834,15 @@ def test_add_unlinked_tune_does_not_enroll(client, authenticated_user, live_inst
     assert db_cursor.fetchone()[0] == 3
 
 
-def test_change_tune_relink_enrolls_new_tune(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relink_enrolls_new_tune(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Relinking a record to a new tune_id enrolls that tune in the repertoire."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         # Start from an unlinked row so the relink is the first thing to introduce newt.
         _, a = _op(client, inst, op_type="add_tune", name="Zzqx Not A Real Tune 4711")
@@ -594,18 +859,31 @@ def test_change_tune_relink_enrolls_new_tune(client, authenticated_user, live_in
 # search-add-then-delete doesn't leave an orphan in the session's tune list.
 # --------------------------------------------------------------------------- #
 
-def test_remove_tune_unenrolls_auto_enrolled_tune(client, authenticated_user, live_instance, db_cursor):
+
+def test_remove_tune_unenrolls_auto_enrolled_tune(
+    client, authenticated_user, live_instance, db_cursor
+):
     """The reported bug: add a tune from search, delete it, repertoire is clean again."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
         assert _repertoire_count(db_cursor, sid, newt) == 1
-        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        _op(
+            client,
+            inst,
+            op_type="remove_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert _repertoire_count(db_cursor, sid, newt) == 0
     # The un-enrollment is audited like the enrollment was.
     db_cursor.execute(
         "SELECT COUNT(*) FROM session_tune_history WHERE session_id = %s AND tune_id = %s AND operation = 'DELETE'",
-        (sid, newt))
+        (sid, newt),
+    )
     assert db_cursor.fetchone()[0] == 1
 
 
@@ -613,13 +891,22 @@ def test_remove_tune_keeps_repertoire_while_another_play_lives(
     client, authenticated_user, live_instance, db_cursor
 ):
     """Only the LAST live play un-enrolls; a tune played twice stays in the repertoire."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
         # A second set, so the add isn't collapsed into a corroboration of the first.
         _op(client, inst, op_type="set_break", action="insert")
         _op(client, inst, op_type="add_tune", tune_id=newt)
-        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        _op(
+            client,
+            inst,
+            op_type="remove_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert _repertoire_count(db_cursor, sid, newt) == 1
 
 
@@ -628,52 +915,98 @@ def test_remove_tune_keeps_repertoire_when_played_another_night(
 ):
     """A play at ANOTHER instance of the same session still counts — deleting tonight's
     play must not drop a tune the session plays regularly."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     other = INST + 1
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date)"
-                    " VALUES (%s, %s, '2026-02-08')", (other, sid))
-        cur.execute("INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type)"
-                    " VALUES (%s, %s, 'a0', 'tune')", (other, newt))
+        cur.execute(
+            "INSERT INTO session_instance (session_instance_id, session_id, date)"
+            " VALUES (%s, %s, '2026-02-08')",
+            (other, sid),
+        )
+        cur.execute(
+            "INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type)"
+            " VALUES (%s, %s, 'a0', 'tune')",
+            (other, newt),
+        )
         conn.commit()
         with authenticated_user:
             _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
-            _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+            _op(
+                client,
+                inst,
+                op_type="remove_tune",
+                record_id=a["record"]["session_instance_tune_id"],
+            )
         assert _repertoire_count(db_cursor, sid, newt) == 1
     finally:
-        cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (other,))
-        cur.execute("DELETE FROM session_instance_tune_history WHERE session_instance_id = %s", (other,))
-        cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (other,))
+        cur.execute(
+            "DELETE FROM session_instance_tune WHERE session_instance_id = %s", (other,)
+        )
+        cur.execute(
+            "DELETE FROM session_instance_tune_history WHERE session_instance_id = %s",
+            (other,),
+        )
+        cur.execute(
+            "DELETE FROM session_instance WHERE session_instance_id = %s", (other,)
+        )
         conn.commit()
         cur.close()
         conn.close()
 
 
-def test_remove_tune_never_unenrolls_manually_added(client, authenticated_user, live_instance, db_cursor):
+def test_remove_tune_never_unenrolls_manually_added(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A repertoire entry someone added on purpose survives a log-then-delete (spec 045)."""
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     assert _repertoire_count(db_cursor, sid, reel) == 1
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=reel)
-        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        _op(
+            client,
+            inst,
+            op_type="remove_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert _repertoire_count(db_cursor, sid, reel) == 1
 
 
-def test_remove_tune_never_unenrolls_curated_row(client, authenticated_user, live_instance, db_cursor):
+def test_remove_tune_never_unenrolls_curated_row(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Belt and braces: a row carrying a session alias stays even with the flag cleared."""
-    sid, inst, cooley = live_instance["session_id"], live_instance["instance_id"], live_instance["cooley"]
+    sid, inst, cooley = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["cooley"],
+    )
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("UPDATE session_tune SET manually_added = FALSE WHERE session_id = %s AND tune_id = %s",
-                (sid, cooley))
+    cur.execute(
+        "UPDATE session_tune SET manually_added = FALSE WHERE session_id = %s AND tune_id = %s",
+        (sid, cooley),
+    )
     conn.commit()
     cur.close()
     conn.close()
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=cooley)
-        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        _op(
+            client,
+            inst,
+            op_type="remove_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert _repertoire_count(db_cursor, sid, cooley) == 1
 
 
@@ -682,15 +1015,26 @@ def test_add_tune_pane_marks_repertoire_entry_protected(
 ):
     """End to end: a tune added through the add-tune pane is flagged manually_added,
     so logging and then deleting it later leaves the entry standing."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         resp = client.post("/api/sessions/liveops-test/tunes", json={"tune_id": newt})
         assert resp.status_code == 201, resp.data
-        db_cursor.execute("SELECT manually_added FROM session_tune WHERE session_id = %s AND tune_id = %s",
-                          (sid, newt))
+        db_cursor.execute(
+            "SELECT manually_added FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (sid, newt),
+        )
         assert db_cursor.fetchone()[0] is True
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
-        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        _op(
+            client,
+            inst,
+            op_type="remove_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert _repertoire_count(db_cursor, sid, newt) == 1
 
 
@@ -699,33 +1043,59 @@ def test_curating_an_auto_enrolled_row_protects_it(
 ):
     """Stating a session-scoped key on an auto-enrolled row (spec 037) makes it
     deliberate, so it stops being cleanup-eligible."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_admin_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
-        db_cursor.execute("SELECT manually_added FROM session_tune WHERE session_id = %s AND tune_id = %s",
-                          (sid, newt))
+        db_cursor.execute(
+            "SELECT manually_added FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (sid, newt),
+        )
         assert db_cursor.fetchone()[0] is False
-        resp = client.put(f"/api/sessions/liveops-test/tunes/{newt}", json={"key": "Ador"})
+        resp = client.put(
+            f"/api/sessions/liveops-test/tunes/{newt}", json={"key": "Ador"}
+        )
         assert resp.status_code == 200, resp.data
-        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        _op(
+            client,
+            inst,
+            op_type="remove_tune",
+            record_id=a["record"]["session_instance_tune_id"],
+        )
     assert _repertoire_count(db_cursor, sid, newt) == 1
 
 
-def test_remove_tunes_bulk_unenrolls(client, authenticated_user, live_instance, db_cursor):
+def test_remove_tunes_bulk_unenrolls(
+    client, authenticated_user, live_instance, db_cursor
+):
     """The bulk delete (spec 029 selection mode) un-enrolls too, once per tune."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
         _op(client, inst, op_type="set_break", action="insert")
         _, b = _op(client, inst, op_type="add_tune", tune_id=newt)
-        ids = [a["record"]["session_instance_tune_id"], b["record"]["session_instance_tune_id"]]
+        ids = [
+            a["record"]["session_instance_tune_id"],
+            b["record"]["session_instance_tune_id"],
+        ]
         _op(client, inst, op_type="remove_tunes", record_ids=ids)
     assert _repertoire_count(db_cursor, sid, newt) == 0
 
 
 def test_restore_tunes_reenrolls(client, authenticated_user, live_instance, db_cursor):
     """Undo is a true round trip: restoring the play puts the repertoire row back."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
         rid = a["record"]["session_instance_tune_id"]
@@ -735,18 +1105,33 @@ def test_restore_tunes_reenrolls(client, authenticated_user, live_instance, db_c
     assert _repertoire_count(db_cursor, sid, newt) == 1
 
 
-def test_change_tune_unlink_unenrolls_old_tune(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_unlink_unenrolls_old_tune(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Unlinking the only play of a tune strands its repertoire row — clean it up."""
-    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    sid, inst, newt = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+    )
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
         rid = a["record"]["session_instance_tune_id"]
         assert _repertoire_count(db_cursor, sid, newt) == 1
-        _op(client, inst, op_type="change_tune", record_id=rid, unlink=True, name="Some Other Name")
+        _op(
+            client,
+            inst,
+            op_type="change_tune",
+            record_id=rid,
+            unlink=True,
+            name="Some Other Name",
+        )
     assert _repertoire_count(db_cursor, sid, newt) == 0
 
 
-def test_change_tune_relink_unenrolls_previous_tune(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relink_unenrolls_previous_tune(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Relinking onto a different tune enrolls the new one and drops the stranded old one."""
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     newt, maid = live_instance["newt"], live_instance["maid"]
@@ -758,7 +1143,9 @@ def test_change_tune_relink_unenrolls_previous_tune(client, authenticated_user, 
     assert _repertoire_count(db_cursor, sid, maid) == 1
 
 
-def test_merged_tune_id_remaps_to_canonical(client, authenticated_user, live_instance, db_cursor):
+def test_merged_tune_id_remaps_to_canonical(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A direct add with a merged-away tune_id (stale typeahead cache / replayed offline
     op) remaps to the canonical tune (spec 030): the record links to the canonical id,
     the ack carries remapped_from, and the tombstoned id is never enrolled."""
@@ -772,14 +1159,18 @@ def test_merged_tune_id_remaps_to_canonical(client, authenticated_user, live_ins
     assert _repertoire_count(db_cursor, sid, merged) == 0
 
 
-def test_change_tune_relink_to_merged_id_remaps(client, authenticated_user, live_instance, db_cursor):
+def test_change_tune_relink_to_merged_id_remaps(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Relinking a record to a merged-away id lands on the canonical tune (spec 030)."""
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     reel, merged = live_instance["reel"], live_instance["merged"]
     with authenticated_user:
         _, add_body = _op(client, inst, op_type="add_tune", name="mystery reel xyz")
         rid = add_body["record"]["session_instance_tune_id"]
-        resp, body = _op(client, inst, op_type="change_tune", record_id=rid, tune_id=merged)
+        resp, body = _op(
+            client, inst, op_type="change_tune", record_id=rid, tune_id=merged
+        )
     assert body["success"] is True
     assert body["record"]["tune_id"] == reel
     assert body["remapped_from"] == merged
@@ -791,19 +1182,26 @@ def test_change_tune_relink_to_merged_id_remaps(client, authenticated_user, live
 # thesession.org import folded into add_tune (spec 026)
 # --------------------------------------------------------------------------- #
 
+
 def _no_fetch(reason):
     """A stand-in importer that fails the test if any network fetch is attempted."""
+
     def _boom(tune_id):
         raise AssertionError(reason)
+
     return _boom
 
 
 def test_add_tune_by_thesession_id_imports_links_enrolls(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """thesession_id for a tune we don't have imports it (tune + default setting), logs it
     LINKED, and enrolls it in the repertoire — all in one op."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE))
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE)
+    )
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     with authenticated_user:
         resp, body = _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID)
@@ -815,7 +1213,10 @@ def test_add_tune_by_thesession_id_imports_links_enrolls(
     db_cursor.execute("SELECT name FROM tune WHERE tune_id = %s", (IMPORT_ID,))
     assert db_cursor.fetchone()[0] == "The Imported Reel"
     # default setting stored with ABC; image is left NULL (rendered lazily on first view)
-    db_cursor.execute("SELECT tune_id, abc, image FROM tune_setting WHERE setting_id = %s", (IMPORT_SETTING,))
+    db_cursor.execute(
+        "SELECT tune_id, abc, image FROM tune_setting WHERE setting_id = %s",
+        (IMPORT_SETTING,),
+    )
     ts = db_cursor.fetchone()
     assert ts is not None and ts[0] == IMPORT_ID and ts[1] and ts[2] is None
     # enrolled in the session repertoire (via the shared spec-025 enrollment)
@@ -823,34 +1224,50 @@ def test_add_tune_by_thesession_id_imports_links_enrolls(
 
 
 def test_add_tune_thesession_id_idempotent_by_op_id(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """A retried import op (same op_id) dedupes: no second tune/setting/record, no re-fetch."""
     import live_logging_routes
+
     calls = {"n": 0}
+
     def _once(tid):
         calls["n"] += 1
         return dict(FAKE_TS_TUNE)
+
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _once)
     inst = live_instance["instance_id"]
     op_id = str(uuid.uuid4())
     with authenticated_user:
         _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID, op_id=op_id)
-        resp, body = _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID, op_id=op_id)
+        resp, body = _op(
+            client, inst, op_type="add_tune", thesession_id=IMPORT_ID, op_id=op_id
+        )
     assert body.get("duplicate") is True
     assert calls["n"] == 1  # the retry returned the cached ack without importing again
     assert len(_records(db_cursor, inst)) == 1
 
 
 def test_add_tune_by_an_unknown_tune_id_imports_it(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """A tune_id not in our catalogue is a thesession.org id: imported and logged linked,
     as a thesession_id is, rather than refused on the tune foreign key (the live listener's
     popular-tier picks, logged by tune_id from app builds 27 and 28)."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE))
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE)
+    )
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=IMPORT_ID, name="Imported Reel, The")
+        resp, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=IMPORT_ID,
+            name="Imported Reel, The",
+        )
     assert resp.status_code == 200 and body["success"] is True
     assert body["record"]["tune_id"] == IMPORT_ID
     db_cursor.execute("SELECT name FROM tune WHERE tune_id = %s", (IMPORT_ID,))
@@ -859,11 +1276,16 @@ def test_add_tune_by_an_unknown_tune_id_imports_it(
 
 
 def test_add_tune_by_a_known_tune_id_does_not_fetch(
-        client, authenticated_user, live_instance, monkeypatch):
+    client, authenticated_user, live_instance, monkeypatch
+):
     """A tune_id we have is linked as before, with no import."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        _no_fetch("should not fetch a tune already in the catalog"))
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        _no_fetch("should not fetch a tune already in the catalog"),
+    )
     inst, reel = live_instance["instance_id"], live_instance["reel"]
     with authenticated_user:
         resp, body = _op(client, inst, op_type="add_tune", tune_id=reel)
@@ -871,11 +1293,16 @@ def test_add_tune_by_a_known_tune_id_does_not_fetch(
 
 
 def test_add_tune_thesession_id_already_local_no_fetch(
-        client, authenticated_user, live_instance, monkeypatch):
+    client, authenticated_user, live_instance, monkeypatch
+):
     """If we already have the tune, thesession_id links it without any network fetch."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        _no_fetch("should not fetch a tune already in the catalog"))
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        _no_fetch("should not fetch a tune already in the catalog"),
+    )
     inst, reel = live_instance["instance_id"], live_instance["reel"]
     with authenticated_user:
         resp, body = _op(client, inst, op_type="add_tune", thesession_id=reel)
@@ -884,28 +1311,44 @@ def test_add_tune_thesession_id_already_local_no_fetch(
 
 
 def test_add_tune_thesession_id_never_stores_the_shipped_name(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """The live listener logs a tune by thesession id with its own label for it, a
     thesession.org setting name ("Test Reel, The"); only the id is recorded."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        _no_fetch("should not fetch a tune already in the catalog"))
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        _no_fetch("should not fetch a tune already in the catalog"),
+    )
     inst, reel = live_instance["instance_id"], live_instance["reel"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="add_tune", thesession_id=reel, name="Test Reel, The")
+        _, body = _op(
+            client, inst, op_type="add_tune", thesession_id=reel, name="Test Reel, The"
+        )
     assert body["record"]["tune_id"] == reel
     assert body["record"]["name"] == "The Test Reel"
     assert _records(db_cursor, inst)[0][2] is None
 
 
 def test_add_tune_thesession_id_merged_follows_redirect(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """A merged/redirect thesession id logs the canonical tune (never the merged id)."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        _no_fetch("a known redirect resolves locally, no fetch"))
-    sid, inst, reel, merged = (live_instance["session_id"], live_instance["instance_id"],
-                               live_instance["reel"], live_instance["merged"])
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        _no_fetch("a known redirect resolves locally, no fetch"),
+    )
+    sid, inst, reel, merged = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+        live_instance["merged"],
+    )
     with authenticated_user:
         resp, body = _op(client, inst, op_type="add_tune", thesession_id=merged)
     assert body["success"] is True
@@ -914,13 +1357,16 @@ def test_add_tune_thesession_id_merged_follows_redirect(
 
 
 def test_add_tune_thesession_id_import_failure_logs_unlinked(
-        client, authenticated_user, live_instance, monkeypatch):
+    client, authenticated_user, live_instance, monkeypatch
+):
     """A failed import (fake/dead id) does NOT reject the op: the entry is logged unlinked and
     the ack carries import_failed so the client settles it as an unmatched row."""
     import live_logging_routes
     from api_routes import TuneImportError
+
     def _fail(tid):
         raise TuneImportError(f"Tune #{tid} not found on thesession.org", 404)
+
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _fail)
     inst = live_instance["instance_id"]
     with authenticated_user:
@@ -935,22 +1381,37 @@ def test_add_tune_thesession_id_import_failure_logs_unlinked(
 # chosen setting on add (spec 032: the preview's settings pager)
 # --------------------------------------------------------------------------- #
 
+
 def _session_setting(cur, sid, tid):
-    cur.execute("SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s", (sid, tid))
+    cur.execute(
+        "SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+        (sid, tid),
+    )
     row = cur.fetchone()
     return row[0] if row else None
 
 
 def test_add_tune_chosen_setting_becomes_session_preference(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """No session-level override yet -> the chosen setting becomes the session's
     preferred setting (session_tune.setting_id); the row itself carries no override."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        _no_fetch("locally-cached setting must not fetch"))
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        _no_fetch("locally-cached setting must not fetch"),
+    )
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)
+        resp, body = _op(
+            client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL
+        )
     assert body["success"] is True
     assert body["setting_applied"] == "session"
     assert _session_setting(db_cursor, sid, reel) == SET_LOCAL
@@ -958,38 +1419,75 @@ def test_add_tune_chosen_setting_becomes_session_preference(
 
 
 def test_add_tune_chosen_setting_instance_only_when_session_prefers_another(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """The session already prefers a different NON-DEFAULT setting -> the chosen one
     applies to THIS row only (setting_override), importing it from thesession.org if
     needed. (A default-valued preference would be replaced instead — see the
     replaces_auto_default test.)"""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL)
+    )
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     with authenticated_user:
-        _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL2)  # explicit non-default pref
+        _op(
+            client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL2
+        )  # explicit non-default pref
         # no_merge: a second add of the same tune would otherwise corroborate, not insert
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE, no_merge=True)
+        resp, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=reel,
+            setting_id=SET_REMOTE,
+            no_merge=True,
+        )
     assert body["success"] is True
     assert body["setting_applied"] == "instance"
     assert body["record"]["setting_override"] == SET_REMOTE
-    assert _session_setting(db_cursor, sid, reel) == SET_LOCAL2  # session preference untouched
+    assert (
+        _session_setting(db_cursor, sid, reel) == SET_LOCAL2
+    )  # session preference untouched
     # the remote setting was imported ("!" unfolded to a newline)
-    db_cursor.execute("SELECT tune_id, abc FROM tune_setting WHERE setting_id = %s", (SET_REMOTE,))
+    db_cursor.execute(
+        "SELECT tune_id, abc FROM tune_setting WHERE setting_id = %s", (SET_REMOTE,)
+    )
     row = db_cursor.fetchone()
     assert row is not None and row[0] == reel and "\n" in row[1]
 
 
 def test_add_tune_chosen_setting_already_preferred_noop(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """Choosing the setting the session already prefers changes nothing."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
-                        _no_fetch("locally-cached setting must not fetch"))
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+
+    monkeypatch.setattr(
+        live_logging_routes,
+        "_fetch_thesession_tune",
+        _no_fetch("locally-cached setting must not fetch"),
+    )
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     with authenticated_user:
         _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL, no_merge=True)
+        resp, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=reel,
+            setting_id=SET_LOCAL,
+            no_merge=True,
+        )
     assert body["success"] is True
     assert body["setting_applied"] == "already"
     assert body["record"]["setting_override"] is None
@@ -997,7 +1495,8 @@ def test_add_tune_chosen_setting_already_preferred_noop(
 
 
 def test_add_tune_chosen_setting_import_failure_is_soft(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """A chosen setting that can't be imported never fails the op: the tune logs
     normally and the ack carries setting_failed."""
     import live_logging_routes
@@ -1007,9 +1506,15 @@ def test_add_tune_chosen_setting_import_failure_is_soft(
         raise TuneImportError("thesession.org is down", 502)
 
     monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _fail)
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE)
+        resp, body = _op(
+            client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE
+        )
     assert body["success"] is True
     assert body["record"]["tune_id"] == reel
     assert body.get("setting_applied") is None
@@ -1018,17 +1523,30 @@ def test_add_tune_chosen_setting_import_failure_is_soft(
 
 
 def test_add_tune_chosen_setting_survives_corroboration(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """A duplicate append collapses into a corroboration — but an explicitly chosen
-    setting still applies (to the corroborated row / session), never silently dropped."""
+    setting still applies (to the corroborated row / session), never silently dropped.
+    """
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL)
+    )
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     with authenticated_user:
-        _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL2)  # non-default pref
+        _op(
+            client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL2
+        )  # non-default pref
         # same tune again, pure append -> corroborates; the chosen (different) setting
         # must land on the corroborated row as an override
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE)
+        resp, body = _op(
+            client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE
+        )
     assert body["success"] is True
     assert body["op_type"] == "corroborate"
     assert body["setting_applied"] == "instance"
@@ -1037,21 +1555,36 @@ def test_add_tune_chosen_setting_survives_corroboration(
 
 
 def test_enrollment_fills_default_setting_and_chosen_replaces_it(
-        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    client, authenticated_user, live_instance, db_cursor, monkeypatch
+):
     """Enrollment always stores a setting_id — the tune's default when nothing was
     chosen (spec 032). And because an auto-filled default is not a real preference,
     a later explicitly chosen setting REPLACES it at the session level."""
     import live_logging_routes
-    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
-    sid, inst, newt, reel = (live_instance["session_id"], live_instance["instance_id"],
-                             live_instance["newt"], live_instance["reel"])
+
+    monkeypatch.setattr(
+        live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL)
+    )
+    sid, inst, newt, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["newt"],
+        live_instance["reel"],
+    )
     with authenticated_user:
         # NEWT enrolls on first add; its default (only) setting is stored automatically.
         _op(client, inst, op_type="add_tune", tune_id=newt)
         # REEL: choose its default first (== auto-fill value), then a different setting —
         # the default-valued preference is replaceable, so the session pref moves.
         _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL2, no_merge=True)
+        resp, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=reel,
+            setting_id=SET_LOCAL2,
+            no_merge=True,
+        )
     assert _session_setting(db_cursor, sid, newt) == SET_NEWT
     assert body["success"] is True
     assert body["setting_applied"] == "session"
@@ -1060,9 +1593,14 @@ def test_enrollment_fills_default_setting_and_chosen_replaces_it(
 
 
 def test_add_tune_without_setting_id_leaves_settings_alone(
-        client, authenticated_user, live_instance, db_cursor):
+    client, authenticated_user, live_instance, db_cursor
+):
     """The one-tap paths (＋ rail, composer) send no setting_id -> no setting writes."""
-    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    sid, inst, reel = (
+        live_instance["session_id"],
+        live_instance["instance_id"],
+        live_instance["reel"],
+    )
     with authenticated_user:
         resp, body = _op(client, inst, op_type="add_tune", tune_id=reel)
     assert body["success"] is True
@@ -1075,12 +1613,23 @@ def test_add_tune_without_setting_id_leaves_settings_alone(
 # set_confidence
 # --------------------------------------------------------------------------- #
 
-def test_set_confidence_and_corroboration(client, authenticated_user, live_instance, db_cursor):
+
+def test_set_confidence_and_corroboration(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"], confidence=50)
+        _, a = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            confidence=50,
+        )
         rid = a["record"]["session_instance_tune_id"]
-        _, conf = _op(client, inst, op_type="set_confidence", record_id=rid, confidence=100)
+        _, conf = _op(
+            client, inst, op_type="set_confidence", record_id=rid, confidence=100
+        )
     assert conf["record"]["confidence"] == 100
     db_cursor.execute("SELECT COUNT(*) FROM corroboration WHERE record_id = %s", (rid,))
     assert db_cursor.fetchone()[0] == 1
@@ -1090,14 +1639,22 @@ def test_set_confidence_and_corroboration(client, authenticated_user, live_insta
 # attribute_set_starter
 # --------------------------------------------------------------------------- #
 
-def test_attribute_set_starter_applies_to_whole_set(client, authenticated_user, live_instance, db_cursor):
+
+def test_attribute_set_starter_applies_to_whole_set(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     pid = live_instance["person_id"]
     with authenticated_user:
         _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
         _, b = _op(client, inst, op_type="add_tune", tune_id=live_instance["maid"])
-        _, res = _op(client, inst, op_type="attribute_set_starter",
-                     record_id=a["record"]["session_instance_tune_id"], person_id=pid)
+        _, res = _op(
+            client,
+            inst,
+            op_type="attribute_set_starter",
+            record_id=a["record"]["session_instance_tune_id"],
+            person_id=pid,
+        )
     assert len(res["records"]) == 2  # both tunes in the open set
     for r in _records(db_cursor, inst):
         assert r[6] == pid  # started_by_person_id
@@ -1107,12 +1664,15 @@ def test_attribute_set_starter_applies_to_whole_set(client, authenticated_user, 
 # metadata ops
 # --------------------------------------------------------------------------- #
 
+
 def test_edit_notes(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, body = _op(client, inst, op_type="edit_notes", notes="Great craic tonight")
     assert body["notes"] == "Great craic tonight"
-    db_cursor.execute("SELECT comments FROM session_instance WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT comments FROM session_instance WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0] == "Great craic tonight"
 
 
@@ -1124,55 +1684,81 @@ def test_set_date_moves_the_log(client, authenticated_user, live_instance, db_cu
     assert body["date"] == "2026-01-31"
     assert body["previous_date"] == "2026-02-01"
     assert body["session_date"] == "Sat · Jan 31, 2026"  # the header's display form
-    db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0].isoformat() == "2026-01-31"
     # The prior date is preserved in the audit trail.
     db_cursor.execute(
         "SELECT date FROM session_instance_history WHERE session_instance_id = %s "
-        "ORDER BY changed_at DESC LIMIT 1", (inst,))
+        "ORDER BY changed_at DESC LIMIT 1",
+        (inst,),
+    )
     assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"
 
 
-def test_set_date_rejects_a_non_date(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_rejects_a_non_date(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, body = _op(client, inst, op_type="set_date", date="last tuesday")
     assert body["rejected"] is True
     assert body["reason"] == "invalid"
-    db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"  # untouched
 
 
-def test_set_date_collision_is_a_soft_stop(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_collision_is_a_soft_stop(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A sibling instance already on that date: rejected once, honoured on confirm."""
     inst = live_instance["instance_id"]
     conn = get_db_connection()
     cur = conn.cursor()
     sibling = INST + 1
-    cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
-                (sibling, live_instance["session_id"], "2026-03-15"))
+    cur.execute(
+        "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
+        (sibling, live_instance["session_id"], "2026-03-15"),
+    )
     conn.commit()
     try:
         with authenticated_user:
             _, blocked = _op(client, inst, op_type="set_date", date="2026-03-15")
             assert blocked["rejected"] is True
             assert blocked["reason"] == "date_conflict"
-            db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+            db_cursor.execute(
+                "SELECT date FROM session_instance WHERE session_instance_id = %s",
+                (inst,),
+            )
             assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"
 
-            _, forced = _op(client, inst, op_type="set_date", date="2026-03-15", confirm=True)
+            _, forced = _op(
+                client, inst, op_type="set_date", date="2026-03-15", confirm=True
+            )
         assert forced["date"] == "2026-03-15"
-        db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+        db_cursor.execute(
+            "SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,)
+        )
         assert db_cursor.fetchone()[0].isoformat() == "2026-03-15"
     finally:
-        cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (sibling,))
-        cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (sibling,))
+        cur.execute(
+            "DELETE FROM session_instance_history WHERE session_instance_id = %s",
+            (sibling,),
+        )
+        cur.execute(
+            "DELETE FROM session_instance WHERE session_instance_id = %s", (sibling,)
+        )
         conn.commit()
         cur.close()
         conn.close()
 
 
-def test_set_date_to_the_same_date_is_a_no_op(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_to_the_same_date_is_a_no_op(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Re-saving the current date must not trip the collision check against itself."""
     inst = live_instance["instance_id"]
     with authenticated_user:
@@ -1181,85 +1767,148 @@ def test_set_date_to_the_same_date_is_a_no_op(client, authenticated_user, live_i
     assert body["date"] == "2026-02-01"
 
 
-def test_set_date_sets_the_times_too(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_sets_the_times_too(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Spec 048: date and times are one edit behind one Save, so one op carries both."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="set_date", date="2026-02-01",
-                      start_time="20:00", end_time="23:00")
+        _, body = _op(
+            client,
+            inst,
+            op_type="set_date",
+            date="2026-02-01",
+            start_time="20:00",
+            end_time="23:00",
+        )
     assert body["start_time"] == "20:00:00"
     assert body["end_time"] == "23:00:00"
     assert body["date"] == "2026-02-01"  # unchanged date is not a collision with itself
     db_cursor.execute(
-        "SELECT date, start_time, end_time FROM session_instance WHERE session_instance_id = %s", (inst,))
+        "SELECT date, start_time, end_time FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
     d, s, e = db_cursor.fetchone()
     assert (d.isoformat(), str(s), str(e)) == ("2026-02-01", "20:00:00", "23:00:00")
 
 
-def test_set_date_accepts_an_overnight_range(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_accepts_an_overnight_range(
+    client, authenticated_user, live_instance, db_cursor
+):
     """End before start is signal, not an error — the after-hours session runs past midnight."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="set_date", date="2026-02-01",
-                      start_time="23:00", end_time="02:00")
+        _, body = _op(
+            client,
+            inst,
+            op_type="set_date",
+            date="2026-02-01",
+            start_time="23:00",
+            end_time="02:00",
+        )
     assert body.get("rejected") is None
     assert (body["start_time"], body["end_time"]) == ("23:00:00", "02:00:00")
 
 
-def test_set_date_blank_end_time_clears_it(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_blank_end_time_clears_it(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A NULL end_time is a real state: "it ran until it stopped" ("11:00pm - ?")."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _op(client, inst, op_type="set_date", date="2026-02-01", start_time="23:00", end_time="02:00")
-        _, body = _op(client, inst, op_type="set_date", date="2026-02-01", start_time="23:00", end_time="")
+        _op(
+            client,
+            inst,
+            op_type="set_date",
+            date="2026-02-01",
+            start_time="23:00",
+            end_time="02:00",
+        )
+        _, body = _op(
+            client,
+            inst,
+            op_type="set_date",
+            date="2026-02-01",
+            start_time="23:00",
+            end_time="",
+        )
     assert body["end_time"] is None
     assert body["previous_end_time"] == "02:00:00"
     db_cursor.execute(
-        "SELECT end_time FROM session_instance WHERE session_instance_id = %s", (inst,))
+        "SELECT end_time FROM session_instance WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0] is None
 
 
-def test_set_date_omitting_times_leaves_them_alone(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_omitting_times_leaves_them_alone(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Absent key != cleared. A pre-048 client sending only `date` must not wipe them."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _op(client, inst, op_type="set_date", date="2026-02-01", start_time="20:00", end_time="23:00")
+        _op(
+            client,
+            inst,
+            op_type="set_date",
+            date="2026-02-01",
+            start_time="20:00",
+            end_time="23:00",
+        )
         _, body = _op(client, inst, op_type="set_date", date="2026-02-03")
     assert (body["start_time"], body["end_time"]) == ("20:00:00", "23:00:00")
     db_cursor.execute(
-        "SELECT start_time, end_time FROM session_instance WHERE session_instance_id = %s", (inst,))
+        "SELECT start_time, end_time FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
     s, e = db_cursor.fetchone()
     assert (str(s), str(e)) == ("20:00:00", "23:00:00")
 
 
-def test_set_date_rejects_a_non_time(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_rejects_a_non_time(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="set_date", date="2026-02-01", start_time="half eight")
+        _, body = _op(
+            client, inst, op_type="set_date", date="2026-02-01", start_time="half eight"
+        )
     assert body["rejected"] is True
     assert body["reason"] == "invalid"
-    db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"  # untouched
 
 
-def test_set_date_times_only_is_not_a_collision(client, authenticated_user, live_instance, db_cursor):
+def test_set_date_times_only_is_not_a_collision(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Editing times without moving the date must not trip the sibling collision check —
     the date isn't moving, so there is nothing to collide with."""
     inst = live_instance["instance_id"]
     conn = get_db_connection()
     cur = conn.cursor()
     sibling = INST + 1
-    cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
-                (sibling, live_instance["session_id"], "2026-02-01"))
+    cur.execute(
+        "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
+        (sibling, live_instance["session_id"], "2026-02-01"),
+    )
     conn.commit()
     try:
         with authenticated_user:
-            _, body = _op(client, inst, op_type="set_date", date="2026-02-01", start_time="21:00")
+            _, body = _op(
+                client, inst, op_type="set_date", date="2026-02-01", start_time="21:00"
+            )
         assert body.get("rejected") is None
         assert body["start_time"] == "21:00:00"
     finally:
-        cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (sibling,))
-        cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (sibling,))
+        cur.execute(
+            "DELETE FROM session_instance_history WHERE session_instance_id = %s",
+            (sibling,),
+        )
+        cur.execute(
+            "DELETE FROM session_instance WHERE session_instance_id = %s", (sibling,)
+        )
         conn.commit()
         cur.close()
         conn.close()
@@ -1268,7 +1917,14 @@ def test_set_date_times_only_is_not_a_collision(client, authenticated_user, live
 def test_bootstrap_returns_the_times(client, authenticated_user, live_instance):
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _op(client, inst, op_type="set_date", date="2026-02-01", start_time="20:00", end_time="23:00")
+        _op(
+            client,
+            inst,
+            op_type="set_date",
+            date="2026-02-01",
+            start_time="20:00",
+            end_time="23:00",
+        )
         res = client.get(f"/api/live/instances/{inst}/bootstrap")
     body = res.get_json()
     assert (body["start_time"], body["end_time"]) == ("20:00:00", "23:00:00")
@@ -1279,16 +1935,22 @@ def test_set_name_names_the_log(client, authenticated_user, live_instance, db_cu
     so the name is the only thing distinguishing them in every list that shows them."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        _, body = _op(client, inst, op_type="set_name", name="  Advanced Session @ Jim Bowie  ")
+        _, body = _op(
+            client, inst, op_type="set_name", name="  Advanced Session @ Jim Bowie  "
+        )
     assert body["instance_name"] == "Advanced Session @ Jim Bowie"  # trimmed
     assert body["previous_name"] is None
     db_cursor.execute(
-        "SELECT location_override FROM session_instance WHERE session_instance_id = %s", (inst,))
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
     assert db_cursor.fetchone()[0] == "Advanced Session @ Jim Bowie"
     # The prior value is recoverable from the audit trail.
     db_cursor.execute(
         "SELECT location_override FROM session_instance_history WHERE session_instance_id = %s "
-        "ORDER BY changed_at DESC LIMIT 1", (inst,))
+        "ORDER BY changed_at DESC LIMIT 1",
+        (inst,),
+    )
     assert db_cursor.fetchone()[0] is None
 
 
@@ -1301,11 +1963,15 @@ def test_set_name_blank_clears_it(client, authenticated_user, live_instance, db_
     assert body["instance_name"] is None
     assert body["previous_name"] == "After-Hours Session @ Hotel"
     db_cursor.execute(
-        "SELECT location_override FROM session_instance WHERE session_instance_id = %s", (inst,))
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
     assert db_cursor.fetchone()[0] is None
 
 
-def test_set_name_rejects_an_overlong_name(client, authenticated_user, live_instance, db_cursor):
+def test_set_name_rejects_an_overlong_name(
+    client, authenticated_user, live_instance, db_cursor
+):
     """The column is VARCHAR(255): reject rather than let psycopg2 raise mid-transaction."""
     inst = live_instance["instance_id"]
     with authenticated_user:
@@ -1313,15 +1979,21 @@ def test_set_name_rejects_an_overlong_name(client, authenticated_user, live_inst
     assert body["rejected"] is True
     assert body["reason"] == "invalid"
     db_cursor.execute(
-        "SELECT location_override FROM session_instance WHERE session_instance_id = %s", (inst,))
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
     assert db_cursor.fetchone()[0] is None  # untouched
 
 
-def test_set_name_to_the_same_name_is_a_no_op(client, authenticated_user, live_instance, db_cursor):
+def test_set_name_to_the_same_name_is_a_no_op(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _op(client, inst, op_type="set_name", name="Slow Session @ Parish Hall")
-        _, body = _op(client, inst, op_type="set_name", name="Slow Session @ Parish Hall")
+        _, body = _op(
+            client, inst, op_type="set_name", name="Slow Session @ Parish Hall"
+        )
     assert body.get("rejected") is None
     assert body["instance_name"] == "Slow Session @ Parish Hall"
     assert body["previous_name"] == "Slow Session @ Parish Hall"
@@ -1337,40 +2009,59 @@ def test_bootstrap_returns_the_instance_name(client, authenticated_user, live_in
     assert res.get_json()["instance_name"] == "Opening Ceili @ Scholz Garten"
 
 
-def test_bootstrap_returns_the_session_type(client, authenticated_user, live_instance, db_cursor):
+def test_bootstrap_returns_the_session_type(
+    client, authenticated_user, live_instance, db_cursor
+):
     """The header's naming help is worded per session type, so bootstrap carries it.
     Nothing is gated on it — the same fields are editable either way."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        assert client.get(f"/api/live/instances/{inst}/bootstrap").get_json()["session_type"] == "regular"
+        assert (
+            client.get(f"/api/live/instances/{inst}/bootstrap").get_json()[
+                "session_type"
+            ]
+            == "regular"
+        )
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("UPDATE session SET session_type = 'festival' WHERE session_id = %s",
-                (live_instance["session_id"],))
+    cur.execute(
+        "UPDATE session SET session_type = 'festival' WHERE session_id = %s",
+        (live_instance["session_id"],),
+    )
     conn.commit()
     try:
         with authenticated_user:
             body = client.get(f"/api/live/instances/{inst}/bootstrap").get_json()
         assert body["session_type"] == "festival"
     finally:
-        cur.execute("UPDATE session SET session_type = 'regular' WHERE session_id = %s",
-                    (live_instance["session_id"],))
+        cur.execute(
+            "UPDATE session SET session_type = 'regular' WHERE session_id = %s",
+            (live_instance["session_id"],),
+        )
         conn.commit()
         cur.close()
         conn.close()
 
 
-def test_mark_complete_then_incomplete(client, authenticated_user, live_instance, db_cursor):
+def test_mark_complete_then_incomplete(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         _, done = _op(client, inst, op_type="mark_complete")
         assert done["log_complete"] is True
-        db_cursor.execute("SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s", (inst,))
+        db_cursor.execute(
+            "SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s",
+            (inst,),
+        )
         assert db_cursor.fetchone()[0] is not None
         _, undo = _op(client, inst, op_type="mark_incomplete")
     assert undo["log_complete"] is False
-    db_cursor.execute("SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
     assert db_cursor.fetchone()[0] is None
 
 
@@ -1378,25 +2069,40 @@ def test_mark_complete_then_incomplete(client, authenticated_user, live_instance
 # idempotency (§C)
 # --------------------------------------------------------------------------- #
 
-def test_idempotent_replay_same_op_id(client, authenticated_user, live_instance, db_cursor):
+
+def test_idempotent_replay_same_op_id(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     op_id = str(uuid.uuid4())
     with authenticated_user:
-        _, first = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"], op_id=op_id)
-        _, second = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"], op_id=op_id)
+        _, first = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"], op_id=op_id
+        )
+        _, second = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"], op_id=op_id
+        )
     assert first["success"] is True and "duplicate" not in first
     assert second["duplicate"] is True
     assert second["event_id"] == first["event_id"]
     # exactly one tune row and one feed event despite two POSTs
     assert len(_records(db_cursor, inst)) == 1
-    db_cursor.execute("SELECT COUNT(*) FROM session_event WHERE session_instance_id = %s", (inst,))
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_event WHERE session_instance_id = %s", (inst,)
+    )
     assert db_cursor.fetchone()[0] == 1
 
 
 def test_op_id_must_be_uuid(client, authenticated_user, live_instance):
     inst = live_instance["instance_id"]
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"], op_id="not-a-uuid")
+        resp, body = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            op_id="not-a-uuid",
+        )
     assert resp.status_code == 400
     assert body["success"] is False
 
@@ -1405,10 +2111,13 @@ def test_op_id_must_be_uuid(client, authenticated_user, live_instance):
 # rejection / errors
 # --------------------------------------------------------------------------- #
 
+
 def test_change_missing_record_rejected(client, authenticated_user, live_instance):
     inst = live_instance["instance_id"]
     with authenticated_user:
-        resp, body = _op(client, inst, op_type="change_tune", record_id=99999999, name="x")
+        resp, body = _op(
+            client, inst, op_type="change_tune", record_id=99999999, name="x"
+        )
     # OpRejected surfaces as HTTP 200 with success=False + a machine reason (§E),
     # not a 4xx — the affected client renders the reason itself.
     assert resp.status_code == 200
@@ -1434,8 +2143,10 @@ def test_unknown_instance_404(client, authenticated_user):
 
 def test_ops_require_auth(client, live_instance):
     """No authenticated user -> 401 (api_login_required)."""
-    resp = client.post(f"/api/live/instances/{live_instance['instance_id']}/ops",
-                        json={"op_type": "add_tune", "name": "x", "op_id": str(uuid.uuid4())})
+    resp = client.post(
+        f"/api/live/instances/{live_instance['instance_id']}/ops",
+        json={"op_type": "add_tune", "name": "x", "op_id": str(uuid.uuid4())},
+    )
     assert resp.status_code == 401
 
 
@@ -1443,18 +2154,24 @@ def test_ops_require_auth(client, live_instance):
 # _position_for — focused unit test (no HTTP; rolled back via db_cursor)
 # --------------------------------------------------------------------------- #
 
+
 def test_position_for_branches(db_cursor):
     """append -> after -> before, driven directly against an uncommitted instance."""
-    db_cursor.execute("INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s)",
-                      (9310, "Pos Test", "pos-test"))
-    db_cursor.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
-                      (9391, 9310, "2026-03-01"))
+    db_cursor.execute(
+        "INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s)",
+        (9310, "Pos Test", "pos-test"),
+    )
+    db_cursor.execute(
+        "INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
+        (9391, 9310, "2026-03-01"),
+    )
 
     def add(pos):
         db_cursor.execute(
             "INSERT INTO session_instance_tune (session_instance_id, name, order_position, record_type) "
             "VALUES (%s, %s, %s, 'tune') RETURNING session_instance_tune_id",
-            (9391, "t", pos))
+            (9391, "t", pos),
+        )
         return db_cursor.fetchone()[0]
 
     # empty instance -> append yields the same as generate_append_position(None)
@@ -1479,6 +2196,7 @@ def test_position_for_branches(db_cursor):
 # bulk ops (spec 029): move_tunes / remove_tunes / restore_tunes
 # --------------------------------------------------------------------------- #
 
+
 def _seed_sets(client, inst, sets):
     """Log unlinked tunes as sets (breaks between). Returns (name->id, [break ids])."""
     ids, breaks = {}, []
@@ -1487,8 +2205,13 @@ def _seed_sets(client, inst, sets):
             _, r = _op(client, inst, op_type="add_tune", name=name)
             ids[name] = r["record"]["session_instance_tune_id"]
         if si < len(sets) - 1:
-            _, b = _op(client, inst, op_type="set_break", action="insert",
-                       after_record_id=ids[names[-1]])
+            _, b = _op(
+                client,
+                inst,
+                op_type="set_break",
+                action="insert",
+                after_record_id=ids[names[-1]],
+            )
             breaks.append(b["record"]["session_instance_tune_id"])
     return ids, breaks
 
@@ -1502,41 +2225,69 @@ def test_move_tunes_within_set(client, authenticated_user, live_instance, db_cur
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvC"]],
+            after_record_id=ids["mvA"],
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "mvC", "mvB"]
     assert res["moved_ids"] == [ids["mvC"]]
 
 
-def test_move_tunes_across_sets_welds(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_across_sets_welds(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvD"]], after_record_id=ids["mvA"])
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvD"]],
+            after_record_id=ids["mvA"],
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "mvD", "mvB", "|", "mvC"]
 
 
-def test_move_tunes_new_set_inserts_boundary_breaks(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_new_set_inserts_boundary_breaks(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Drop on an inter-set seam (before C, new_set) -> block becomes its own set."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvB"]], before_record_id=ids["mvC"], new_set=True)
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvB"]],
+            before_record_id=ids["mvC"],
+            new_set=True,
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "|", "mvB", "|", "mvC", "mvD"]
 
 
-def test_move_tunes_new_set_at_very_start(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_new_set_at_very_start(
+    client, authenticated_user, live_instance, db_cursor
+):
     """new_set before the first tune: boundary break only on the tune side."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvC"], ids["mvD"]], before_record_id=ids["mvA"], new_set=True)
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvC"], ids["mvD"]],
+            before_record_id=ids["mvA"],
+            new_set=True,
+        )
     assert res["success"] is True
     # no leading break above the block; one break separates it from A's set; the
     # original inter-set break is now orphaned (nothing after it) BUT a trailing
@@ -1544,111 +2295,202 @@ def test_move_tunes_new_set_at_very_start(client, authenticated_user, live_insta
     assert _shape(db_cursor, inst) == ["mvC", "mvD", "|", "mvA", "mvB", "|"]
 
 
-def test_move_tunes_multiset_block_preserves_interior_breaks(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_multiset_block_preserves_interior_breaks(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Interior breaks travel: a 2-set block dropped at the start is still 2 sets."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"], ["mvE", "mvF"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvC"], ids["mvD"], ids["mvE"], ids["mvF"]],
-                     before_record_id=ids["mvA"], new_set=True)
+        ids, _ = _seed_sets(
+            client, inst, [["mvA", "mvB"], ["mvC", "mvD"], ["mvE", "mvF"]]
+        )
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvC"], ids["mvD"], ids["mvE"], ids["mvF"]],
+            before_record_id=ids["mvA"],
+            new_set=True,
+        )
     assert res["success"] is True
     # block [C D | E F] + boundary break, then A B; break formerly after B is now
     # trailing (closed end) and stays.
-    assert _shape(db_cursor, inst) == ["mvC", "mvD", "|", "mvE", "mvF", "|", "mvA", "mvB", "|"]
+    assert _shape(db_cursor, inst) == [
+        "mvC",
+        "mvD",
+        "|",
+        "mvE",
+        "mvF",
+        "|",
+        "mvA",
+        "mvB",
+        "|",
+    ]
 
 
-def test_move_tunes_source_remnants_merge(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_source_remnants_merge(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Taking [B C | D] out of A B C | D E leaves A and E adjacent -> they merge."""
     inst = live_instance["instance_id"]
     with authenticated_user:
-        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"], ["mvD", "mvE"], ["mvF"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvB"], ids["mvC"], ids["mvD"]],
-                     after_record_id=ids["mvF"])
+        ids, _ = _seed_sets(
+            client, inst, [["mvA", "mvB", "mvC"], ["mvD", "mvE"], ["mvF"]]
+        )
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvB"], ids["mvC"], ids["mvD"]],
+            after_record_id=ids["mvF"],
+        )
     assert res["success"] is True
     # A+E merged (their break travelled with the block); block welds onto open set F.
-    assert _shape(db_cursor, inst) == ["mvA", "mvE", "|", "mvF", "mvB", "mvC", "|", "mvD"]
+    assert _shape(db_cursor, inst) == [
+        "mvA",
+        "mvE",
+        "|",
+        "mvF",
+        "mvB",
+        "mvC",
+        "|",
+        "mvD",
+    ]
 
 
-def test_move_tunes_orphan_break_cleanup(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_orphan_break_cleanup(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Emptying the first set leaves a leading break -> deleted in the same txn."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, breaks = _seed_sets(client, inst, [["mvA"], ["mvB", "mvC"]])
-        _, res = _op(client, inst, op_type="move_tunes", record_ids=[ids["mvA"]])  # append
+        _, res = _op(
+            client, inst, op_type="move_tunes", record_ids=[ids["mvA"]]
+        )  # append
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvB", "mvC", "mvA"]
     assert breaks[0] in res["removed_break_ids"]
 
 
-def test_move_tunes_back_to_back_breaks_collapse(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_back_to_back_breaks_collapse(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC"], ["mvD"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvC"]],
+            after_record_id=ids["mvA"],
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "mvC", "mvB", "|", "mvD"]
 
 
-def test_move_tunes_anchor_inside_block_rejected(client, authenticated_user, live_instance):
+def test_move_tunes_anchor_inside_block_rejected(
+    client, authenticated_user, live_instance
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvA"], ids["mvB"]], after_record_id=ids["mvA"])
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvA"], ids["mvB"]],
+            after_record_id=ids["mvA"],
+        )
     assert res["success"] is False
     assert res["reason"] == "invalid_anchor"
 
 
-def test_move_tunes_vanished_anchor_appends(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_vanished_anchor_appends(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
         _op(client, inst, op_type="remove_tune", record_id=ids["mvC"])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvA"]], after_record_id=ids["mvC"])  # deleted anchor
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvA"]],
+            after_record_id=ids["mvC"],
+        )  # deleted anchor
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvB", "mvA"]
 
 
-def test_move_tunes_server_resorts_stale_client_order(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_server_resorts_stale_client_order(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC", "mvD"]])
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvC"], ids["mvA"]])  # scrambled; A precedes C today
+        _, res = _op(
+            client, inst, op_type="move_tunes", record_ids=[ids["mvC"], ids["mvA"]]
+        )  # scrambled; A precedes C today
     assert res["success"] is True
     # non-contiguous ids re-pack in CURRENT relative order (A then C), appended.
     assert _shape(db_cursor, inst) == ["mvB", "mvD", "mvA", "mvC"]
 
 
-def test_move_tunes_started_by_untouched(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_started_by_untouched(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A move NEVER stamps/clears started_by — per-tune claims are durable (spec 029 F)."""
     inst = live_instance["instance_id"]
     pid = live_instance["person_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
-        _op(client, inst, op_type="attribute_set_starter", record_id=ids["mvC"], person_id=pid)
-        _, res = _op(client, inst, op_type="move_tunes",
-                     record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+        _op(
+            client,
+            inst,
+            op_type="attribute_set_starter",
+            record_id=ids["mvC"],
+            person_id=pid,
+        )
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvC"]],
+            after_record_id=ids["mvA"],
+        )
     assert res["success"] is True
     rows = {r[2]: r for r in _records(db_cursor, inst)}
-    assert rows["mvC"][6] == pid          # claim survives the move
-    assert rows["mvA"][6] is None         # destination set untouched
-    assert rows["mvD"][6] == pid          # left-behind set-mate untouched
+    assert rows["mvC"][6] == pid  # claim survives the move
+    assert rows["mvA"][6] is None  # destination set untouched
+    assert rows["mvD"][6] == pid  # left-behind set-mate untouched
 
 
-def test_move_tunes_idempotent_replay(client, authenticated_user, live_instance, db_cursor):
+def test_move_tunes_idempotent_replay(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     op_id = str(uuid.uuid4())
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
-        _, first = _op(client, inst, op_type="move_tunes", op_id=op_id,
-                       record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
-        _, replay = _op(client, inst, op_type="move_tunes", op_id=op_id,
-                        record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+        _, first = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            op_id=op_id,
+            record_ids=[ids["mvC"]],
+            after_record_id=ids["mvA"],
+        )
+        _, replay = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            op_id=op_id,
+            record_ids=[ids["mvC"]],
+            after_record_id=ids["mvA"],
+        )
     assert replay["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "mvC", "mvB"]  # applied exactly once
 
@@ -1661,19 +2503,27 @@ def test_move_tunes_requires_ids(client, authenticated_user, live_instance):
     assert res["reason"] == "invalid"
 
 
-def test_remove_tunes_bulk_tombstones(client, authenticated_user, live_instance, db_cursor):
+def test_remove_tunes_bulk_tombstones(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
-        _, res = _op(client, inst, op_type="remove_tunes",
-                     record_ids=[ids["mvA"], ids["mvC"]])
+        _, res = _op(
+            client, inst, op_type="remove_tunes", record_ids=[ids["mvA"], ids["mvC"]]
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvB"]
-    assert {r["session_instance_tune_id"] for r in res["records"]} == {ids["mvA"], ids["mvC"]}
+    assert {r["session_instance_tune_id"] for r in res["records"]} == {
+        ids["mvA"],
+        ids["mvC"],
+    }
     assert all(r["deleted"] for r in res["records"])
 
 
-def test_tombstones_do_not_bound_new_keys(client, authenticated_user, live_instance, db_cursor):
+def test_tombstones_do_not_bound_new_keys(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Remove the last tune, then keep logging after the one before it -- the
     segmenter's mark / delete / mark rhythm. The dead row must not act as the
     follower: every new key was bisected toward it, one character longer each
@@ -1684,7 +2534,13 @@ def test_tombstones_do_not_bound_new_keys(client, authenticated_user, live_insta
         _op(client, inst, op_type="remove_tune", record_id=ids["mvB"])
         anchor = ids["mvA"]
         for i in range(12):
-            _, r = _op(client, inst, op_type="add_tune", name=f"after{i}", after_record_id=anchor)
+            _, r = _op(
+                client,
+                inst,
+                op_type="add_tune",
+                name=f"after{i}",
+                after_record_id=anchor,
+            )
             anchor = r["record"]["session_instance_tune_id"]
     live = _records(db_cursor, inst)
     assert [r[2] for r in live] == ["mvA"] + [f"after{i}" for i in range(12)]
@@ -1692,7 +2548,9 @@ def test_tombstones_do_not_bound_new_keys(client, authenticated_user, live_insta
     assert all(len(r[7]) == 1 for r in live)
 
 
-def test_restore_rekeys_a_tune_whose_key_was_reused(client, authenticated_user, live_instance, db_cursor):
+def test_restore_rekeys_a_tune_whose_key_was_reused(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A tune logged while another was tombstoned may take its key (tombstones no
     longer bound the gap). Restoring the tombstone puts it just BEFORE that tune --
     it was logged first -- with a distinct key."""
@@ -1700,9 +2558,15 @@ def test_restore_rekeys_a_tune_whose_key_was_reused(client, authenticated_user, 
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
         _op(client, inst, op_type="remove_tunes", record_ids=[ids["mvB"]])
-        _, r = _op(client, inst, op_type="add_tune", name="mvC", after_record_id=ids["mvA"])
-        taken = {row[0]: row[7] for row in _records(db_cursor, inst, include_deleted=True)}
-        assert taken[r["record"]["session_instance_tune_id"]] == taken[ids["mvB"]]  # the collision
+        _, r = _op(
+            client, inst, op_type="add_tune", name="mvC", after_record_id=ids["mvA"]
+        )
+        taken = {
+            row[0]: row[7] for row in _records(db_cursor, inst, include_deleted=True)
+        }
+        assert (
+            taken[r["record"]["session_instance_tune_id"]] == taken[ids["mvB"]]
+        )  # the collision
         _, res = _op(client, inst, op_type="restore_tunes", record_ids=[ids["mvB"]])
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "mvB", "mvC"]
@@ -1710,12 +2574,20 @@ def test_restore_rekeys_a_tune_whose_key_was_reused(client, authenticated_user, 
     assert len(set(keys)) == 3 and keys == sorted(keys)
 
 
-def test_move_ignores_tombstones_at_the_destination(client, authenticated_user, live_instance, db_cursor):
+def test_move_ignores_tombstones_at_the_destination(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
         _op(client, inst, op_type="remove_tune", record_id=ids["mvC"])
-        _, res = _op(client, inst, op_type="move_tunes", record_ids=[ids["mvA"]], after_record_id=ids["mvB"])
+        _, res = _op(
+            client,
+            inst,
+            op_type="move_tunes",
+            record_ids=[ids["mvA"]],
+            after_record_id=ids["mvB"],
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvB", "mvA"]
     # Appended after mvB, not squeezed between mvB and the dead mvC.
@@ -1723,13 +2595,16 @@ def test_move_ignores_tombstones_at_the_destination(client, authenticated_user, 
     assert len(keys[-1]) == 1
 
 
-def test_remove_tunes_skips_already_deleted(client, authenticated_user, live_instance, db_cursor):
+def test_remove_tunes_skips_already_deleted(
+    client, authenticated_user, live_instance, db_cursor
+):
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
         _op(client, inst, op_type="remove_tune", record_id=ids["mvA"])
-        _, res = _op(client, inst, op_type="remove_tunes",
-                     record_ids=[ids["mvA"], ids["mvB"]])
+        _, res = _op(
+            client, inst, op_type="remove_tunes", record_ids=[ids["mvA"], ids["mvB"]]
+        )
     assert res["success"] is True
     assert [r["session_instance_tune_id"] for r in res["records"]] == [ids["mvB"]]
     assert _shape(db_cursor, inst) == []
@@ -1750,27 +2625,32 @@ def test_restore_tunes_round_trip(client, authenticated_user, live_instance, db_
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
         _op(client, inst, op_type="remove_tunes", record_ids=[ids["mvA"], ids["mvB"]])
-        _, res = _op(client, inst, op_type="restore_tunes",
-                     record_ids=[ids["mvA"], ids["mvB"]])
+        _, res = _op(
+            client, inst, op_type="restore_tunes", record_ids=[ids["mvA"], ids["mvB"]]
+        )
     assert res["success"] is True
     assert _shape(db_cursor, inst) == ["mvA", "mvB", "mvC"]  # original order preserved
     assert all(not r["deleted"] for r in res["records"])
 
 
-def test_restore_tunes_only_flips_tombstones(client, authenticated_user, live_instance, db_cursor):
+def test_restore_tunes_only_flips_tombstones(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Restoring a mix where one id was never deleted only touches the tombstoned one."""
     inst = live_instance["instance_id"]
     with authenticated_user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
         _op(client, inst, op_type="remove_tune", record_id=ids["mvA"])
-        _, res = _op(client, inst, op_type="restore_tunes",
-                     record_ids=[ids["mvA"], ids["mvB"]])
+        _, res = _op(
+            client, inst, op_type="restore_tunes", record_ids=[ids["mvA"], ids["mvB"]]
+        )
     assert res["success"] is True
     assert [r["session_instance_tune_id"] for r in res["records"]] == [ids["mvA"]]
     assert _shape(db_cursor, inst) == ["mvA", "mvB"]
 
 
 # --- People-tracking flags (spec 039) -------------------------------------------
+
 
 def _set_flags(db_cursor, session_id, *, attendance, starters):
     """Flip a session's people-tracking flags. The op endpoint reads its OWN committed
@@ -1783,30 +2663,43 @@ def _set_flags(db_cursor, session_id, *, attendance, starters):
     db_cursor.connection.commit()
 
 
-def test_attendance_ops_refused_when_attendance_off(client, authenticated_user, live_instance, db_cursor):
+def test_attendance_ops_refused_when_attendance_off(
+    client, authenticated_user, live_instance, db_cursor
+):
     """A stale client, a queued offline op, or a direct POST must not slip a check-in into
-    a session that has turned attendance off — the op is refused, not merely UI-hidden."""
+    a session that has turned attendance off — the op is refused, not merely UI-hidden.
+    """
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     _set_flags(db_cursor, sid, attendance=False, starters=False)
     with authenticated_user as user:
-        resp, body = _op(client, inst, op_type="attendance_add", person_id=user.person_id)
+        resp, body = _op(
+            client, inst, op_type="attendance_add", person_id=user.person_id
+        )
     assert resp.status_code == 200  # the endpoint answers; the OP is rejected
     assert body["success"] is False and body["rejected"] is True
     assert body["reason"] == "people_tracking_off"
     db_cursor.execute(
-        "SELECT COUNT(*) FROM session_instance_person WHERE session_instance_id = %s", (inst,)
+        "SELECT COUNT(*) FROM session_instance_person WHERE session_instance_id = %s",
+        (inst,),
     )
     assert db_cursor.fetchone()[0] == 0
 
 
-def test_set_starter_refused_when_starters_off(client, authenticated_user, live_instance, db_cursor):
+def test_set_starter_refused_when_starters_off(
+    client, authenticated_user, live_instance, db_cursor
+):
     """Attendance may stay on while starters are off; the starter op is refused on its own."""
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     _set_flags(db_cursor, sid, attendance=True, starters=False)
     with authenticated_user as user:
         ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
-        resp, body = _op(client, inst, op_type="attribute_set_starter",
-                         record_id=ids["mvA"], person_id=user.person_id)
+        resp, body = _op(
+            client,
+            inst,
+            op_type="attribute_set_starter",
+            record_id=ids["mvA"],
+            person_id=user.person_id,
+        )
     assert resp.status_code == 200
     assert body["success"] is False and body["reason"] == "people_tracking_off"
     db_cursor.execute(
@@ -1816,10 +2709,89 @@ def test_set_starter_refused_when_starters_off(client, authenticated_user, live_
     assert db_cursor.fetchone()[0] == 0
 
 
-def test_people_ops_allowed_when_flags_on(client, authenticated_user, live_instance, db_cursor):
+def test_people_ops_allowed_when_flags_on(
+    client, authenticated_user, live_instance, db_cursor
+):
     """The default (all flags on) still lets a check-in through — the gate is specific."""
     sid, inst = live_instance["session_id"], live_instance["instance_id"]
     _set_flags(db_cursor, sid, attendance=True, starters=True)
     with authenticated_user as user:
-        resp, body = _op(client, inst, op_type="attendance_add", person_id=user.person_id)
+        resp, body = _op(
+            client, inst, op_type="attendance_add", person_id=user.person_id
+        )
     assert resp.status_code == 200 and body["success"] is True
+
+
+# --- set_cancelled: call a night off, or reinstate it ------------------------
+
+
+def test_set_cancelled_cancels_the_night(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """The column has been honoured by every reader since the first schema, but its
+    only writer was the legacy night page's edit form, unreachable since spec 035."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_cancelled", cancelled=True)
+    assert body.get("rejected") is None
+    assert body["is_cancelled"] is True
+    assert body["previous_cancelled"] is False
+    db_cursor.execute(
+        "SELECT is_cancelled FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
+    assert db_cursor.fetchone()[0] is True
+    # The prior state is in the audit trail.
+    db_cursor.execute(
+        "SELECT is_cancelled FROM session_instance_history WHERE session_instance_id = %s "
+        "ORDER BY changed_at DESC LIMIT 1",
+        (inst,),
+    )
+    assert db_cursor.fetchone()[0] is False
+
+
+def test_set_cancelled_false_reinstates(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """Reversible: the same op with cancelled=false puts the night back."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_cancelled", cancelled=True)
+        _, body = _op(client, inst, op_type="set_cancelled", cancelled=False)
+    assert body["is_cancelled"] is False
+    assert body["previous_cancelled"] is True
+    db_cursor.execute(
+        "SELECT is_cancelled FROM session_instance WHERE session_instance_id = %s",
+        (inst,),
+    )
+    assert db_cursor.fetchone()[0] is False
+
+
+def test_set_cancelled_missing_flag_means_reinstated(
+    client, authenticated_user, live_instance
+):
+    """A payload without `cancelled` is read as false, never as an error: the op is a
+    setter, and the only two values are the two buttons."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_cancelled")
+    assert body.get("rejected") is None
+    assert body["is_cancelled"] is False
+
+
+def test_bootstrap_and_logs_carry_is_cancelled(
+    client, authenticated_user, live_instance
+):
+    """The night's own screen paints the strike from the bootstrap; the session's Logs
+    tab (and the app's) from the logs payload."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        res = client.get(f"/api/live/instances/{inst}/bootstrap")
+        assert res.get_json()["is_cancelled"] is False
+        _op(client, inst, op_type="set_cancelled", cancelled=True)
+        res = client.get(f"/api/live/instances/{inst}/bootstrap")
+        assert res.get_json()["is_cancelled"] is True
+        logs = client.get("/api/sessions/liveops-test/logs").get_json()
+    nights = [n for group in logs["instances_by_year"].values() for n in group]
+    mine = next(n for n in nights if n["session_instance_id"] == inst)
+    assert mine["is_cancelled"] is True

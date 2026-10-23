@@ -259,4 +259,4 @@
 </Sheet>
 
 <!-- Session instance detail (bundled port of the old vanilla SessionInstanceModal) -->
-<InstanceSheet bind:this={instanceSheet} onDeleted={loadLogsContent} />
+<InstanceSheet bind:this={instanceSheet} onDeleted={loadLogsContent} onChanged={loadLogsContent} />

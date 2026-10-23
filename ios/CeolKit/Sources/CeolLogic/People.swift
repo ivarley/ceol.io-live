@@ -119,6 +119,8 @@ public enum People {
         case "set_name":
             if let name = d["instance_name"]?.stringValue, !name.isEmpty { return "named this log \"\(name)\"" }
             return "cleared this log's name"
+        case "set_cancelled":
+            return d["is_cancelled"] == true ? "cancelled this session" : "reinstated this session"
         default: return nil
         }
     }

@@ -479,7 +479,7 @@
                   <Row
                     as="div"
                     styled={false}
-                    rowClass="logs-row year-content-row{dimmed(instance) ? ' empty-log' : ''}"
+                    rowClass="logs-row year-content-row{dimmed(instance) ? ' empty-log' : ''}{instance.is_cancelled ? ' cancelled-log' : ''}"
                     data-year={groupKey}
                     data-instance-id={instance.session_instance_id}>
                     {#snippet lead()}
@@ -505,8 +505,10 @@
                         <span class="logs-row-sub">
                           <!-- The separator is an expression, not literal whitespace:
                                Svelte trims text at a block boundary, so " · " written
-                               inline collapses and the two facts run together. -->
-                          {#if when}{when}{/if}{#if when && count}{' · '}{/if}{#if count}<span class="log-tune-count">{tn(count, '{n} tune logged', '{n} tunes logged')}</span>{/if}
+                               inline collapses and the two facts run together.
+                               A cancelled night says so here as well as by the strike:
+                               a line through a date can pass for a rendering fault. -->
+                          {#if instance.is_cancelled}<span class="log-cancelled">{t('Cancelled')}</span>{/if}{#if instance.is_cancelled && (when || count)}{' · '}{/if}{#if when}{when}{/if}{#if when && count}{' · '}{/if}{#if count}<span class="log-tune-count">{tn(count, '{n} tune logged', '{n} tunes logged')}</span>{/if}
                         </span>
                       </span>
                       {@render tuneHits(instance)}

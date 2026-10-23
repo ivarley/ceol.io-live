@@ -350,6 +350,10 @@
   let notesText = $state('') // server-truth session notes
   let notesDraft = $state('') // editable buffer in the expanded header
   let logComplete = $state(false) // session marked "completely logged" — hides editing (§024)
+  // Called off (session_instance.is_cancelled). Readable and editable all the same — the
+  // log may hold what was played before the call was made — but struck through, left
+  // out of Home, and never marked live. Flipped from the header (set_cancelled), echoed.
+  let instanceCancelled = $state(untrack(() => config.instanceCancelled) === true)
   let expanded = $state(false)
   // Svelte's `slide` animates HEIGHT, which unrolls the panel a row at a time. This
   // moves it as one piece, out from under the session band (which sits a z-index
@@ -413,7 +417,7 @@
         session_name: sessionName, session_date: sessionDate, instance_date: instanceDate,
         instance_name: instanceName, start_time: instanceStart, end_time: instanceEnd,
         session_type: sessionType, notes: notesText,
-        log_complete: logComplete, display_tz: displayTz,
+        log_complete: logComplete, is_cancelled: instanceCancelled, display_tz: displayTz,
         // Persist the session vocabulary so the offline-render path keeps the local
         // exact-match fast path working without a fresh bootstrap (§024 / §G).
         known_tunes: vocabKnown, known_aliases: vocabAliases,
@@ -1481,6 +1485,26 @@
     instanceName = d.instance_name || ''
   }
 
+  // Cancel this night, or reinstate it. No Dialog: it is reversible, and Reinstate sits
+  // exactly where Cancel was. Online-only like the other header edits; the echo strikes
+  // the night through on every other open screen.
+  let cancelSaving = $state(false)
+  async function setCancelled(cancelled) {
+    error = ''
+    if (!navigator.onLine) { notice = t("You're offline — cancelling needs a connection."); return }
+    cancelSaving = true
+    try {
+      const res = await sendOp(config, 'set_cancelled', { cancelled })
+      if (res.rejected) { notice = res.message || res.reason; return }
+      instanceCancelled = res.is_cancelled === true
+    } catch (e) {
+      if (e.networkError) notice = t("You're offline — cancelling needs a connection.")
+      else error = e.message
+    } finally {
+      cancelSaving = false
+    }
+  }
+
   // Mark this session "completely logged" (§024): hides the editing affordances for
   // everyone (the SSE echo flips other clients via applyOp). Online-only metadata op,
   // like notes. Drops us to read-only view; the next reload takes the render-only path.
@@ -2368,6 +2392,9 @@
       case 'mark_incomplete':
         logComplete = false
         break
+      case 'set_cancelled':
+        instanceCancelled = d.is_cancelled === true
+        break
     }
     scheduleSnapshot() // keep the offline snapshot fresh
   }
@@ -3213,7 +3240,7 @@
     instance_date: cached.instance_date, instance_name: cached.instance_name,
     start_time: cached.start_time, end_time: cached.end_time,
     session_type: cached.session_type, notes: cached.notes,
-    log_complete: cached.log_complete, user_timezone: cached.display_tz,
+    log_complete: cached.log_complete, is_cancelled: cached.is_cancelled, user_timezone: cached.display_tz,
     known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [],
   })
   // Apply a bootstrap-shaped snapshot (server truth or cached copy) to the screen.
@@ -3237,6 +3264,9 @@
     if ('start_time' in snap) instanceStart = snap.start_time || ''
     if ('end_time' in snap) instanceEnd = snap.end_time || ''
     if (snap.session_type) sessionType = snap.session_type
+    // Key presence again: a snapshot cached before this flag existed must not reinstate
+    // a night the shell already painted as cancelled.
+    if ('is_cancelled' in snap) instanceCancelled = snap.is_cancelled === true
     displayTz = snap.user_timezone || snap.session_timezone || undefined
     notesText = snap.notes || ''
     logComplete = !!snap.log_complete
@@ -3764,7 +3794,9 @@
                moved the avatars, the help icon and the chevron down the screen every
                time you opened the drawer — a header that jumps is more distracting
                than a date that appears twice. -->
-          <div class="session-date">{sessionDate}{#if ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
+          <div class="session-date">
+            <span class:session-date-cancelled={instanceCancelled}>{sessionDate}</span>{#if instanceCancelled}{' '}<span class="session-cancelled-badge">{t('Cancelled')}</span>{/if}{#if ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}
+          </div>
           {#if notesText && logComplete}
             <div class="session-notes">{notesText}</div>
           {/if}
@@ -4615,6 +4647,25 @@
             {/if}
           {/if}
         </div>
+
+        <!-- Whether the night was called off. Its own row rather than a third state of
+             Status, because a cancelled night can still be logged and completed (the
+             tunes played before the call came). Signed out it appears only when there
+             is something to say. -->
+        {#if instanceCancelled || !readOnly}
+          <div class="kit-field header-cancelled">
+            <span class="kit-field-label">{t('Cancelled')}</span>
+            {#if instanceCancelled}
+              <span class="kit-field-value hc-cancelled">{t('Yes')}</span>
+              {#if !readOnly}
+                <button class="hx-act" disabled={cancelSaving} onclick={() => setCancelled(false)}>{t('Reinstate')}</button>
+              {/if}
+            {:else}
+              <span class="kit-field-value">{t('No')}</span>
+              <button class="hx-act" disabled={cancelSaving} onclick={() => setCancelled(true)}>{t('Cancel it')}</button>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       {#if (trackAttendance && !readOnly) || canManageRecordings || (!readOnly && roster.length)}

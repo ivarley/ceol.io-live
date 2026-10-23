@@ -439,8 +439,8 @@ public enum LogState {
         return out
     }
 
-    /// The night's own fields an op sets (notes, date and times, name, complete): only the
-    /// keys it changes.
+    /// The night's own fields an op sets (notes, date and times, name, complete,
+    /// cancelled): only the keys it changes.
     public static func metaChanges(_ d: JSONValue?) -> [String: JSONValue] {
         guard let d else { return [:] }
         func text(_ k: String) -> JSONValue { d[k].isTruthy ? d[k]! : .string("") }
@@ -460,6 +460,8 @@ public enum LogState {
             return ["log_complete": .bool(true)]
         case "mark_incomplete":
             return ["log_complete": .bool(false)]
+        case "set_cancelled":
+            return ["is_cancelled": .bool(d["is_cancelled"] == true)]
         default:
             return [:]
         }

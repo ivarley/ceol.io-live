@@ -713,6 +713,8 @@ components:
         tune_count: { type: integer }
         # Signed in: whether the viewer checked in that night (the "Attended" filter).
         attended: { type: boolean }
+        # Called off: listed struck through, with the word beside it.
+        is_cancelled: { type: boolean }
     SessionPeople:
       type: object
       required: [success, people]
@@ -989,6 +991,9 @@ components:
         end_time: { $ref: "#/components/schemas/TimeOrNull" }
         session_type: { type: string }
         instance_active: { type: boolean }
+        # The night was called off. Still readable and editable (what was played before
+        # the call came), shown struck through; `set_cancelled` {cancelled} flips it.
+        is_cancelled: { type: boolean }
         records: { type: array, items: { $ref: "#/components/schemas/LiveRecord" } }
         sets: { type: array, items: { type: array, items: { $ref: "#/components/schemas/LiveRecord" } } }
         # The session's people settings (spec 039). Set starters show only when
@@ -1050,7 +1055,7 @@ components:
           type: string
           enum: [add_tune, remove_tune, change_tune, set_confidence, set_break, attribute_set_starter,
                  edit_notes, set_date, set_name, attendance_add, attendance_remove, attendance_create_person,
-                 mark_complete, mark_incomplete, move_tunes, remove_tunes, restore_tunes]
+                 mark_complete, mark_incomplete, set_cancelled, move_tunes, remove_tunes, restore_tunes]
     LiveOpResult:
       type: object
       required: [success]

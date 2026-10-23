@@ -730,12 +730,17 @@ struct SessionDetailView: View {
                                               color: CeolTokens.textMuted)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
+                                    // A cancelled night is struck through and says so beneath
+                                    // (a line alone can pass for a rendering fault), as on the web.
+                                    let cancelled = night.isCancelled ?? false
                                     Text(title).font(.ceol(size: 18, weight: .medium))
                                         .foregroundStyle(CeolTokens.primary)
-                                    Text([SessionsL10n.timeRange(start: night.startTime, end: night.endTime),
+                                        .strikethrough(cancelled)
+                                    Text([cancelled ? tr("Cancelled") : "",
+                                          SessionsL10n.timeRange(start: night.startTime, end: night.endTime),
                                           night.tuneCount == 1 ? tr("1 tune logged") : tr("\(night.tuneCount) tunes logged")]
                                         .filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                                        .font(.ceol(size: 14)).foregroundStyle(cancelled ? CeolTokens.errorText : CeolTokens.textMuted)
                                     // Searched for a tune: where it came round that night.
                                     if let spots = tuneNights?.value?.positions[night.sessionInstanceId], !spots.isEmpty {
                                         Text(spots.joined(separator: " · ")).font(.ceol(size: 14))
@@ -1313,8 +1318,11 @@ struct NightView: View {
                     Text(name).font(.ceol(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
                 }
                 HStack(alignment: .firstTextBaseline) {
-                    Text([log.meta["session_date"]?.stringValue, tuneCount == 0 ? nil : tally(tunes: tuneCount, sets: sets.count)]
-                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    // Called off: the date struck through, the word beside it (as on the web).
+                    let cancelled = log.meta["is_cancelled"] == true
+                    (Text(log.meta["session_date"]?.stringValue ?? "").strikethrough(cancelled)
+                     + Text(cancelled ? " " + tr("Cancelled") : "").foregroundStyle(CeolTokens.errorText).fontWeight(.semibold)
+                     + Text(tuneCount == 0 ? "" : " · " + tally(tunes: tuneCount, sets: sets.count)))
                         .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     Spacer(minLength: 4)
                     // Tap the header for the log's details, as on the web (spec 052 §B15).

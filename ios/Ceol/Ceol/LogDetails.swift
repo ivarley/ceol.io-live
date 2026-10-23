@@ -21,10 +21,12 @@ struct LogDetailsSheet: View {
     @State private var editingName = false
     @State private var confirmComplete = false
     @State private var confirmReopen = false
+    @State private var cancelSaving = false
 
     var body: some View {
         let meta = model.log?.meta ?? [:]
         let complete = meta["log_complete"] == true
+        let cancelled = meta["is_cancelled"] == true
         // A guest reads the details and changes none of them (spec 060).
         let guest = app.isGuest
         NavigationStack {
@@ -52,6 +54,27 @@ struct LogDetailsSheet: View {
                             Button("Re-open") { confirmReopen = true }.accessibilityIdentifier("details.reopen")
                         } else {
                             Button("Mark complete") { confirmComplete = true }.accessibilityIdentifier("details.complete")
+                        }
+                    }
+                    // Its own row, not a third state of Status: a cancelled night can still
+                    // be logged and completed (the tunes played before the call came).
+                    // Reversible, so no confirmation — Reinstate sits where Cancel it was.
+                    if cancelled || !guest {
+                        row("Cancelled", cancelled ? tr("Yes") : tr("No")) {
+                            if guest {
+                                EmptyView()
+                            } else {
+                                Button(cancelled ? tr("Reinstate") : tr("Cancel it")) {
+                                    cancelSaving = true
+                                    Task {
+                                        let r = await model.metaOp("set_cancelled", ["cancelled": .bool(!cancelled)], label: "cancelling")
+                                        why = r.why
+                                        cancelSaving = false
+                                    }
+                                }
+                                .disabled(cancelSaving)
+                                .accessibilityIdentifier("details.cancelled")
+                            }
                         }
                     }
                 }

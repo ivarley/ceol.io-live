@@ -955,6 +955,26 @@
             }
           },
           "expected": null
+        },
+        {
+          "name": "cancelled",
+          "input": {
+            "d": {
+              "op_type": "set_cancelled",
+              "is_cancelled": true
+            }
+          },
+          "expected": "cancelled this session"
+        },
+        {
+          "name": "reinstated",
+          "input": {
+            "d": {
+              "op_type": "set_cancelled",
+              "is_cancelled": false
+            }
+          },
+          "expected": "reinstated this session"
         }
       ]
     },

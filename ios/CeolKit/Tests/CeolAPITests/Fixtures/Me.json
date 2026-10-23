@@ -6,6 +6,7 @@
     "first_name": "Ian",
     "has_password": true,
     "is_system_admin": true,
+    "language": "en",
     "last_name": "Varley",
     "needs_profile_setup": false,
     "person_id": 1,

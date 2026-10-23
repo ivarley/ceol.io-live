@@ -1,4 +1,14 @@
 {
+  "account": {
+    "created_at": "2026-10-22T21:40:14.424917+00:00",
+    "email": "ian@ceol.io",
+    "email_verified": true,
+    "has_password": true,
+    "language": "en",
+    "last_login": "2026-10-22T16:42:27.900282+00:00",
+    "receive_update_emails": true,
+    "username": "ian"
+  },
   "canonical_instruments": [
     "Banjo",
     "Bodhrán",
@@ -26,7 +36,9 @@
       "Mandolin"
     ],
     "last_name": "Varley",
+    "sms_number": "",
     "state": "TX",
+    "thesession_user_id": null,
     "timezone": "America/Chicago"
   },
   "success": true,
@@ -100,11 +112,11 @@
       "value": "Europe/Amsterdam"
     },
     {
-      "label": "Australia/Sydney (UTC+10:00)",
+      "label": "Australia/Sydney (UTC+11:00)",
       "value": "Australia/Sydney"
     },
     {
-      "label": "Australia/Melbourne (UTC+10:00)",
+      "label": "Australia/Melbourne (UTC+11:00)",
       "value": "Australia/Melbourne"
     },
     {

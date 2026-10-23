@@ -3,6 +3,27 @@
     {
       "active_instances": [],
       "kind": "session",
+      "location_name": "Barton Springs Saloon",
+      "name": "Barton Springs Session",
+      "path": "austin/barton-springs",
+      "place": {
+        "area": "Texas",
+        "country": "United States",
+        "kind": "place",
+        "name": "Austin",
+        "parent": null,
+        "place_id": 1,
+        "slug": "austin"
+      },
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"saturday\", \"start_time\": \"15:00\", \"end_time\": \"18:00\", \"every_n_weeks\": 1}]}",
+      "session_id": 9,
+      "termination_date": null,
+      "user_is_member": true,
+      "user_relationship": "member"
+    },
+    {
+      "active_instances": [],
+      "kind": "session",
       "location_name": "The Burren",
       "name": "Boston Celtic Session",
       "path": "boston/celtic",
@@ -45,7 +66,7 @@
     {
       "active_instances": [
         {
-          "date": "2026-10-05",
+          "date": "2026-10-22",
           "end_time": "23:00:00",
           "location_override": null,
           "path": "austin/downtown",
@@ -95,9 +116,30 @@
       "years": 1
     },
     {
+      "active_instances": [],
+      "kind": "session",
+      "location_name": "Hyde Park Bar & Grill",
+      "name": "Hyde Park Session",
+      "path": "austin/hyde-park",
+      "place": {
+        "area": "Texas",
+        "country": "United States",
+        "kind": "place",
+        "name": "Austin",
+        "parent": null,
+        "place_id": 1,
+        "slug": "austin"
+      },
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"saturday\", \"start_time\": \"15:00\", \"end_time\": \"18:00\", \"every_n_weeks\": 1}]}",
+      "session_id": 7,
+      "termination_date": null,
+      "user_is_member": true,
+      "user_relationship": "member"
+    },
+    {
       "active_instances": [
         {
-          "date": "2026-10-05",
+          "date": "2026-10-22",
           "end_time": "22:00:00",
           "location_override": null,
           "path": "austin/mueller",
@@ -127,6 +169,27 @@
     {
       "active_instances": [],
       "kind": "session",
+      "location_name": "The Riverside Tavern",
+      "name": "Riverside Session",
+      "path": "austin/riverside",
+      "place": {
+        "area": "Texas",
+        "country": "United States",
+        "kind": "place",
+        "name": "Austin",
+        "parent": null,
+        "place_id": 1,
+        "slug": "austin"
+      },
+      "recurrence": "{\"schedules\": [{\"type\": \"weekly\", \"weekday\": \"saturday\", \"start_time\": \"15:00\", \"end_time\": \"18:00\", \"every_n_weeks\": 1}]}",
+      "session_id": 8,
+      "termination_date": null,
+      "user_is_member": true,
+      "user_relationship": "member"
+    },
+    {
+      "active_instances": [],
+      "kind": "session",
       "location_name": "The Plough and Stars",
       "name": "San Francisco Session",
       "path": "sf/sunset",
@@ -147,6 +210,6 @@
     }
   ],
   "success": true,
-  "today": "2026-10-05",
+  "today": "2026-10-22",
   "viewer_country": "USA"
 }

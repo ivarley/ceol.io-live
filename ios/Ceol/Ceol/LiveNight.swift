@@ -286,6 +286,7 @@ final class NightModel {
             "session_date": b["session_date"] ?? .null, "start_time": b["start_time"] ?? .null,
             "end_time": b["end_time"] ?? .null, "instance_name": b["instance_name"] ?? .null,
             "log_complete": b["log_complete"] ?? false,
+            "is_cancelled": b["is_cancelled"] ?? false,
         ]
     }
 
@@ -795,6 +796,7 @@ final class NightModel {
         case "notes": tr("You're offline — notes need a connection.")
         case "changing the date": tr("You're offline — changing the date needs a connection.")
         case "naming this log": tr("You're offline — naming this log needs a connection.")
+        case "cancelling": tr("You're offline — cancelling needs a connection.")
         default: tr("You're offline — this needs a connection.")
         }
     }
@@ -1152,6 +1154,8 @@ private func irishActivity(_ d: JSONValue) -> String? {
     case "set_name":
         if let name = d["instance_name"]?.stringValue, !name.isEmpty { return tr("\(actor) named this log \"\(name)\"") }
         return tr("\(actor) cleared this log's name")
+    case "set_cancelled":
+        return d["is_cancelled"] == true ? tr("\(actor) cancelled this session") : tr("\(actor) reinstated this session")
     default: return nil
     }
 }

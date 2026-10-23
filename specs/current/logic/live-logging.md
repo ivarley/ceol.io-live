@@ -60,7 +60,7 @@ All writes are incremental, intent-based ops `POST`ed to
 `/api/live/instances/<id>/ops` and refereed by `live_op` in `live_logging_routes.py`:
 
 `add_tune`, `remove_tune` (soft tombstone), `change_tune`, `set_confidence`, `set_break`,
-`attribute_set_starter`, `edit_notes`, `set_date` (spec 046), `set_name` (spec 047), `attendance_add` /
+`attribute_set_starter`, `edit_notes`, `set_date` (spec 046), `set_name` (spec 047), `set_cancelled`, `attendance_add` /
 `attendance_remove` / `attendance_create_person`, `mark_complete` / `mark_incomplete`, plus the bulk ops
 (spec 029): `move_tunes` (atomic block move; interior breaks travel, `started_by` is
 never touched), `remove_tunes` (atomic bulk tombstone), and `restore_tunes` (its
@@ -138,6 +138,26 @@ paints it before bootstrap lands.
 In the header it sits under the session name in the collapsed row (absent when unset, so
 the ordinary weekly night is unchanged) and as a **Name** row in the expanded panel,
 whose action reads "Name it" or "Rename".
+
+
+### Cancelling a night
+
+`set_cancelled` `{cancelled: bool}` writes `session_instance.is_cancelled`, and the same op
+with `false` reinstates. The column has been honoured by every reader since the first
+schema — Home leaves a cancelled night out of the week and of the logs to finish, the
+active-sessions cron never marks one live, the admin Logs tab chips it — but its only
+writer was the legacy night page's edit form, unreachable since spec 035, so nothing
+could be cancelled.
+
+A cancelled night is not hidden: the log may hold what was played before the call came,
+so it stays readable and editable, struck through. It is listed on the session's Logs
+tab with the date struck through and "Cancelled" beside it (web and app), and the night's
+own screen strikes its date in the band. The header's Cancelled row (web drawer, the app's
+Log details) carries Cancel it / Reinstate; the admin instance sheet offers the same pair
+through the same op, so the two surfaces cannot disagree about what it means. Reversible,
+so no confirmation. Metadata like the name: online-only, one history row, echoed to every
+open screen; `metaChanges` patches `is_cancelled`, and the bootstrap, the page shell
+(`instanceCancelled`) and `SessionLogNight` all carry it.
 
 ### Repertoire enrollment (spec 025)
 

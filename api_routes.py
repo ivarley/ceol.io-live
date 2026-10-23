@@ -14506,7 +14506,8 @@ def get_session_logs(session_path):
                        WHERE sip.session_instance_id = si.session_instance_id
                          AND sip.person_id = %s
                          AND sip.attendance = 'yes'
-                   )) as attended
+                   )) as attended,
+                   si.is_cancelled
             FROM session_instance si
             WHERE si.session_id = %s
             ORDER BY si.date DESC, si.session_instance_id ASC
@@ -14538,6 +14539,7 @@ def get_session_logs(session_path):
                         "multiple_on_date": instance[5] > 1,
                         "tune_count": instance[6],
                         "attended": bool(instance[7]),
+                        "is_cancelled": bool(instance[8]),
                     }
                 )
         else:
@@ -14557,6 +14559,7 @@ def get_session_logs(session_path):
                         "multiple_on_date": instance[5] > 1,
                         "tune_count": instance[6],
                         "attended": bool(instance[7]),
+                        "is_cancelled": bool(instance[8]),
                     }
                 )
 

@@ -1590,5 +1590,33 @@
   "Also known as": {
     "ga": "Ainmneacha eile",
     "review": true
+  },
+  "Yes": {
+    "ga": "Tá",
+    "review": true
+  },
+  "No": {
+    "ga": "Níl",
+    "review": true
+  },
+  "Cancel it": {
+    "ga": "Cuir ar ceal é",
+    "review": true
+  },
+  "Reinstate": {
+    "ga": "Cuir ar ais é",
+    "review": true
+  },
+  "You're offline — cancelling needs a connection.": {
+    "ga": "Tá tú as líne — teastaíonn ceangal chun é a chur ar ceal.",
+    "review": true
+  },
+  "{actor} cancelled this session": {
+    "ga": "Chuir {actor} an seisiún seo ar ceal",
+    "review": true
+  },
+  "{actor} reinstated this session": {
+    "ga": "Chuir {actor} an seisiún seo ar ais",
+    "review": true
   }
 }

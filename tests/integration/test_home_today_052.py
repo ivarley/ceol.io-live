@@ -281,3 +281,24 @@ class TestTwoSessionsOnOneDay:
         second = _row(body, HT_INSTANCE_B)
         assert second["is_active"] is False
         assert second["tunes_logged"] == 0
+
+
+@pytest.mark.integration
+class TestCancelledNights:
+    def test_a_cancelled_night_leaves_home(
+        self, client, authenticated_regular_user, tonight, db_cursor, db_conn
+    ):
+        """Called off means not on Home: not in the week, not on the Today card, not
+        among the logs to finish. It stays on the session's own Logs tab, struck through.
+        """
+        body = _home(client, authenticated_regular_user)
+        _row(body, tonight["instance_id"])  # there while it is held
+        db_cursor.execute(
+            "UPDATE session_instance SET is_cancelled = TRUE WHERE session_instance_id = %s",
+            (tonight["instance_id"],),
+        )
+        db_conn.commit()
+        body = _home(client, authenticated_regular_user)
+        gone = tonight["instance_id"]
+        assert all(s["session_instance_id"] != gone for s in body["upcoming_sessions"])
+        assert all(s["session_instance_id"] != gone for s in body["in_progress_logs"])

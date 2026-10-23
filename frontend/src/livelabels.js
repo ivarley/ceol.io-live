@@ -79,6 +79,8 @@ function irishActivity(d, actor) {
       return d.instance_name
         ? t('{actor} named this log "{name}"', { ...v, name: d.instance_name })
         : t("{actor} cleared this log's name", v)
+    case 'set_cancelled':
+      return d.is_cancelled ? t('{actor} cancelled this session', v) : t('{actor} reinstated this session', v)
     default: return null
   }
 }

@@ -93,6 +93,7 @@ export function remoteLabel(d) {
       return 're-dated this log'
     }
     case 'set_name': return d.instance_name ? `named this log "${d.instance_name}"` : "cleared this log's name"
+    case 'set_cancelled': return d.is_cancelled ? 'cancelled this session' : 'reinstated this session'
     default: return null
   }
 }

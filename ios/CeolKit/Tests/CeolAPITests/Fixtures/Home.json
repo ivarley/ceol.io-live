@@ -10,10 +10,10 @@
     "tune_id": 116,
     "tune_type": "Reel"
   },
-  "today": "2026-09-27",
+  "today": "2026-10-22",
   "upcoming_sessions": [
     {
-      "date": "2026-09-27",
+      "date": "2026-10-22",
       "end_time": "22:00:00",
       "is_active": true,
       "location_name": "BD Riley's Irish Pub",
@@ -23,11 +23,12 @@
       "people_here": 0,
       "session_id": 1,
       "session_instance_id": 121,
+      "session_type": "regular",
       "start_time": "19:00:00",
       "tunes_logged": 0
     },
     {
-      "date": "2026-09-27",
+      "date": "2026-10-22",
       "end_time": "23:00:00",
       "is_active": true,
       "location_name": "The Driskill Hotel Bar",
@@ -37,6 +38,7 @@
       "people_here": 3,
       "session_id": 2,
       "session_instance_id": 120,
+      "session_type": "regular",
       "start_time": "20:00:00",
       "tunes_logged": 4
     }
@@ -47,7 +49,7 @@
   },
   "want_to_learn_count": 1,
   "week": {
-    "end": "2026-09-27",
-    "start": "2026-09-21"
+    "end": "2026-10-25",
+    "start": "2026-10-19"
   }
 }

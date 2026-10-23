@@ -9,7 +9,9 @@
   import { parseLocalDate } from '../shared/parse.js'
   import { LoadError, Sheet, toast, ServerError, t, tn, formatDate } from '../lib/index.js'
 
-  let { onDeleted = () => {} } = $props()
+  // onChanged: the row's Held/Cancelled chip lives in the parent's table, so a flip
+  // here has to reach it.
+  let { onDeleted = () => {}, onChanged = () => {} } = $props()
 
   let open = $state(false)
   let loading = $state(false)
@@ -17,6 +19,7 @@
   let instance = $state(null)
   let deleteConfirmShown = $state(false)
   let deleting = $state(false)
+  let cancelSaving = $state(false)
 
   let sessionPath = $state('')
   let currentDate = $state('')
@@ -86,6 +89,36 @@
     return t('Time not specified')
   })
 
+  // Cancel the night, or reinstate it: the same live op the night's own header sends
+  // (set_cancelled), so the admin page and the logger can't disagree about what it
+  // means. Reversible, so no confirmation; the other button is right where this one was.
+  function setCancelled(cancelled) {
+    cancelSaving = true
+    fetch(`/api/live/instances/${currentId}/ops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op_id: crypto.randomUUID(), op_type: 'set_cancelled', cancelled }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.rejected || data.success === false) throw new ServerError(data.message || data.reason || data.error)
+        instance = { ...instance, is_cancelled: data.is_cancelled === true }
+        onChanged()
+      })
+      .catch((e) => {
+        console.error("Couldn't change whether this instance is cancelled:", e)
+        toast(
+          e instanceof ServerError
+            ? e.message || t("Couldn't save that. Try again.")
+            : t("Couldn't save that. Check your connection and try again."),
+          'error'
+        )
+      })
+      .finally(() => {
+        cancelSaving = false
+      })
+  }
+
   function showDeleteConfirmation() {
     deleteConfirmShown = true
     // Bring the confirmation into view inside the scrolling sheet body (legacy behavior).
@@ -140,8 +173,13 @@
       </div>
       <div class="instance-info-row">
         <span class="instance-info-label">{t('Status:')}</span>
-        <span class="instance-status-badge {instance.is_cancelled ? 'instance-status-cancelled' : 'instance-status-held'}">
-          {instance.is_cancelled ? t('Cancelled') : t('Held')}
+        <span class="instance-info-value">
+          <span class="instance-status-badge {instance.is_cancelled ? 'instance-status-cancelled' : 'instance-status-held'}">
+            {instance.is_cancelled ? t('Cancelled') : t('Held')}
+          </span>
+          <button class="instance-status-toggle" disabled={cancelSaving} onclick={() => setCancelled(!instance.is_cancelled)}>
+            {instance.is_cancelled ? t('Reinstate') : t('Cancel it')}
+          </button>
         </span>
       </div>
       <div class="instance-info-row">

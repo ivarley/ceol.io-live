@@ -201,6 +201,13 @@ main {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .session-date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+/* A cancelled night: the date struck through, and the word beside it (a line alone
+   is easy to read as a rendering glitch). Same pair the session's Logs tab uses. */
+.session-date-cancelled { text-decoration: line-through; }
+.session-cancelled-badge {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+  color: var(--danger);
+}
 /* The time range beside the date in the expanded header (spec 048). */
 .hx-time { color: var(--muted); }
 /* read-only session notes shown under the date/count line (collapsed header) */
@@ -325,6 +332,7 @@ main.wide .hx-drawer {
 /* "completely logged" (§024): the Status row's value; the mark/re-open control is a
    plain .hx-act like every other row action. */
 .header-complete .hc-done { color: var(--text); font-weight: 600; }
+.header-cancelled .hc-cancelled { color: var(--danger); font-weight: 600; }
 .header-help {
   display: inline-flex; align-items: center;
   color: var(--muted); opacity: 0.6;

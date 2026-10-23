@@ -13,7 +13,7 @@ Ops (this build):
   Tune/set:  add_tune, remove_tune (soft tombstone), change_tune (relink/rename/
              unlink/key/setting), set_confidence, set_break (insert/remove),
              attribute_set_starter
-  Metadata:  edit_notes, set_date, set_name, mark_complete, mark_incomplete
+  Metadata:  edit_notes, set_date, set_name, mark_complete, mark_incomplete, set_cancelled
 
 Idempotency (§C): every op carries `op_id`; a retried POST whose ack was lost
 dedupes to the same `session_event` row (UNIQUE on op_id) and returns the cached
@@ -1342,6 +1342,41 @@ def _handle_mark_incomplete(cur, session_instance_id, data, user_id):
     return _set_log_complete(cur, session_instance_id, user_id, False)
 
 
+def _handle_set_cancelled(cur, session_instance_id, data, user_id):
+    """Cancel this night, or reinstate it — `session_instance.is_cancelled`.
+
+    The column has been there since the first schema and every reader honours it:
+    Home leaves a cancelled night out, the active-sessions cron never marks one live,
+    the admin Logs tab chips it. But its only writer was the legacy night page's edit
+    form, which spec 035 made unreachable, so nothing could be cancelled any more.
+
+    `cancelled` is the whole payload; the same op reinstates. It is reversible, so it
+    asks for no confirmation. Metadata like the name: online-only, one history row,
+    and the SSE echo strikes the night through on every other open screen.
+    """
+    cancelled = bool(data.get("cancelled"))
+    cur.execute(
+        "SELECT is_cancelled FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise OpRejected("not_found", _("This session log no longer exists."))
+    previous = bool(row[0])
+    if cancelled == previous:
+        return {"is_cancelled": cancelled, "previous_cancelled": previous}
+
+    save_to_history(
+        cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id
+    )
+    cur.execute(
+        "UPDATE session_instance SET is_cancelled = %s, last_modified_user_id = %s "
+        "WHERE session_instance_id = %s",
+        (cancelled, user_id, session_instance_id),
+    )
+    return {"is_cancelled": cancelled, "previous_cancelled": previous}
+
+
 # --- Bulk ops (spec 029): move_tunes / remove_tunes / restore_tunes --------
 
 
@@ -1746,6 +1781,7 @@ HANDLERS = {
     "set_name": _handle_set_name,
     "mark_complete": _handle_mark_complete,
     "mark_incomplete": _handle_mark_incomplete,
+    "set_cancelled": _handle_set_cancelled,
 }
 
 
@@ -3174,7 +3210,8 @@ def live_bootstrap(session_instance_id):
             SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path,
                    s.timezone, si.is_active, si.location_override,
                    si.start_time, si.end_time, s.session_type,
-                   s.show_people_list, s.track_attendance, s.track_set_starters
+                   s.show_people_list, s.track_attendance, s.track_set_starters,
+                   si.is_cancelled
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -3242,6 +3279,9 @@ def live_bootstrap(session_instance_id):
                 # is (the sidecar enforces the same rule), and re-read it on every reconnect
                 # so a viewer whose session ends settles into a static snapshot by itself.
                 "instance_active": bool(meta[7]) if meta else False,
+                # Cancelled nights stay readable (the log may hold tunes from before the
+                # call was made) and editable, struck through; set_cancelled flips it.
+                "is_cancelled": bool(meta[15]) if meta else False,
                 # The session's people settings (spec 039), which the page shell passes to the
                 # web logger as config: set starters show only when both tracking flags are on.
                 "show_people_list": bool(meta[12]) if meta else True,

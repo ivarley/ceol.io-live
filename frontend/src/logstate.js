@@ -359,7 +359,7 @@ export function recordChanges(d) {
   return { puts, drops }
 }
 
-// The night's own fields an op sets (notes, date and times, name, complete), as a patch:
+// The night's own fields an op sets (notes, date and times, name, complete, cancelled), as a patch:
 // only the keys it changes. {} for an op that sets none.
 export function metaChanges(d) {
   switch (d?.op_type) {
@@ -379,6 +379,8 @@ export function metaChanges(d) {
       return { log_complete: true }
     case 'mark_incomplete':
       return { log_complete: false }
+    case 'set_cancelled':
+      return { is_cancelled: d.is_cancelled === true }
   }
   return {}
 }

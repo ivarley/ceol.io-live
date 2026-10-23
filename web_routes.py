@@ -3825,7 +3825,8 @@ def live_logging_screen(session_instance_id):
             """
             SELECT s.path, s.session_id, si.date,
                    s.track_attendance, s.track_set_starters, si.is_active,
-                   si.location_override, si.start_time, si.end_time, s.session_type
+                   si.location_override, si.start_time, si.end_time, s.session_type,
+                   si.is_cancelled
             FROM session_instance si
             JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
@@ -3851,6 +3852,7 @@ def live_logging_screen(session_instance_id):
             instance_start,
             instance_end,
             session_type,
+            instance_cancelled,
         ) = row
 
         # Who may upload/timestamp this session's audio (schema/053). Resolved here so
@@ -3888,6 +3890,9 @@ def live_logging_screen(session_instance_id):
         # 'regular' | 'festival' (spec 004) — the header's naming help is written for
         # whichever this is. Nothing is gated on it.
         session_type=session_type or "regular",
+        # Struck through from first paint when the night was called off; the header's
+        # Cancelled row flips it (set_cancelled).
+        instance_cancelled=bool(instance_cancelled),
         session_path=session_path,
         streaming_base_url=streaming_base_url,
         # Per-session people-tracking flags (spec 039). Off => the attendance header /

@@ -1758,5 +1758,13 @@
   "Hide the other controls": {
     "ga": "Folaigh na rialtáin eile",
     "review": true
+  },
+  "Couldn't save that. Try again.": {
+    "ga": "Níorbh fhéidir é sin a shábháil. Bain triail eile as.",
+    "review": true
+  },
+  "Couldn't save that. Check your connection and try again.": {
+    "ga": "Níorbh fhéidir é sin a shábháil. Seiceáil do cheangal agus bain triail eile as.",
+    "review": true
   }
 }
