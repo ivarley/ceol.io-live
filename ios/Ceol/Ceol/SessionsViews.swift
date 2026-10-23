@@ -214,6 +214,13 @@ struct SessionDetailView: View {
     @State private var aboutOpen = false
     /// The session's details, folded under its band until tapped (as on the web).
     @State private var infoOpen = false
+    // The pinned chrome (spec 052 §B8 Stage 3, as the web's sticky layers): whether the
+    // tab strip has scrolled off the top, its height, where each Logs group's header
+    // is in the scroll view, and the pinned header's height.
+    @State private var tabsPinned = false
+    @State private var tabsHeight: CGFloat = 0
+    @State private var groupHeaderY: [String: CGFloat] = [:]
+    @State private var pinnedHeaderHeight: CGFloat = 0
     @State private var openTune: TuneRef?
     @State private var newNight: NewNight?
 
@@ -499,8 +506,10 @@ struct SessionDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 VStack(spacing: 0) {
-                    UnderlineTabs(items: tabs.map { ($0, festival && $0 == .logs ? tr("Sessions") : $0.label, count($0, d)) },
-                                  selection: $tab)
+                    tabStrip(tabs, d, festival: festival)
+                        // Scrolled off the top, the pinned copy takes over (and speaks for it).
+                        .onGeometryChange(for: Bool.self) { $0.frame(in: .scrollView).minY < 0 } action: { tabsPinned = $0 }
+                        .accessibilityHidden(tabsPinned)
                     switch tab {
                     case .tunes: tunes(d)
                     case .logs: logsSection(d)
@@ -511,12 +520,51 @@ struct SessionDetailView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
+        // The tab strip stays at the top once the band has scrolled away, and under it,
+        // on Logs, the header of the day or year you are in: one at a time, the next
+        // pushing it up as it arrives, as the web's sticky layers do (spec 052 §B8
+        // Stage 3). SwiftUI's own pinned section headers cannot nest, so it is drawn here.
+        .overlay(alignment: .top) {
+            if tabsPinned {
+                ZStack(alignment: .top) {
+                    if tab == .logs, let l = logs.value, let pin = pinnedGroup(filteredGroups(l)) {
+                        groupHeader(pin.group, festival: l.sessionType == "festival")
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pinnedHeaderHeight = $0 }
+                            .padding(.top, tabsHeight)
+                            .offset(y: -pin.shift)
+                    }
+                    tabStrip(tabs, d, festival: festival)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabsHeight = $0 }
+                }
+                .clipped()
+            }
+        }
         .refreshable {
             loggedTunes = nil
             await load()
             if tab == .logs { await loadLogs() }
             if tab == .people { await loadPeople() }
         }
+    }
+
+    private func tabStrip(_ tabs: [Tab], _ d: SessionDetailPayload, festival: Bool) -> some View {
+        UnderlineTabs(items: tabs.map { ($0, festival && $0 == .logs ? tr("Sessions") : $0.label, count($0, d)) },
+                      selection: $tab)
+            // Opaque: pinned, the list scrolls under it.
+            .background(CeolTokens.bgColor)
+    }
+
+    /// The Logs group whose header sits at or above the line under the pinned tab
+    /// strip (the last such group is the one you are in), and how far the next
+    /// group's header, arriving, has pushed it up.
+    private func pinnedGroup(_ groups: [LogGroup]) -> (group: LogGroup, shift: CGFloat)? {
+        let line = tabsHeight
+        guard let i = groups.lastIndex(where: { (groupHeaderY[$0.key] ?? .infinity) <= line }) else { return nil }
+        var shift: CGFloat = 0
+        if i + 1 < groups.count, let next = groupHeaderY[groups[i + 1].key] {
+            shift = max(0, line + pinnedHeaderHeight - next)
+        }
+        return (groups[i], shift)
     }
 
     private func count(_ t: Tab, _ d: SessionDetailPayload) -> Int? {
@@ -719,16 +767,8 @@ struct SessionDetailView: View {
                         .padding(24)
                 }
                 ForEach(years, id: \.key) { group in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(group.title).font(.ceol(size: festival ? 20 : 24, weight: .semibold, relativeTo: .title2))
-                            .foregroundStyle(CeolTokens.textColor)
-                        let n = group.nights.count
-                        Text(festival ? (n == 1 ? tr("1 session") : tr("\(n) sessions"))
-                                      : (n == 1 ? tr("1 log") : tr("\(n) logs"))).font(.ceol(size: 16))
-                            .foregroundStyle(CeolTokens.textMuted)
-                    }
-                    .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
-                    Hairline()
+                    groupHeader(group, festival: festival)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).minY } action: { groupHeaderY[group.key] = $0 }
                     ForEach(group.nights, id: \.sessionInstanceId) { night in
                         // At a festival a night is named by its session (the room, the leader),
                         // and its day is the group's header; elsewhere the date names it.
@@ -776,15 +816,34 @@ struct SessionDetailView: View {
     }
 
     typealias LogNight = Components.Schemas.SessionLogNight
+    typealias LogGroup = (key: String, title: String, nights: [LogNight])
+
+    /// A group's header: the day (a festival) or the year, and how many nights.
+    private func groupHeader(_ group: LogGroup, festival: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(group.title).font(.ceol(size: festival ? 20 : 24, weight: .semibold, relativeTo: .title2))
+                    .foregroundStyle(CeolTokens.textColor)
+                let n = group.nights.count
+                Text(festival ? (n == 1 ? tr("1 session") : tr("\(n) sessions"))
+                              : (n == 1 ? tr("1 log") : tr("\(n) logs"))).font(.ceol(size: 16))
+                    .foregroundStyle(CeolTokens.textMuted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
+            Hairline()
+        }
+        .background(CeolTokens.bgColor)
+    }
 
     /// The groups left after the filter, each with its nights; a group left empty goes.
     /// A session's nights are grouped by year, newest first; a festival's by day,
     /// earliest first ("Friday, October 23"), as the web groups them.
-    private func filteredGroups(_ l: SessionLogsPayload) -> [(key: String, title: String, nights: [LogNight])] {
+    private func filteredGroups(_ l: SessionLogsPayload) -> [LogGroup] {
         // Searched for a tune: its nights, whatever the filter (they are all logged ones).
         let ids: Set<Int>? = chosenTune == nil ? nil : tuneNights?.value?.ids ?? []
         let festival = l.sessionType == "festival"
-        let groups: [(key: String, title: String, nights: [LogNight])] = festival
+        let groups: [LogGroup] = festival
             ? l.sortedDays.map { ($0, festivalDay($0), l.instancesByDay.additionalProperties[$0] ?? []) }
             : l.sortedYears.map { (String($0), String($0), l.instancesByYear.additionalProperties[String($0)] ?? []) }
         return groups.compactMap { group in
