@@ -126,6 +126,8 @@
     <h3 id="iosBetaSoonTitle">{{ _('Ceol for iPhone') }}</h3>
     {% set testflight_link %}<a href="https://apps.apple.com/app/testflight/id899247664">{{ _('TestFlight installed') }}</a>{% endset %}
     <p>{{ _('The beta is coming soon. To get ready, make sure you have %(link)s.', link=testflight_link) }}</p>
+    {% set email_link %}<a href="mailto:ian@ceol.app">{{ _('email me') }}</a>{% endset %}
+    <p>{{ _('To get early access, just %(link)s!', link=email_link) }}</p>
     <div class="ios-beta-actions">
         <form method="dialog"><button class="ios-beta-close">{{ _('Close') }}</button></form>
     </div>
