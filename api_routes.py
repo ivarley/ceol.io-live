@@ -13764,6 +13764,19 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
+            # Greedy-path fallback, as in get_session_instance_tune_detail: a festival
+            # year's path ends in a number (oflahertys/2026), so the session-level
+            # PUT /api/sessions/oflahertys/2026/tunes/<id> lands here with the year
+            # read as an instance id. When "<path>/<segment>" is itself a session,
+            # this is the session speaking about its repertoire.
+            combined_path = f"{session_path}/{date_or_id}"
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s", (combined_path,)
+            )
+            if cur.fetchone():
+                cur.close()
+                conn.close()
+                return update_session_tune_details(combined_path, tune_id)
             return jsonify({"success": False, "message": _("Session not found")}), 404
 
         session_id = session_result[0]

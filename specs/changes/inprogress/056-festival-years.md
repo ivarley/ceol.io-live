@@ -164,6 +164,12 @@ surface built for "a night" broke at that scale:
   A multi-day festival's card and rows say which day it is — "Day 2 · 8 sessions" —
   from `festival_day` on the Home payload (`date − initiation_date + 1`, counted from
   the year's first day; null for a regular session).
+- **The tune routes.** A year's path ends in a number, so
+  `/api/sessions/oflahertys/2026/tunes/<id>` also matches the per-night rule
+  `/api/sessions/<path>/<date_or_id>/tunes/<id>` with the year read as an instance id,
+  and Flask prefers the longer rule. Both per-night handlers (GET and PUT) fall back to
+  the session when `<path>/<segment>` is itself a session's path. (Found the first
+  night: "Session not found" on renaming a tune from the live logger's sheet.)
 - **Directory.** Web: the "On Now …" list links each room by id. App: with several on at
   once the pill reads "4 on now" and opens the session; it used to open the first room.
 

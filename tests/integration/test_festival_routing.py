@@ -129,7 +129,10 @@ class TestSwitcherBlock:
         assert [y["year"] for y in data["festival"]["years"]] == [2001, 2002]
 
     def test_a_regular_session_has_none(self, client):
-        assert "festival" not in client.get("/api/sessions/austin/mueller/detail").get_json()
+        assert (
+            "festival"
+            not in client.get("/api/sessions/austin/mueller/detail").get_json()
+        )
 
     def test_the_admin_payload_too(self, client, fest):
         fest["years"]((2001, TODAY - 400 * DAY, None))
@@ -144,3 +147,43 @@ class TestSwitcherBlock:
         html = client.get("/sessions/probefest/2001").get_data(as_text=True)
         assert 'href="/sessions/probefest">Probe Fest</a>' in html
         assert 'id="festival-year-root">2001<' in html
+
+
+class TestTuneAPI:
+    """A festival year's path ends in a number, so the session-level tune routes
+    (/api/sessions/probefest/2002/tunes/<id>) also match the per-night ones with the
+    year read as an instance id, and Flask prefers the longer rule. Both per-night
+    handlers fall back to the session when "<path>/<segment>" is itself a session.
+    (2026-10-22: "Session not found" when renaming a tune at O'Flaherty's.)"""
+
+    def test_an_admin_can_rename_a_tune_at_a_festival_year(
+        self, client, committed, fest
+    ):
+        ids = fest["years"]((2002, TODAY, TODAY + 3 * DAY))
+        committed.member(ids[2002], 2, is_admin=True)
+        committed.cur.execute("SELECT tune_id FROM tune ORDER BY tune_id LIMIT 1")
+        tune_id = committed.cur.fetchone()[0]
+        try:
+            with logged_in(client, person_id=2, is_system_admin=False):
+                resp = client.put(
+                    f"/api/sessions/probefest/2002/tunes/{tune_id}",
+                    json={"alias": "The Graf Spee"},
+                )
+                assert resp.status_code == 200, resp.data
+                assert resp.get_json()["success"] is True, resp.data
+                detail = client.get(
+                    f"/api/sessions/probefest/2002/tunes/{tune_id}"
+                ).get_json()
+            assert detail["session_tune"]["session_scope"]["path"] == "probefest/2002"
+            assert detail["session_tune"]["alias"] == "The Graf Spee"
+            committed.cur.execute(
+                "SELECT alias FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                (ids[2002], tune_id),
+            )
+            assert committed.cur.fetchone()[0] == "The Graf Spee"
+        finally:
+            committed.cur.execute(
+                "DELETE FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                (ids[2002], tune_id),
+            )
+            committed.conn.commit()
