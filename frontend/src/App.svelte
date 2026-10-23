@@ -1485,21 +1485,33 @@
     instanceName = d.instance_name || ''
   }
 
-  // Cancel this night, or reinstate it. No Dialog: it is reversible, and Reinstate sits
-  // exactly where Cancel was. Online-only like the other header edits; the echo strikes
-  // the night through on every other open screen.
+  // The Status select: Active or Cancelled. No Dialog: it is reversible, and the other
+  // state is one pick away. Online-only like the other header edits; the echo strikes
+  // the night through on every other open screen. The draft follows the server truth
+  // (local save or echo) and springs back when a save fails, so the control never
+  // shows a state the night isn't in.
   let cancelSaving = $state(false)
+  let statusDraft = $state('active')
+  $effect(() => { statusDraft = instanceCancelled ? 'cancelled' : 'active' })
+  async function changeStatus() {
+    const cancelled = statusDraft === 'cancelled'
+    if (cancelled === instanceCancelled) return
+    if (!(await setCancelled(cancelled))) statusDraft = instanceCancelled ? 'cancelled' : 'active'
+  }
+  // Returns whether the change landed.
   async function setCancelled(cancelled) {
     error = ''
-    if (!navigator.onLine) { notice = t("You're offline — cancelling needs a connection."); return }
+    if (!navigator.onLine) { notice = t("You're offline — cancelling needs a connection."); return false }
     cancelSaving = true
     try {
       const res = await sendOp(config, 'set_cancelled', { cancelled })
-      if (res.rejected) { notice = res.message || res.reason; return }
+      if (res.rejected) { notice = res.message || res.reason; return false }
       instanceCancelled = res.is_cancelled === true
+      return true
     } catch (e) {
       if (e.networkError) notice = t("You're offline — cancelling needs a connection.")
       else error = e.message
+      return false
     } finally {
       cancelSaving = false
     }
@@ -4633,8 +4645,24 @@
           <span class="kit-field-value">{tuneSummary}</span>
         </div>
 
-        <div class="kit-field header-complete">
+        <!-- Whether the night is on. Its own row rather than a third state of the
+             logging status, because a cancelled night can still be logged and completed
+             (the tunes played before the call came). A select, not a button pair: the
+             two states are peers, and the control names both at once. -->
+        <div class="kit-field header-status">
           <span class="kit-field-label">{t('Status')}</span>
+          {#if readOnly}
+            <span class="kit-field-value" class:hc-cancelled={instanceCancelled}>{instanceCancelled ? t('Cancelled') : t('Active')}</span>
+          {:else}
+            <select class="hx-select" class:hc-cancelled={instanceCancelled} aria-label={t('Status')} disabled={cancelSaving} bind:value={statusDraft} onchange={changeStatus}>
+              <option value="active">{t('Active')}</option>
+              <option value="cancelled">{t('Cancelled')}</option>
+            </select>
+          {/if}
+        </div>
+
+        <div class="kit-field header-complete">
+          <span class="kit-field-label">{t('Logging status')}</span>
           {#if logComplete}
             <span class="kit-field-value hc-done">✓ {t('Marked complete')}</span>
             {#if !readOnly}
@@ -4647,25 +4675,6 @@
             {/if}
           {/if}
         </div>
-
-        <!-- Whether the night was called off. Its own row rather than a third state of
-             Status, because a cancelled night can still be logged and completed (the
-             tunes played before the call came). Signed out it appears only when there
-             is something to say. -->
-        {#if instanceCancelled || !readOnly}
-          <div class="kit-field header-cancelled">
-            <span class="kit-field-label">{t('Cancelled')}</span>
-            {#if instanceCancelled}
-              <span class="kit-field-value hc-cancelled">{t('Yes')}</span>
-              {#if !readOnly}
-                <button class="hx-act" disabled={cancelSaving} onclick={() => setCancelled(false)}>{t('Reinstate')}</button>
-              {/if}
-            {:else}
-              <span class="kit-field-value">{t('No')}</span>
-              <button class="hx-act" disabled={cancelSaving} onclick={() => setCancelled(true)}>{t('Cancel it')}</button>
-            {/if}
-          </div>
-        {/if}
       </div>
 
       {#if (trackAttendance && !readOnly) || canManageRecordings || (!readOnly && roster.length)}

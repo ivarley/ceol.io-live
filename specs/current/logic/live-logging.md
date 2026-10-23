@@ -157,10 +157,11 @@ could be cancelled.
 A cancelled night is not hidden: the log may hold what was played before the call came,
 so it stays readable and editable, struck through. It is listed on the session's Logs
 tab with the date struck through and "Cancelled" beside it (web and app), and the night's
-own screen strikes its date in the band. The header's Cancelled row (web drawer, the app's
-Log details) carries Cancel it / Reinstate; the admin instance sheet offers the same pair
-through the same op, so the two surfaces cannot disagree about what it means. Reversible,
-so no confirmation. Metadata like the name: online-only, one history row, echoed to every
+own screen strikes its date in the band. The header's Status row (web drawer, the app's
+Log details) is a select, Active or Cancelled, beside the separate Logging status row
+(Still logging / Marked complete), because a cancelled night can still be logged and
+completed; the admin instance sheet offers Cancel it / Reinstate through the same op, so
+the two surfaces cannot disagree about what it means. Reversible, so no confirmation. Metadata like the name: online-only, one history row, echoed to every
 open screen; `metaChanges` patches `is_cancelled`, and the bootstrap, the page shell
 (`instanceCancelled`) and `SessionLogNight` all carry it.
 

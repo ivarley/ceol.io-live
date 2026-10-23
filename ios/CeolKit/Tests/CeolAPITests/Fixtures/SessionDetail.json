@@ -4,6 +4,7 @@
       "date": "2026-10-22",
       "end_time": "22:00:00",
       "location_override": null,
+      "multiple_on_date": false,
       "session_instance_id": 121,
       "start_time": "19:00:00"
     }
@@ -171,7 +172,7 @@
     "unlisted_address": false
   },
   "success": true,
-  "today_in_session_tz": "2026-10-22",
+  "today_in_session_tz": "2026-10-23",
   "total_logs_count": 15,
   "total_people_count": 9,
   "total_tunes_count": 16,

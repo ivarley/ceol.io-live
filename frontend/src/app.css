@@ -332,7 +332,14 @@ main.wide .hx-drawer {
 /* "completely logged" (§024): the Status row's value; the mark/re-open control is a
    plain .hx-act like every other row action. */
 .header-complete .hc-done { color: var(--text); font-weight: 600; }
-.header-cancelled .hc-cancelled { color: var(--danger); font-weight: 600; }
+.header-status .hc-cancelled { color: var(--danger); font-weight: 600; }
+/* The Status select, sized like the row's value text rather than a form field. */
+.hx-select {
+  font: inherit; font-size: 15px; color: var(--text);
+  padding: 4px 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+}
+.hx-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.hx-select:disabled { opacity: 0.6; }
 .header-help {
   display: inline-flex; align-items: center;
   color: var(--muted); opacity: 0.6;

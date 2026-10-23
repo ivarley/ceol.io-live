@@ -1591,14 +1591,6 @@
     "ga": "Ainmneacha eile",
     "review": true
   },
-  "Yes": {
-    "ga": "Tá",
-    "review": true
-  },
-  "No": {
-    "ga": "Níl",
-    "review": true
-  },
   "Cancel it": {
     "ga": "Cuir ar ceal é",
     "review": true
@@ -1617,6 +1609,10 @@
   },
   "{actor} reinstated this session": {
     "ga": "Chuir {actor} an seisiún seo ar ais",
+    "review": true
+  },
+  "Logging status": {
+    "ga": "Stádas logála",
     "review": true
   }
 }

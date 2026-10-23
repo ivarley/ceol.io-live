@@ -333,10 +333,7 @@
   "Sign in to log tunes": "Sínigh isteach chun foinn a logáil",
   "%@ cancelled this session": "Chuir %@ an seisiún seo ar ceal",
   "%@ reinstated this session": "Chuir %@ an seisiún seo ar ais",
-  "Cancel it": "Cuir ar ceal é",
   "Cancelled": "Curtha ar ceal",
-  "No": "Níl",
-  "Reinstate": "Cuir ar ais é",
-  "Yes": "Tá",
-  "You're offline — cancelling needs a connection.": "Tá tú as líne — teastaíonn ceangal chun é a chur ar ceal."
+  "You're offline — cancelling needs a connection.": "Tá tú as líne — teastaíonn ceangal chun é a chur ar ceal.",
+  "Logging status": "Stádas logála"
 }

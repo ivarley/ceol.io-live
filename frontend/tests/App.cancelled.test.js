@@ -54,42 +54,46 @@ beforeEach(async () => {
   vi.mocked(openStream).mockClear()
 })
 
-/** Expand the header and find the Cancelled row. */
-async function cancelledRow(container) {
+/** Expand the header and find the Status row (the night's, not the logging status). */
+async function statusRow(container) {
   await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(1))
   await fireEvent.click(container.querySelector('.topbar-row'))
   const row = [...document.querySelectorAll('.kit-field')]
-    .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Cancelled')
+    .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Status')
   expect(row).toBeTruthy()
   return row
 }
 
+const pick = (row, value) => fireEvent.change(row.querySelector('.hx-select'), { target: { value } })
+
 describe('cancelling a night', () => {
-  it('offers to cancel a night that is on, and nothing is struck through', async () => {
+  it('shows an Active night in a Status select beside a separate Logging status row', async () => {
     const { container } = render(App, { props: { config } })
-    const row = await cancelledRow(container)
-    expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('No')
-    expect(row.querySelector('.hx-act').textContent.trim()).toBe('Cancel it')
+    const row = await statusRow(container)
+    expect(row.querySelector('.hx-select').value).toBe('active')
+    expect([...row.querySelectorAll('option')].map((o) => o.textContent.trim())).toEqual(['Active', 'Cancelled'])
+    const logging = [...document.querySelectorAll('.kit-field')]
+      .find((r) => r.querySelector('.kit-field-label').textContent.trim() === 'Logging status')
+    expect(logging.querySelector('.kit-field-value').textContent.trim()).toBe('Still logging')
     expect(container.querySelector('.session-date-cancelled')).toBeNull()
     expect(container.querySelector('.session-cancelled-badge')).toBeNull()
   })
 
-  it('sends one set_cancelled op and strikes the date through; Reinstate sends the reverse', async () => {
+  it('picking Cancelled sends one set_cancelled op and strikes the date through; Active sends the reverse', async () => {
     const { container } = render(App, { props: { config } })
-    const row = await cancelledRow(container)
-    await fireEvent.click(row.querySelector('.hx-act'))
+    const row = await statusRow(container)
+    await pick(row, 'cancelled')
 
     await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(1))
     const [, opType, payload] = vi.mocked(sendOp).mock.calls[0]
     expect(opType).toBe('set_cancelled')
     expect(payload).toEqual({ cancelled: true })
 
-    await waitFor(() => expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('Yes'))
-    expect(row.querySelector('.hx-act').textContent.trim()).toBe('Reinstate')
-    expect(container.querySelector('.session-date-cancelled')).toBeTruthy()
+    await waitFor(() => expect(container.querySelector('.session-date-cancelled')).toBeTruthy())
     expect(container.querySelector('.session-cancelled-badge').textContent.trim()).toBe('Cancelled')
+    expect(row.querySelector('.hx-select').value).toBe('cancelled')
 
-    await fireEvent.click(row.querySelector('.hx-act'))
+    await pick(row, 'active')
     await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(2))
     expect(vi.mocked(sendOp).mock.calls[1][2]).toEqual({ cancelled: false })
     await waitFor(() => expect(container.querySelector('.session-date-cancelled')).toBeNull())
@@ -98,18 +102,26 @@ describe('cancelling a night', () => {
   it('paints a cancelled night from the bootstrap', async () => {
     bootstrapSnapshot.is_cancelled = true
     const { container } = render(App, { props: { config } })
-    const row = await cancelledRow(container)
-    expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('Yes')
+    const row = await statusRow(container)
+    await waitFor(() => expect(row.querySelector('.hx-select').value).toBe('cancelled'))
     expect(container.querySelector('.session-date-cancelled')).toBeTruthy()
   })
 
-  it('a rejected op leaves the night as it was and says why', async () => {
+  it('a rejected op springs the select back and leaves the night as it was', async () => {
     vi.mocked(sendOp).mockResolvedValueOnce({ rejected: true, reason: 'not_found', message: 'This session log no longer exists.' })
     const { container } = render(App, { props: { config } })
-    const row = await cancelledRow(container)
-    await fireEvent.click(row.querySelector('.hx-act'))
+    const row = await statusRow(container)
+    await pick(row, 'cancelled')
     await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(1))
-    expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('No')
+    await waitFor(() => expect(row.querySelector('.hx-select').value).toBe('active'))
     expect(container.querySelector('.session-date-cancelled')).toBeNull()
+  })
+
+  it('signed out, the status is a plain value', async () => {
+    bootstrapSnapshot.is_cancelled = true
+    const { container } = render(App, { props: { config: { ...config, canEdit: false, currentPerson: null } } })
+    const row = await statusRow(container)
+    expect(row.querySelector('.hx-select')).toBeNull()
+    expect(row.querySelector('.kit-field-value').textContent.trim()).toBe('Cancelled')
   })
 })

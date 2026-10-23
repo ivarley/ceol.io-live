@@ -47,34 +47,45 @@ struct LogDetailsSheet: View {
                         }
                     }
                     row("Tunes", tuneSummary) { EmptyView() }
-                    row("Status", complete ? tr("✓ Marked complete") : tr("Still logging")) {
+                    // Whether the night is on: Active or Cancelled, as a menu. Its own row
+                    // rather than a third logging status, since a cancelled night can still be
+                    // logged and completed (the tunes played before the call came). Reversible,
+                    // so no confirmation.
+                    HStack {
+                        Text("Status").foregroundStyle(CeolTokens.textMuted).frame(width: 70, alignment: .leading)
+                        if guest {
+                            Text(cancelled ? tr("Cancelled") : tr("Active"))
+                                .foregroundStyle(cancelled ? CeolTokens.errorText : CeolTokens.textColor)
+                        } else {
+                            Picker("Status", selection: Binding(
+                                get: { cancelled ? "cancelled" : "active" },
+                                set: { picked in
+                                    let want = picked == "cancelled"
+                                    guard want != cancelled, !cancelSaving else { return }
+                                    cancelSaving = true
+                                    Task {
+                                        let r = await model.metaOp("set_cancelled", ["cancelled": .bool(want)], label: "cancelling")
+                                        why = r.why
+                                        cancelSaving = false
+                                    }
+                                })) {
+                                Text("Active").tag("active")
+                                Text("Cancelled").tag("cancelled")
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .disabled(cancelSaving)
+                            .accessibilityIdentifier("details.status")
+                        }
+                        Spacer()
+                    }
+                    row("Logging status", complete ? tr("✓ Marked complete") : tr("Still logging")) {
                         if guest {
                             EmptyView()
                         } else if complete {
                             Button("Re-open") { confirmReopen = true }.accessibilityIdentifier("details.reopen")
                         } else {
                             Button("Mark complete") { confirmComplete = true }.accessibilityIdentifier("details.complete")
-                        }
-                    }
-                    // Its own row, not a third state of Status: a cancelled night can still
-                    // be logged and completed (the tunes played before the call came).
-                    // Reversible, so no confirmation — Reinstate sits where Cancel it was.
-                    if cancelled || !guest {
-                        row("Cancelled", cancelled ? tr("Yes") : tr("No")) {
-                            if guest {
-                                EmptyView()
-                            } else {
-                                Button(cancelled ? tr("Reinstate") : tr("Cancel it")) {
-                                    cancelSaving = true
-                                    Task {
-                                        let r = await model.metaOp("set_cancelled", ["cancelled": .bool(!cancelled)], label: "cancelling")
-                                        why = r.why
-                                        cancelSaving = false
-                                    }
-                                }
-                                .disabled(cancelSaving)
-                                .accessibilityIdentifier("details.cancelled")
-                            }
                         }
                     }
                 }
