@@ -25,6 +25,7 @@ import {
   groupSubtitle,
   groupTally,
   groupWeekSubtitle,
+  festivalDayLabel,
 } from '../src/homepage/logic.js'
 
 const night = (over = {}) => ({
@@ -154,6 +155,16 @@ describe('festival rows', () => {
     )
     expect(weekSubtitle(retreat({ log_complete_date: 'x' }), '2026-10-25')).toBe(
       "O'Flaherty's Irish Music Retreat 2026 · logged",
+    )
+  })
+
+  it('says which day of a multi-day festival it is, after the festival name', () => {
+    expect(festivalDayLabel(retreat({ festival_day: 2 }))).toBe('Day 2')
+    expect(festivalDayLabel(retreat())).toBe('')
+    expect(festivalDayLabel(night({ festival_day: null }))).toBe('')
+    expect(todaySubtitle(retreat({ festival_day: 1 }))).toBe("O'Flaherty's Irish Music Retreat 2026 · Day 1")
+    expect(weekSubtitle(retreat({ festival_day: 3, log_complete_date: 'x' }), '2026-10-25')).toBe(
+      "O'Flaherty's Irish Music Retreat 2026 · Day 3 · logged",
     )
   })
 
@@ -382,6 +393,15 @@ describe('nightItems', () => {
     expect(groupSubtitle(g)).toBe('3 sessions today')
     expect(groupTally(g)).toBe('Room A, Room B')
     expect(groupWeekSubtitle(g, '2026-10-22')).toBe('3 sessions · 2 on now')
+  })
+
+  it("leads a multi-day festival's fold with which day it is", () => {
+    const g = nightItems([room(1, { festival_day: 2 }), room(2, { festival_day: 2 })])[0]
+    expect(g.festival_day).toBe(2)
+    expect(groupSubtitle(g)).toBe('Day 2 · 2 sessions today')
+    expect(groupWeekSubtitle(g, '2026-10-24')).toBe('Day 2 · 2 sessions · not logged')
+    const noDay = nightItems([room(1), room(2)])[0]
+    expect(groupSubtitle(noDay)).toBe('2 sessions today')
   })
 
   it('does not fold nights of different sessions, or of the same session on different days', () => {

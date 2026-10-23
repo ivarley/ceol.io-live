@@ -65,10 +65,16 @@ export function homeTitle(session) {
   return timeAndPlace(session).join(' · ') || session.name || ''
 }
 
+/** "Day 2" at a multi-day festival (the server counts from its first day); '' otherwise. */
+export function festivalDayLabel(night) {
+  const n = night?.festival_day
+  return n ? t('Day {n}', { n }) : ''
+}
+
 /** The opening parts of a home row's second line: where and when, or at a festival
- *  (where the title already says that) the festival's name. */
+ *  (where the title already says that) the festival's name and which day it is. */
 function whereAndWhen(session) {
-  return isFestival(session) ? [session.name].filter(Boolean) : timeAndPlace(session)
+  return isFestival(session) ? [session.name, festivalDayLabel(session)].filter(Boolean) : timeAndPlace(session)
 }
 
 /** The status chip's words. "Starts 7:00pm" needs a time; without one, "Today". */
@@ -125,7 +131,8 @@ export function sessionInstanceHref(session) {
  *
  * Items keep the payload's order (date, then start time). A single night is
  * `{ kind: 'night', night }`; a fold is `{ kind: 'group', ... }` with the nights, the
- * ones on now, and where it opens: the session's list of nights.
+ * ones on now, which day of the festival it is, and where it opens: the session's
+ * list of nights.
  */
 export function nightItems(nights) {
   const items = []
@@ -134,7 +141,15 @@ export function nightItems(nights) {
     const key = `${night.session_id ?? night.path}|${night.date}`
     let group = byKey.get(key)
     if (!group) {
-      group = { kind: 'group', key, name: night.name, path: night.path, date: night.date, nights: [] }
+      group = {
+        kind: 'group',
+        key,
+        name: night.name,
+        path: night.path,
+        date: night.date,
+        festival_day: night.festival_day ?? null,
+        nights: [],
+      }
       byKey.set(key, group)
       items.push(group)
     }
@@ -169,9 +184,11 @@ export function groupStatusLabel(group) {
   return start ? t('Starts {time}', { time: start }) : t('Today')
 }
 
-/** A fold's second line: how many sessions the day holds. */
+/** A fold's second line: which day of the festival, and how many sessions it holds. */
 export function groupSubtitle(group) {
-  return tn(group.nights.length, '{n} session today', '{n} sessions today')
+  return [festivalDayLabel(group), tn(group.nights.length, '{n} session today', '{n} sessions today')]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** A fold's third line: the rooms on now by name — the thing you are choosing
@@ -181,9 +198,10 @@ export function groupTally(group) {
   return tallyLabel({ tunes_logged: group.tunesLogged, is_active: false })
 }
 
-/** A week row for a fold: the count, and the ones on now or that it is all logged. */
+/** A week row for a fold: which day of the festival, the count, and the ones on now
+ *  or that it is all logged. */
 export function groupWeekSubtitle(group, todayStr) {
-  const parts = [tn(group.nights.length, '{n} session', '{n} sessions')]
+  const parts = [festivalDayLabel(group), tn(group.nights.length, '{n} session', '{n} sessions')].filter(Boolean)
   if (group.live.length) parts.push(tn(group.live.length, '{n} on now', '{n} on now'))
   else if (group.allFinished) parts.push(t('logged'))
   else if (todayStr && group.date < todayStr) parts.push(t('not logged'))

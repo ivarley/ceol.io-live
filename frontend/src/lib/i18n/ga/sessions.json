@@ -1036,5 +1036,9 @@
       "other": "{n} seisiún inniu"
     },
     "review": true
+  },
+  "Day {n}": {
+    "ga": "Lá {n}",
+    "review": true
   }
 }

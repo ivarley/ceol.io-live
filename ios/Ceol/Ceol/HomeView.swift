@@ -26,7 +26,7 @@ extension HomePayload.UpcomingSessionsPayloadPayload {
             name: name, path: path, date: date, startTime: startTime, endTime: endTime,
             locationName: locationName, isActive: isActive, logComplete: logCompleteDate != nil,
             peopleHere: peopleHere, tunesLogged: tunesLogged,
-            sessionInstanceID: sessionInstanceId, multipleOnDate: multipleOnDate)
+            sessionInstanceID: sessionInstanceId, multipleOnDate: multipleOnDate, festivalDay: festivalDay)
     }
 }
 
@@ -398,6 +398,7 @@ enum HomeText {
         let when = timeRange(start: n.startTime, end: n.endTime)
         if !when.isEmpty { parts.append(when) }
         if let loc = n.locationName, !loc.isEmpty { parts.append(loc) }
+        if let day = n.festivalDay { parts.append(festivalDayLabel(day)) }
         if HomeRules.status(n) == .live && n.peopleHere > 0 {
             parts.append(n.peopleHere == 1 ? tr("1 person here") : tr("\(n.peopleHere) people here"))
         }
@@ -420,6 +421,7 @@ enum HomeText {
         let when = timeRange(start: n.startTime, end: n.endTime)
         if !when.isEmpty { parts.append(when) }
         if let loc = n.locationName, !loc.isEmpty { parts.append(loc) }
+        if let day = n.festivalDay { parts.append(festivalDayLabel(day)) }
         if n.logComplete {
             parts.append(tr("logged"))
         } else if let today, n.date < today {
@@ -441,9 +443,15 @@ enum HomeText {
         }
     }
 
+    /// "Lá 2" at a multi-day festival.
+    static func festivalDayLabel(_ day: Int) -> String { tr("Day \(day)") }
+
     static func groupSubtitle(_ g: HomeGroup) -> String {
         guard irish else { return HomeRules.groupSubtitle(g) }
-        return tr("\(g.nights.count) sessions today")
+        var parts: [String] = []
+        if let day = g.festivalDay { parts.append(festivalDayLabel(day)) }
+        parts.append(tr("\(g.nights.count) sessions today"))
+        return parts.joined(separator: " · ")
     }
 
     static func groupTally(_ g: HomeGroup) -> String {
@@ -455,7 +463,9 @@ enum HomeText {
 
     static func groupWeekSubtitle(_ g: HomeGroup, today: String?) -> String {
         guard irish else { return HomeRules.groupWeekSubtitle(g, today: today) }
-        var parts = [tr("\(g.nights.count) sessions")]
+        var parts: [String] = []
+        if let day = g.festivalDay { parts.append(festivalDayLabel(day)) }
+        parts.append(tr("\(g.nights.count) sessions"))
         if !g.live.isEmpty {
             parts.append(tr("\(g.live.count) on now"))
         } else if g.allFinished {

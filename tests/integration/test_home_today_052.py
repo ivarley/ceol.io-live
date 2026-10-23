@@ -306,6 +306,29 @@ class TestTwoSessionsOnOneDay:
         assert _row(body, HT_INSTANCE)["multiple_on_date"] is True
         assert _row(body, HT_INSTANCE_B)["multiple_on_date"] is True
 
+    def test_a_festival_night_says_which_day_it_is(
+        self, client, authenticated_regular_user, tonight, db_conn, db_cursor
+    ):
+        # "Day 2" of a multi-day festival, counted from its first day. A regular
+        # session has no day.
+        assert (
+            _row(_home(client, authenticated_regular_user), HT_INSTANCE)["festival_day"]
+            is None
+        )
+        db_cursor.execute(
+            """
+            UPDATE session SET session_type = 'festival',
+                   initiation_date = (SELECT date - 1 FROM session_instance WHERE session_instance_id = %s)
+            WHERE session_id = (SELECT session_id FROM session_instance WHERE session_instance_id = %s)
+            """,
+            (HT_INSTANCE, HT_INSTANCE),
+        )
+        db_conn.commit()
+        assert (
+            _row(_home(client, authenticated_regular_user), HT_INSTANCE)["festival_day"]
+            == 2
+        )
+
 
 @pytest.mark.integration
 class TestCancelledNights:

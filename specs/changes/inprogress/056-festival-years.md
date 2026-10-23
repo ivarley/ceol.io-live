@@ -161,6 +161,9 @@ surface built for "a night" broke at that scale:
   row — "12 sessions today, 4 on now", naming the rooms on now — that opens the session
   (web: its Logs tab; app: its screen, where the "On now" rows lead with the room). A
   dozen cards was a strip nobody could page through. `nightItems` on both platforms.
+  A multi-day festival's card and rows say which day it is — "Day 2 · 8 sessions" —
+  from `festival_day` on the Home payload (`date − initiation_date + 1`, counted from
+  the year's first day; null for a regular session).
 - **Directory.** Web: the "On Now …" list links each room by id. App: with several on at
   once the pill reads "4 on now" and opens the session; it used to open the first room.
 

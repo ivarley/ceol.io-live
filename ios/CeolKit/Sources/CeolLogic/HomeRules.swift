@@ -26,11 +26,14 @@ public struct HomeNight: Sendable, Equatable {
     /// Other nights of the session share the date (a festival's rooms): the night's
     /// web link is then by id, because the date URL cannot tell them apart.
     public var multipleOnDate: Bool
+    /// Which day of a multi-day festival this is, counted from its first day ("Day 2");
+    /// nil for a regular session.
+    public var festivalDay: Int?
 
     public init(
         name: String, path: String?, date: String, startTime: String?, endTime: String?,
         locationName: String?, isActive: Bool, logComplete: Bool, peopleHere: Int, tunesLogged: Int,
-        sessionInstanceID: Int? = nil, multipleOnDate: Bool = false
+        sessionInstanceID: Int? = nil, multipleOnDate: Bool = false, festivalDay: Int? = nil
     ) {
         self.name = name
         self.path = path
@@ -44,6 +47,7 @@ public struct HomeNight: Sendable, Equatable {
         self.tunesLogged = tunesLogged
         self.sessionInstanceID = sessionInstanceID
         self.multipleOnDate = multipleOnDate
+        self.festivalDay = festivalDay
     }
 }
 
@@ -59,6 +63,8 @@ public struct HomeGroup: Sendable, Equatable {
     public var liveRooms: [String]
     public var tunesLogged: Int
     public var allFinished: Bool
+    /// Which day of the festival this is; nil when the session does not say.
+    public var festivalDay: Int?
 }
 
 /// One Today card or week row: a night on its own, or a day's fold of one session.
@@ -122,7 +128,8 @@ public enum HomeRules {
                 name: group[0].name, path: group[0].path, date: group[0].date, nights: group, live: live,
                 liveRooms: live.compactMap { $0.locationName.flatMap { $0.isEmpty ? nil : $0 } },
                 tunesLogged: group.reduce(0) { $0 + $1.tunesLogged },
-                allFinished: group.allSatisfy(\.logComplete)))
+                allFinished: group.allSatisfy(\.logComplete),
+                festivalDay: group[0].festivalDay))
         }
     }
 
@@ -143,8 +150,15 @@ public enum HomeRules {
         }
     }
 
+    /// "Day 2" at a multi-day festival; "" otherwise.
+    public static func festivalDayLabel(_ day: Int?) -> String {
+        day.map { "Day \($0)" } ?? ""
+    }
+
+    /// Which day of the festival, and how many sessions it holds.
     public static func groupSubtitle(_ g: HomeGroup) -> String {
-        g.nights.count == 1 ? "1 session today" : "\(g.nights.count) sessions today"
+        [festivalDayLabel(g.festivalDay), g.nights.count == 1 ? "1 session today" : "\(g.nights.count) sessions today"]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// The rooms on now by name, or, with none on, the day's tally.
@@ -155,7 +169,8 @@ public enum HomeRules {
     }
 
     public static func groupWeekSubtitle(_ g: HomeGroup, today: String?) -> String {
-        var parts = [g.nights.count == 1 ? "1 session" : "\(g.nights.count) sessions"]
+        var parts = [festivalDayLabel(g.festivalDay), g.nights.count == 1 ? "1 session" : "\(g.nights.count) sessions"]
+            .filter { !$0.isEmpty }
         if !g.live.isEmpty {
             parts.append("\(g.live.count) on now")
         } else if g.allFinished {
@@ -190,6 +205,7 @@ public enum HomeRules {
         let when = instanceTimeLabel(start: n.startTime, end: n.endTime)
         if !when.isEmpty { parts.append(when) }
         if let loc = n.locationName, !loc.isEmpty { parts.append(loc) }
+        if let day = n.festivalDay { parts.append(festivalDayLabel(day)) }
         if status(n) == .live && n.peopleHere > 0 {
             parts.append("\(n.peopleHere) \(n.peopleHere == 1 ? "person" : "people") here")
         }
@@ -209,6 +225,7 @@ public enum HomeRules {
         let when = instanceTimeLabel(start: n.startTime, end: n.endTime)
         if !when.isEmpty { parts.append(when) }
         if let loc = n.locationName, !loc.isEmpty { parts.append(loc) }
+        if let day = n.festivalDay { parts.append(festivalDayLabel(day)) }
         if n.logComplete {
             parts.append("logged")
         } else if let today, n.date < today {

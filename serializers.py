@@ -2733,7 +2733,11 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
                -- Several nights on one date (a festival's rooms): the night's link must
                -- then carry its id, because the date URL cannot tell them apart.
                (SELECT COUNT(*) FROM session_instance x
-                 WHERE x.session_id = si.session_id AND x.date = si.date) > 1 AS multiple_on_date
+                 WHERE x.session_id = si.session_id AND x.date = si.date) > 1 AS multiple_on_date,
+               -- Which day of a multi-day festival this is ("Day 2"), counted from the
+               -- festival's first day; NULL for a regular session.
+               CASE WHEN COALESCE(s.session_type, 'regular') = 'festival' AND s.initiation_date IS NOT NULL
+                    THEN (si.date - s.initiation_date) + 1 END AS festival_day
         FROM session_person sp
         JOIN session s ON sp.session_id = s.session_id
         JOIN session_instance si ON s.session_id = si.session_id
@@ -2760,6 +2764,7 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
             "tunes_logged": row["tunes_logged"],
             "people_here": row["people_here"],
             "multiple_on_date": row["multiple_on_date"],
+            "festival_day": row["festival_day"],
         }
         for row in cur.fetchall()
     ]

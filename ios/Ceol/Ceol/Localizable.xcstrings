@@ -3010,6 +3010,7 @@
       }
     },
     "Cancel it": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3856,6 +3857,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Lá"
+          }
+        }
+      }
+    },
+    "Day %lld": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lá %lld"
           }
         }
       }
@@ -5370,6 +5381,16 @@
         }
       }
     },
+    "Logging status": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stádas logála"
+          }
+        }
+      }
+    },
     "Logging tunes to %@": {
       "localizations": {
         "ga": {
@@ -5833,6 +5854,7 @@
       }
     },
     "No": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7444,6 +7466,7 @@
       }
     },
     "Reinstate": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -10160,6 +10183,7 @@
       }
     },
     "Yes": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {

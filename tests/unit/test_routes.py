@@ -41,7 +41,8 @@ class TestHomeRoute:
               "start_time": None, "end_time": None, "location_name": "The Pub",
               "log_complete_date": None, "is_active": False,
               "tunes_logged": 0, "people_here": 0,
-              "session_type": "regular", "multiple_on_date": False}],  # upcoming sessions
+              "session_type": "regular", "multiple_on_date": False,
+              "festival_day": None}],  # upcoming sessions
             [{"name": "Mueller Session", "path": "austin/mueller", "session_id": 2,
               "session_instance_id": 102, "date": datetime(2023, 8, 10).date(),
               "last_edit": datetime(2023, 8, 12),

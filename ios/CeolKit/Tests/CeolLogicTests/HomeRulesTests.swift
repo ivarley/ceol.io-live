@@ -9,22 +9,22 @@ private func night(
     date: String = "2026-09-22", start: String? = "19:00:00", end: String? = "22:00:00",
     location: String? = "BD Riley's", active: Bool = false, complete: Bool = false,
     people: Int = 0, tunes: Int = 0, id: Int? = nil, path: String = "austin/mueller",
-    name: String = "Mueller Session", several: Bool = false
+    name: String = "Mueller Session", several: Bool = false, day: Int? = nil
 ) -> HomeNight {
     HomeNight(
         name: name, path: path, date: date, startTime: start, endTime: end,
         locationName: location, isActive: active, logComplete: complete, peopleHere: people, tunesLogged: tunes,
-        sessionInstanceID: id, multipleOnDate: several)
+        sessionInstanceID: id, multipleOnDate: several, festivalDay: day)
 }
 
 /// A room of a festival day: one of several nights of the one session on the date.
 private func room(
     _ id: Int, start: String = "10:00:00", location: String? = "Room A", active: Bool = false,
-    complete: Bool = false, tunes: Int = 0, date: String = "2026-10-22"
+    complete: Bool = false, tunes: Int = 0, date: String = "2026-10-22", day: Int? = nil
 ) -> HomeNight {
     night(
         date: date, start: start, end: nil, location: location, active: active, complete: complete, tunes: tunes,
-        id: id, path: "oflahertys/2026", name: "O'Flaherty's 2026", several: true)
+        id: id, path: "oflahertys/2026", name: "O'Flaherty's 2026", several: true, day: day)
 }
 
 @Suite("HomeRules")
@@ -94,6 +94,19 @@ struct HomeRulesTests {
         #expect(HomeRules.groupWeekSubtitle(done, today: "2026-10-23") == "2 sessions · logged")
         guard case .group(let missed) = HomeRules.nightItems([room(1), room(2)])[0] else { Issue.record("expected a group"); return }
         #expect(HomeRules.groupWeekSubtitle(missed, today: "2026-10-23") == "2 sessions · not logged")
+    }
+
+    @Test("a multi-day festival's items say which day it is")
+    func festivalDay() {
+        guard case .group(let g) = HomeRules.nightItems([room(1, day: 2), room(2, day: 2)])[0]
+        else { Issue.record("expected a group"); return }
+        #expect(HomeRules.groupSubtitle(g) == "Day 2 · 2 sessions today")
+        #expect(HomeRules.groupWeekSubtitle(g, today: "2026-10-24") == "Day 2 · 2 sessions · not logged")
+        // A festival day with one session, and a regular session, which has no day.
+        #expect(HomeRules.weekSubtitle(room(3, day: 1), today: "2026-10-22") == "10:00am - ? · Room A · Day 1")
+        #expect(HomeRules.todaySubtitle(room(3, day: 1)) == "10:00am - ? · Room A · Day 1")
+        #expect(HomeRules.weekSubtitle(night(), today: "2026-09-22") == "7:00pm-10:00pm · BD Riley's")
+        #expect(HomeRules.festivalDayLabel(nil) == "")
     }
 
     @Test("liveness: the server flag, then a completed log")

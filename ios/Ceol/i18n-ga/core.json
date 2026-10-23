@@ -210,5 +210,6 @@
     "few": "%lld sheisiún inniu",
     "many": "%lld seisiún inniu",
     "other": "%lld seisiún inniu"
-  }
+  },
+  "Day %lld": "Lá %lld"
 }

@@ -204,7 +204,7 @@ components:
             type: object
             required: [name, path, session_id, session_instance_id, date, start_time, log_complete_date,
                        end_time, location_name, is_active, tunes_logged, people_here, session_type,
-                       multiple_on_date]
+                       multiple_on_date, festival_day]
             properties:
               name: { type: string }
               path: { type: string }
@@ -226,6 +226,9 @@ components:
               # link to the night must then carry session_instance_id, not the date: the
               # date URL (/sessions/{path}/{date}) cannot tell them apart.
               multiple_on_date: { type: boolean }
+              # Which day of a multi-day festival this is, counted from its first day
+              # ("Day 2"); null for a regular session, or a festival with no first day.
+              festival_day: { type: [integer, "null"] }
         in_progress_logs:
           type: array
           items:
