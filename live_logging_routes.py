@@ -3211,7 +3211,9 @@ def live_bootstrap(session_instance_id):
                    s.timezone, si.is_active, si.location_override,
                    si.start_time, si.end_time, s.session_type,
                    s.show_people_list, s.track_attendance, s.track_set_starters,
-                   si.is_cancelled
+                   si.is_cancelled,
+                   (SELECT COUNT(*) FROM session_instance x
+                     WHERE x.session_id = si.session_id AND x.date = si.date) > 1
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -3282,6 +3284,10 @@ def live_bootstrap(session_instance_id):
                 # Cancelled nights stay readable (the log may hold tunes from before the
                 # call was made) and editable, struck through; set_cancelled flips it.
                 "is_cancelled": bool(meta[15]) if meta else False,
+                # Other nights of this session share the date (a festival's rooms). A link
+                # to this night must then carry its id: the date URL cannot tell them apart,
+                # and the app's Share builds that link.
+                "multiple_on_date": bool(meta[16]) if meta else False,
                 # The session's people settings (spec 039), which the page shell passes to the
                 # web logger as config: set starters show only when both tracking flags are on.
                 "show_people_list": bool(meta[12]) if meta else True,

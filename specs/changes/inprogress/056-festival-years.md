@@ -146,6 +146,24 @@ you mean" treatment, and site admins fix slug or name on the Places page afterwa
   two years coexist. (Being a member of 2025 says nothing about 2026 — which is why the
   copy carries the admins.)
 
+### Many rooms at once (2026-10-22, the first day of O'Flaherty's)
+
+A festival day is a dozen instances of the one session, several on at once, and every
+surface built for "a night" broke at that scale:
+
+- **Links.** A night's URL is its date, and the date route took the lowest id, so the
+  app's Share (and Home's cards, the directory's "On Now", the admin sheet) sent people
+  to another room. Every payload that lists nights now carries `multiple_on_date`, and a
+  link to such a night is by id (`frontend/src/shared/nights.js`, `HomeRules.nightPath`,
+  the Logs tab's existing `instanceUrlId`). A date URL that several nights share goes to
+  the session's Logs tab instead of guessing.
+- **Home.** A session's several nights on one day fold into ONE Today card and ONE week
+  row — "12 sessions today, 4 on now", naming the rooms on now — that opens the session
+  (web: its Logs tab; app: its screen, where the "On now" rows lead with the room). A
+  dozen cards was a strip nobody could page through. `nightItems` on both platforms.
+- **Directory.** Web: the "On Now …" list links each room by id. App: with several on at
+  once the pill reads "4 on now" and opens the session; it used to open the first room.
+
 ## API
 
 Changed outright, not additively (spec 055 takes the same exception; regenerate the Swift

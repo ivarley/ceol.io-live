@@ -156,7 +156,8 @@ export function isEmptyLog(instance) {
   return (instance.tune_count || 0) === 0
 }
 
-// Date-based URL normally; instance-id URL when several instances share a date.
+// Date-based URL normally; instance-id URL when several instances share a date
+// (the rule shared/nights.js states; Home and the directory use nightHref there).
 export function instanceUrlId(instance) {
   return instance.multiple_on_date ? instance.session_instance_id : instance.date
 }

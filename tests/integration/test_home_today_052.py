@@ -281,6 +281,30 @@ class TestTwoSessionsOnOneDay:
         second = _row(body, HT_INSTANCE_B)
         assert second["is_active"] is False
         assert second["tunes_logged"] == 0
+        # Two sessions on one day are not two nights of one session: each night's
+        # link may use its date.
+        assert second["multiple_on_date"] is False
+        assert _row(body, HT_INSTANCE)["multiple_on_date"] is False
+
+    def test_two_nights_of_one_session_on_a_day_say_so(
+        self, client, authenticated_regular_user, tonight, db_conn, db_cursor
+    ):
+        # A festival's rooms: the date URL cannot tell them apart, so the client
+        # links each by id. The flag is what tells it to.
+        db_cursor.execute(
+            """
+            INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time,
+                                          is_active, is_cancelled)
+            SELECT %s, session_id, date, '21:00', '23:00', FALSE, FALSE
+            FROM session_instance WHERE session_instance_id = %s
+            """,
+            (HT_INSTANCE_B, HT_INSTANCE),
+        )
+        db_conn.commit()
+
+        body = _home(client, authenticated_regular_user)
+        assert _row(body, HT_INSTANCE)["multiple_on_date"] is True
+        assert _row(body, HT_INSTANCE_B)["multiple_on_date"] is True
 
 
 @pytest.mark.integration

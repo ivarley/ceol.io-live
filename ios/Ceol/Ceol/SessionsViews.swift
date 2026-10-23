@@ -126,7 +126,17 @@ struct SessionsView: View {
                     HStack(spacing: 10) {
                         Text(s.name).font(.ceol(size: 19, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
                         Spacer(minLength: 6)
-                        if let night = s.activeInstances.first {
+                        if s.activeInstances.count > 1, let night = s.activeInstances.first {
+                            // Several rooms at once (a festival): the session's screen lists
+                            // them by room; picking the first here sent everyone to one room.
+                            Button {
+                                model.sessionsPath.append(.session(path: night.path ?? s.path, name: s.name))
+                            } label: {
+                                Pill(text: tr("\(s.activeInstances.count) on now"), style: .filled, color: CeolTokens.primaryFill)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("\(s.name) has \(s.activeInstances.count) sessions on now: open the list")
+                        } else if let night = s.activeInstances.first {
                             // As on the web: straight into tonight's log.
                             Button {
                                 // A festival row gathers its years' nights: each says whose it is.
@@ -461,11 +471,15 @@ struct SessionDetailView: View {
                 }
                 // The one thing you came for mid-session: tonight's log.
                 ForEach(d.activeInstances, id: \.sessionInstanceId) { night in
-                    NavigationLink(value: Route.night(id: night.sessionInstanceId, title: tr("\(d.session.name) · Tonight"))) {
+                    // At a festival several rooms are on at once, each a night of this
+                    // session: the row leads with the room, or it is a column of "On now".
+                    let room = night.locationOverride.flatMap { $0.isEmpty ? nil : $0 }
+                    let title = room.map { "\(tr("On now")) · \($0)" } ?? tr("On now")
+                    NavigationLink(value: Route.night(id: night.sessionInstanceId, title: room ?? tr("\(d.session.name) · Tonight"))) {
                         HStack(spacing: 12) {
                             Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(CeolTokens.primary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("On now").font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                                Text(title).font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
                                 Text(SessionsL10n.timeRange(start: night.startTime, end: night.endTime))
                                     .font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                             }
@@ -1123,8 +1137,12 @@ struct NightView: View {
                     .accessibilityIdentifier("night.recordings")
             }
             if let night = model.night, let path = night["session_path"]?.stringValue {
-                // A night's page is its date, or its id when it has none.
-                let url = app.webURL("/sessions/\(path)/\(night["instance_date"]?.stringValue ?? String(sessionInstanceID))")
+                // A night's page is its date — or its id when other nights of the session
+                // share the date (a festival's rooms), since the date URL would send
+                // whoever scans the code to whichever room has the lowest id.
+                let url = app.webURL(HomeRules.nightPath(
+                    sessionPath: path, date: night["instance_date"]?.stringValue, id: sessionInstanceID,
+                    multipleOnDate: night["multiple_on_date"]?.boolValue ?? false))
                 Divider()
                 Button {
                     app.sharing = app.shareOverride ?? ShareTarget(

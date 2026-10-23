@@ -85,6 +85,16 @@
         }
       }
     },
+    "%@ cancelled this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chuir %@ an seisiún seo ar ceal"
+          }
+        }
+      }
+    },
     "%@ checked in %@": {
       "localizations": {
         "en": {
@@ -199,6 +209,22 @@
         }
       }
     },
+    "%@ has %lld sessions on now: open the list": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ has %2$lld sessions on now: open the list"
+          }
+        },
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá %lld seisiún ar siúl anois ag %@: oscail an liosta"
+          }
+        }
+      }
+    },
     "%@ in %@": {
       "localizations": {
         "en": {
@@ -305,6 +331,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "D'athraigh %@ dáta an loga seo go %@, %@"
+          }
+        }
+      }
+    },
+    "%@ reinstated this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chuir %@ an seisiún seo ar ais"
           }
         }
       }
@@ -1064,6 +1100,46 @@
         }
       }
     },
+    "%lld on now": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld ar siúl anois"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld ar siúl anois"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld ar siúl anois"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld ar siúl anois"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld ar siúl anois"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld people": {
       "localizations": {
         "ga": {
@@ -1277,6 +1353,46 @@
                 "stringUnit": {
                   "state": "needs_review",
                   "value": "%lld sheisiún logáilte"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld sessions today": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún inniu"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún inniu"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún inniu"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld seisiún inniu"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld sheisiún inniu"
                 }
               }
             }
@@ -2889,6 +3005,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Cealaigh"
+          }
+        }
+      }
+    },
+    "Cancel it": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir ar ceal é"
+          }
+        }
+      }
+    },
+    "Cancelled": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Curtha ar ceal"
           }
         }
       }
@@ -5696,6 +5832,16 @@
         }
       }
     },
+    "No": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl"
+          }
+        }
+      }
+    },
     "No archived.": {
       "localizations": {
         "ga": {
@@ -7293,6 +7439,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Seinnteoirí rialta"
+          }
+        }
+      }
+    },
+    "Reinstate": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir ar ais é"
           }
         }
       }
@@ -10003,6 +10159,16 @@
         }
       }
     },
+    "Yes": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá"
+          }
+        }
+      }
+    },
     "Yes, Add Me": {
       "localizations": {
         "ga": {
@@ -10100,6 +10266,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Tá tú as líne — teastaíonn ceangal chun duine a chur leis."
+          }
+        }
+      }
+    },
+    "You're offline — cancelling needs a connection.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá tú as líne — teastaíonn ceangal chun é a chur ar ceal."
           }
         }
       }

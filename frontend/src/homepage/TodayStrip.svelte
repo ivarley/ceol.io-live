@@ -11,7 +11,24 @@
   // Both, because the card is the bigger target on a phone and the button is the
   // one people look for. The button stops propagation so a tap is one navigation,
   // not two.
-  import { statusLabel, todaySubtitle, tallyLabel, sessionStatus, sessionInstanceHref, homeTitle } from './logic.js'
+  //
+  // Several nights of ONE session on the day (a festival's rooms) are one card for the
+  // session — "12 sessions today, 4 on now", naming the rooms on now — that opens the
+  // day's list (logic.js nightItems). Twelve cards were a strip nobody could page
+  // through to find their room.
+  import {
+    statusLabel,
+    todaySubtitle,
+    tallyLabel,
+    sessionStatus,
+    sessionInstanceHref,
+    homeTitle,
+    nightItems,
+    groupStatus,
+    groupStatusLabel,
+    groupSubtitle,
+    groupTally,
+  } from './logic.js'
   import { t } from '../lib/index.js'
 
   let { sessions = [] } = $props()
@@ -19,7 +36,8 @@
   let stripEl = $state(null)
   let current = $state(0)
 
-  const multi = $derived(sessions.length > 1)
+  const items = $derived(nightItems(sessions))
+  const multi = $derived(items.length > 1)
 
   function onScroll() {
     if (!stripEl || !stripEl.firstElementChild) return
@@ -27,51 +45,73 @@
     current = step > 0 ? Math.round(stripEl.scrollLeft / step) : 0
   }
 
-  function open(session, event) {
-    const href = sessionInstanceHref(session)
+  function open(href, event) {
     if (!href) return
     event?.stopPropagation()
     window.location.href = href
   }
 </script>
 
-{#if sessions.length}
+{#snippet card(status, label, chip, name, sub, tally, muted, href)}
+  <!-- A div, not a button: it contains the View button, and interactive
+       content inside a button is invalid HTML (the same rule that gave Row
+       its `as` prop). Keyboard users get the View button, which is real. -->
+  <div
+    class="today-card"
+    data-status={status}
+    role="group"
+    aria-label={label}
+    onclick={(e) => open(href, e)}>
+    <div class="today-top">
+      <span class="today-eyebrow">{t('Today')}</span>
+      <span class="today-chip" data-status={status}>{chip}</span>
+    </div>
+    <div class="today-name">{name}</div>
+    <div class="today-sub">{sub}</div>
+    <div class="today-tally" class:muted>{tally}</div>
+    <div class="today-actions">
+      <a class="today-view" {href} onclick={(e) => e.stopPropagation()}>{t('View')}</a>
+    </div>
+  </div>
+{/snippet}
+
+{#if items.length}
   <div class="today-wrap" id="home-today">
     <div
       class="today-strip"
       class:multi
       bind:this={stripEl}
       onscroll={multi ? onScroll : undefined}>
-      {#each sessions as session (session.session_instance_id)}
-        {@const status = sessionStatus(session)}
-        <!-- A div, not a button: it contains the View button, and interactive
-             content inside a button is invalid HTML (the same rule that gave Row
-             its `as` prop). Keyboard users get the View button, which is real. -->
-        <div
-          class="today-card"
-          data-status={status}
-          role="group"
-          aria-label={homeTitle(session)}
-          onclick={(e) => open(session, e)}>
-          <div class="today-top">
-            <span class="today-eyebrow">{t('Today')}</span>
-            <span class="today-chip" data-status={status}>{statusLabel(session)}</span>
-          </div>
-          <div class="today-name">{homeTitle(session)}</div>
-          <div class="today-sub">{todaySubtitle(session)}</div>
-          <div class="today-tally" class:muted={!session.tunes_logged}>{tallyLabel(session)}</div>
-          <div class="today-actions">
-            <a
-              class="today-view"
-              href={sessionInstanceHref(session)}
-              onclick={(e) => e.stopPropagation()}>{t('View')}</a>
-          </div>
-        </div>
+      {#each items as item (item.key)}
+        {#if item.kind === 'group'}
+          {@render card(
+            groupStatus(item),
+            item.name,
+            groupStatusLabel(item),
+            item.name,
+            groupSubtitle(item),
+            groupTally(item),
+            !item.liveRooms.length && !item.tunesLogged,
+            item.href
+          )}
+        {:else}
+          {@const session = item.night}
+          {@render card(
+            sessionStatus(session),
+            homeTitle(session),
+            statusLabel(session),
+            homeTitle(session),
+            todaySubtitle(session),
+            tallyLabel(session),
+            !session.tunes_logged,
+            sessionInstanceHref(session)
+          )}
+        {/if}
       {/each}
     </div>
     {#if multi}
       <div class="today-dots" aria-hidden="true">
-        {#each sessions as session, i (session.session_instance_id)}
+        {#each items as item, i (item.key)}
           <span class:on={i === current}></span>
         {/each}
       </div>

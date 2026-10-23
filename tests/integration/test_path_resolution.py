@@ -129,6 +129,26 @@ class TestPages:
         assert resp.status_code == 302  # on to the live logger, as before
         assert "/live/" in resp.headers["Location"]
 
+    def test_a_date_shared_by_two_nights_shows_the_days_list(
+        self, client, committed, metro
+    ):
+        # A festival's rooms are several nights of one session on one date, so the
+        # date URL names none of them. It used to land on whichever had the lowest id,
+        # which is how a shared QR code sent people to the wrong room.
+        committed.instance(metro["pub"], "2026-10-02")
+        committed.instance(metro["pub"], "2026-10-02")
+        resp = client.get("/sessions/probemetro/the-pub/2026-10-02")
+        assert resp.status_code == 302
+        assert _location(resp) == "/sessions/probemetro/the-pub/logs"
+
+    def test_a_night_by_id_is_unambiguous(self, client, committed, metro):
+        first = committed.instance(metro["pub"], "2026-10-03")
+        second = committed.instance(metro["pub"], "2026-10-03")
+        for instance_id in (first, second):
+            resp = client.get(f"/sessions/probemetro/the-pub/{instance_id}")
+            assert resp.status_code == 302
+            assert resp.headers["Location"].endswith(f"/live/instances/{instance_id}")
+
     def test_exact_page_renders(self, client):
         assert client.get("/sessions/austin/mueller").status_code == 200
 

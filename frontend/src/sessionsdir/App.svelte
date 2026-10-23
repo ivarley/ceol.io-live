@@ -9,6 +9,7 @@
   import { untrack } from 'svelte'
   import { SearchField, Seg, Toolbar, LoadError, t, tn } from '../lib/index.js'
   import { parseLocalDate } from '../shared/parse.js'
+  import { nightHref } from '../shared/nights.js'
   import { locationLabel } from './logic.js'
   import AddSessionSheet from '../addsession/AddSessionSheet.svelte'
 
@@ -279,7 +280,7 @@
               onclick={(e) => {
                 e.preventDefault()
                 const night = session.active_instances[0]
-                goto(`/sessions/${night.path || session.path}/${night.date}`)
+                goto(nightHref(night.path || session.path, night))
               }}>{t('On Now')}</button>
           {:else if session.active_instances && session.active_instances.length > 1}
             <!-- A festival can have several rooms going at once; the select is the
@@ -288,10 +289,12 @@
               class="today-action-btn btn-goto-today"
               id="dropdown-{session.session_id}"
               onclick={(e) => e.preventDefault()}
-              onchange={(e) => e.target.value && goto(`/sessions/${e.target.value}`)}>
+              onchange={(e) => e.target.value && goto(e.target.value)}>
               <option value="">{t('On Now ...')}</option>
               {#each session.active_instances as instance (instance.session_instance_id)}
-                <option value="{instance.path || session.path}/{instance.date}">{instanceLabel(session, instance)}</option>
+                <!-- By id when the rooms share the date (shared/nights.js): the date URL
+                     would land every room on the same log. -->
+                <option value={nightHref(instance.path || session.path, instance)}>{instanceLabel(session, instance)}</option>
               {/each}
             </select>
           {/if}

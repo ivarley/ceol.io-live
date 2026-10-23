@@ -96,4 +96,16 @@ describe('the rows', () => {
     await fireEvent.click(document.querySelector('[data-session-path="hill-country-fest"] .btn-goto-today'))
     expect(assigned).toBe('/sessions/hill-country-fest/2026/2026-06-05')
   })
+
+  it('several rooms on now are a list, each linking by id, since they share the date', () => {
+    const rooms = [
+      { session_instance_id: 100, date: '2026-06-05', start_time: '19:00:00', end_time: null, location_override: 'The Hall', path: 'hill-country-fest/2026', multiple_on_date: true },
+      { session_instance_id: 101, date: '2026-06-05', start_time: '19:00:00', end_time: null, location_override: 'The Snug', path: 'hill-country-fest/2026', multiple_on_date: true },
+    ]
+    const data = { ...pageData, sessions: [{ ...festival, active_instances: rooms }] }
+    render(App, { pageData: data, isLoggedIn: false })
+    const options = [...document.querySelectorAll('[data-session-path="hill-country-fest"] select option')]
+    expect(options.map((o) => o.value)).toEqual(['', '/sessions/hill-country-fest/2026/100', '/sessions/hill-country-fest/2026/101'])
+    expect(options[1].textContent).toContain('The Hall')
+  })
 })

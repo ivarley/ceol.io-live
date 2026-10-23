@@ -203,7 +203,8 @@ components:
           items:
             type: object
             required: [name, path, session_id, session_instance_id, date, start_time, log_complete_date,
-                       end_time, location_name, is_active, tunes_logged, people_here, session_type]
+                       end_time, location_name, is_active, tunes_logged, people_here, session_type,
+                       multiple_on_date]
             properties:
               name: { type: string }
               path: { type: string }
@@ -221,11 +222,15 @@ components:
               # and `location_name`, the room-and-leader label) and carries the festival's
               # `name` as its second line; a regular row leads with `name`.
               session_type: { type: string, enum: [regular, festival] }
+              # Other nights of the same session share this date (a festival's rooms). A
+              # link to the night must then carry session_instance_id, not the date: the
+              # date URL (/sessions/{path}/{date}) cannot tell them apart.
+              multiple_on_date: { type: boolean }
         in_progress_logs:
           type: array
           items:
             type: object
-            required: [name, path, session_id, session_instance_id, date, last_edit]
+            required: [name, path, session_id, session_instance_id, date, last_edit, multiple_on_date]
             properties:
               name: { type: string }
               path: { type: string }
@@ -233,6 +238,7 @@ components:
               session_instance_id: { type: integer }
               date: { $ref: "#/components/schemas/Date" }
               last_edit: { $ref: "#/components/schemas/DateTime" }
+              multiple_on_date: { type: boolean }
         in_progress_recordings:
           type: array
           items:
@@ -497,7 +503,7 @@ components:
         A night of a session that is on right now (session_instance.is_active, kept by the
         active-sessions job). The same shape in the sessions list and in a session's detail.
       type: object
-      required: [session_instance_id, date, start_time, end_time, location_override]
+      required: [session_instance_id, date, start_time, end_time, location_override, multiple_on_date]
       properties:
         session_instance_id: { type: integer }
         date: { $ref: "#/components/schemas/Date" }
@@ -507,6 +513,9 @@ components:
         # The night's own session path, on a sessions-list row that gathers several
         # sessions' nights (a festival's years).
         path: { type: string }
+        # Other nights of the session share this date (a festival's rooms): a link to
+        # the night then carries session_instance_id, not the date.
+        multiple_on_date: { type: boolean }
     SessionDetail:
       type: object
       required: [success, session, permissions, today_in_session_tz, default_tab, active_instances, tunes, total_tunes_count,
@@ -968,7 +977,7 @@ components:
       type: object
       required: [success, session_instance_id, can_edit, current_person, session_timezone, session_id,
                  session_name, session_path, session_date, instance_date, instance_name, start_time, end_time,
-                 session_type, instance_active, log_complete, records, sets, last_event_id]
+                 session_type, instance_active, log_complete, records, sets, last_event_id, multiple_on_date]
       properties:
         success: { type: boolean, const: true }
         session_instance_id: { type: integer }
@@ -991,6 +1000,10 @@ components:
         end_time: { $ref: "#/components/schemas/TimeOrNull" }
         session_type: { type: string }
         instance_active: { type: boolean }
+        # Other nights of the session share instance_date (a festival's rooms). The
+        # night's web link is then /sessions/{session_path}/{session_instance_id}; with
+        # one night on the date it is /sessions/{session_path}/{instance_date}.
+        multiple_on_date: { type: boolean }
         # The night was called off. Still readable and editable (what was played before
         # the call came), shown struck through; `set_cancelled` {cancelled} flips it.
         is_cancelled: { type: boolean }

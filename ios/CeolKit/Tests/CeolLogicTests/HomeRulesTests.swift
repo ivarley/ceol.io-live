@@ -8,11 +8,23 @@ import Testing
 private func night(
     date: String = "2026-09-22", start: String? = "19:00:00", end: String? = "22:00:00",
     location: String? = "BD Riley's", active: Bool = false, complete: Bool = false,
-    people: Int = 0, tunes: Int = 0
+    people: Int = 0, tunes: Int = 0, id: Int? = nil, path: String = "austin/mueller",
+    name: String = "Mueller Session", several: Bool = false
 ) -> HomeNight {
     HomeNight(
-        name: "Mueller Session", path: "austin/mueller", date: date, startTime: start, endTime: end,
-        locationName: location, isActive: active, logComplete: complete, peopleHere: people, tunesLogged: tunes)
+        name: name, path: path, date: date, startTime: start, endTime: end,
+        locationName: location, isActive: active, logComplete: complete, peopleHere: people, tunesLogged: tunes,
+        sessionInstanceID: id, multipleOnDate: several)
+}
+
+/// A room of a festival day: one of several nights of the one session on the date.
+private func room(
+    _ id: Int, start: String = "10:00:00", location: String? = "Room A", active: Bool = false,
+    complete: Bool = false, tunes: Int = 0, date: String = "2026-10-22"
+) -> HomeNight {
+    night(
+        date: date, start: start, end: nil, location: location, active: active, complete: complete, tunes: tunes,
+        id: id, path: "oflahertys/2026", name: "O'Flaherty's 2026", several: true)
 }
 
 @Suite("HomeRules")
@@ -24,6 +36,64 @@ struct HomeRulesTests {
         #expect(HomeRules.todaysSessions([night()], today: nil).isEmpty)
         let festival = [night(), night(), night()]
         #expect(HomeRules.todaysSessions(festival, today: "2026-09-22").count == 3)
+    }
+
+    @Test("a night's web path is its date, or its id when the session has several nights that day")
+    func nightPath() {
+        #expect(HomeRules.nightPath(sessionPath: "austin/mueller", date: "2026-09-22", id: 120, multipleOnDate: false)
+            == "/sessions/austin/mueller/2026-09-22")
+        #expect(HomeRules.nightPath(sessionPath: "oflahertys/2026", date: "2026-10-22", id: 7, multipleOnDate: true)
+            == "/sessions/oflahertys/2026/7")
+        // No date at all: the id is all there is.
+        #expect(HomeRules.nightPath(sessionPath: "austin/mueller", date: nil, id: 120, multipleOnDate: false)
+            == "/sessions/austin/mueller/120")
+        let logs = HomeRules.continueItems(
+            logs: [.init(sessionInstanceID: 7, name: "O'Flaherty's 2026", path: "oflahertys/2026", date: "2026-10-22",
+                         lastEdit: nil, multipleOnDate: true)],
+            recordings: [], currentYear: 2026)
+        #expect(logs[0].path == "/sessions/oflahertys/2026/7")
+    }
+
+    @Test("a session's several nights on one day fold into one item; a night alone stays one")
+    func fold() {
+        let items = HomeRules.nightItems([
+            night(date: "2026-10-22", id: 1),
+            room(10, location: "Room A", active: true, tunes: 4),
+            room(11, location: "Room B", active: true),
+            room(12, start: "14:00:00", location: "Room C", tunes: 2),
+        ])
+        #expect(items.count == 2)
+        guard case .night(let alone) = items[0], case .group(let g) = items[1] else {
+            Issue.record("expected a night then a group"); return
+        }
+        #expect(alone.sessionInstanceID == 1)
+        #expect(g.name == "O'Flaherty's 2026")
+        #expect(g.nights.count == 3)
+        #expect(g.live.map(\.sessionInstanceID) == [10, 11])
+        #expect(HomeRules.groupStatusLabel(g) == "2 on now")
+        #expect(HomeRules.groupSubtitle(g) == "3 sessions today")
+        #expect(HomeRules.groupTally(g) == "Room A, Room B")
+        #expect(HomeRules.groupWeekSubtitle(g, today: "2026-10-22") == "3 sessions · 2 on now")
+        #expect(items[0].id != items[1].id)
+
+        // Different sessions, or different days of one session, do not fold.
+        let apart = HomeRules.nightItems([room(1), room(2, date: "2026-10-23"), night(date: "2026-10-22", id: 3)])
+        #expect(apart.count == 3)
+    }
+
+    @Test("a fold with none on now says when the first starts, then that it is finished")
+    func foldStatus() {
+        guard case .group(let upcoming) = HomeRules.nightItems([room(1, start: "19:00:00"), room(2, start: "21:00:00")])[0]
+        else { Issue.record("expected a group"); return }
+        #expect(HomeRules.groupStatusLabel(upcoming) == "Starts 7:00pm")
+        #expect(HomeRules.groupTally(upcoming) == "No tunes logged yet")
+        guard case .group(let done) = HomeRules.nightItems([room(1, complete: true, tunes: 3), room(2, complete: true, tunes: 5)])[0]
+        else { Issue.record("expected a group"); return }
+        #expect(HomeRules.groupStatusLabel(done) == "Finished")
+        #expect(HomeRules.groupTally(done) == "8 tunes logged")
+        #expect(HomeRules.groupWeekSubtitle(done, today: "2026-10-23") == "2 sessions · logged")
+        guard case .group(let missed) = HomeRules.nightItems([room(1), room(2)])[0] else { Issue.record("expected a group"); return }
+        #expect(HomeRules.groupWeekSubtitle(missed, today: "2026-10-23") == "2 sessions · not logged")
     }
 
     @Test("liveness: the server flag, then a completed log")

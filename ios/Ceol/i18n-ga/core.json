@@ -196,5 +196,19 @@
   "Listen to identify tunes": "Éist chun foinn a aithint",
   "Find popular tunes": "Aimsigh foinn choitianta",
   "Browse session logs": "Brabhsáil logaí seisiún",
-  "Sign in or create a free account": "Sínigh isteach nó cruthaigh cuntas saor in aisce"
+  "Sign in or create a free account": "Sínigh isteach nó cruthaigh cuntas saor in aisce",
+  "%lld on now": {
+    "one": "%lld ar siúl anois",
+    "two": "%lld ar siúl anois",
+    "few": "%lld ar siúl anois",
+    "many": "%lld ar siúl anois",
+    "other": "%lld ar siúl anois"
+  },
+  "%lld sessions today": {
+    "one": "%lld seisiún inniu",
+    "two": "%lld sheisiún inniu",
+    "few": "%lld sheisiún inniu",
+    "many": "%lld seisiún inniu",
+    "other": "%lld seisiún inniu"
+  }
 }

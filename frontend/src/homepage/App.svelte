@@ -23,6 +23,9 @@
     editedLabel,
     adjustedCounts,
     homeTitle,
+    nightItems,
+    groupWeekSubtitle,
+    sessionInstanceHref,
   } from './logic.js'
 
   let { payload } = $props()
@@ -95,7 +98,15 @@
 
   {#if upcoming.length}
     <div class="home-list">
-      {#each upcoming as session (session.session_instance_id)}
+      <!-- A session's several nights on one day (a festival's rooms) are one row, which
+           opens the day's list (logic.js nightItems); a night on its own opens its log. -->
+      {#each nightItems(upcoming) as item (item.key)}
+        {@const group = item.kind === 'group' ? item : null}
+        {@const session = group ? null : item.night}
+        {@const title = group ? group.name : homeTitle(session)}
+        {@const subtitle = group ? groupWeekSubtitle(group, todayStr) : weekSubtitle(session, todayStr)}
+        {@const live = group ? group.live.length > 0 : session.is_active}
+        {@const logged = group ? group.allFinished : !!session.log_complete_date}
         <!-- Two destinations in one row: the night (this instance's log) and the
              session it belongs to. So the row cannot be an <a> — an anchor inside an
              anchor is invalid, and browsers disagree about which one a click means.
@@ -106,7 +117,7 @@
           as="div"
           styled={false}
           rowClass="session-item"
-          subtitle={weekSubtitle(session, todayStr)}>
+          {subtitle}>
           {#snippet lead()}
             <!-- Covers the whole row (it is absolutely positioned against
                  .session-item), sitting UNDER the name so the name wins its own
@@ -115,23 +126,23 @@
                  link with no text is a link screen readers cannot announce. -->
             <a
               class="week-open"
-              href={`/sessions/${session.path}/${session.date}`}
-              aria-label={t('Log for {name}, {when}', { name: homeTitle(session), when: weekSubtitle(session, todayStr) })}
+              href={group ? group.href : sessionInstanceHref(session)}
+              aria-label={t('Log for {name}, {when}', { name: title, when: subtitle })}
             ></a>
             <div class="session-date">
-              <div class="session-date-day">{dowOf(session.date)}</div>
-              <div class="session-date-num">{domOf(session.date)}</div>
+              <div class="session-date-day">{dowOf(item.kind === 'group' ? group.date : session.date)}</div>
+              <div class="session-date-num">{domOf(item.kind === 'group' ? group.date : session.date)}</div>
             </div>
           {/snippet}
           {#snippet titleContent()}
-            <a class="session-name" href={`/sessions/${session.path}`}>{homeTitle(session)}</a>
+            <a class="session-name" href={`/sessions/${group ? group.path : session.path}`}>{title}</a>
           {/snippet}
           {#snippet trailing()}
-            {#if session.date === todayStr}
-              <span class="home-badge" class:live={session.is_active}>
-                {session.is_active ? t('Live') : t('Today')}
+            {#if (group ? group.date : session.date) === todayStr}
+              <span class="home-badge" class:live>
+                {live ? t('Live') : t('Today')}
               </span>
-            {:else if session.log_complete_date}
+            {:else if logged}
               <span class="badge-logged">{t('Logged')}</span>
             {/if}
           {/snippet}

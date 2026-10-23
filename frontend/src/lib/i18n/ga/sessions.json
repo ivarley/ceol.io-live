@@ -1016,5 +1016,25 @@
   "Sorting upward": {
     "ga": "Ag sórtáil aníos",
     "review": true
+  },
+  "{n} on now": {
+    "ga": {
+      "one": "{n} ar siúl anois",
+      "two": "{n} ar siúl anois",
+      "few": "{n} ar siúl anois",
+      "many": "{n} ar siúl anois",
+      "other": "{n} ar siúl anois"
+    },
+    "review": true
+  },
+  "{n} sessions today": {
+    "ga": {
+      "one": "{n} seisiún inniu",
+      "two": "{n} sheisiún inniu",
+      "few": "{n} sheisiún inniu",
+      "many": "{n} seisiún inniu",
+      "other": "{n} seisiún inniu"
+    },
+    "review": true
   }
 }

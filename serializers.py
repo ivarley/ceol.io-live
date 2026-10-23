@@ -759,7 +759,9 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
     cur.execute(
         """
         SELECT si.session_id, si.session_instance_id, si.date, si.start_time, si.end_time,
-               si.location_override, s.path
+               si.location_override, s.path,
+               (SELECT COUNT(*) FROM session_instance x
+                 WHERE x.session_id = si.session_id AND x.date = si.date) > 1 AS multiple_on_date
         FROM session_instance si JOIN session s ON s.session_id = si.session_id
         WHERE si.is_active = TRUE
         ORDER BY si.session_id, si.date, si.start_time
@@ -776,6 +778,7 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
                 "location_override": r["location_override"],
                 # A festival row gathers several years' nights, so each says whose it is.
                 "path": r["path"],
+                "multiple_on_date": r["multiple_on_date"],
             }
         )
 
@@ -1265,10 +1268,12 @@ def build_session_detail_payload(
     # opens tonight's log, the one thing you came to a session page for mid-session.
     cur.execute(
         """
-        SELECT session_instance_id, date, start_time, end_time, location_override
-        FROM session_instance
-        WHERE session_id = %s AND is_active = TRUE
-        ORDER BY date, start_time
+        SELECT si.session_instance_id, si.date, si.start_time, si.end_time, si.location_override,
+               (SELECT COUNT(*) FROM session_instance x
+                 WHERE x.session_id = si.session_id AND x.date = si.date) > 1 AS multiple_on_date
+        FROM session_instance si
+        WHERE si.session_id = %s AND si.is_active = TRUE
+        ORDER BY si.date, si.start_time
         """,
         (session_id,),
     )
@@ -1279,6 +1284,7 @@ def build_session_detail_payload(
             "start_time": r["start_time"].isoformat() if r["start_time"] else None,
             "end_time": r["end_time"].isoformat() if r["end_time"] else None,
             "location_override": r["location_override"],
+            "multiple_on_date": r["multiple_on_date"],
         }
         for r in cur.fetchall()
     ]
@@ -2723,7 +2729,11 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
                    AND sit.deleted = FALSE
                    AND sit.record_type <> 'break') AS tunes_logged,
                (SELECT COUNT(*) FROM person p
-                 WHERE p.at_active_session_instance_id = si.session_instance_id) AS people_here
+                 WHERE p.at_active_session_instance_id = si.session_instance_id) AS people_here,
+               -- Several nights on one date (a festival's rooms): the night's link must
+               -- then carry its id, because the date URL cannot tell them apart.
+               (SELECT COUNT(*) FROM session_instance x
+                 WHERE x.session_id = si.session_id AND x.date = si.date) > 1 AS multiple_on_date
         FROM session_person sp
         JOIN session s ON sp.session_id = s.session_id
         JOIN session_instance si ON s.session_id = si.session_id
@@ -2749,6 +2759,7 @@ def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Di
             "is_active": row["is_active"],
             "tunes_logged": row["tunes_logged"],
             "people_here": row["people_here"],
+            "multiple_on_date": row["multiple_on_date"],
         }
         for row in cur.fetchall()
     ]
@@ -2760,7 +2771,9 @@ def _load_home_in_progress_logs(cur, user_id: int) -> List[Dict[str, Any]]:
     cur.execute(
         """
         SELECT s.name, s.path, s.session_id, si.session_instance_id, si.date,
-               MAX(sit.last_modified_date) AS last_edit
+               MAX(sit.last_modified_date) AS last_edit,
+               (SELECT COUNT(*) FROM session_instance x
+                 WHERE x.session_id = si.session_id AND x.date = si.date) > 1 AS multiple_on_date
         FROM session_instance_tune sit
         JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
         JOIN session s ON si.session_id = s.session_id
@@ -2788,6 +2801,7 @@ def _load_home_in_progress_logs(cur, user_id: int) -> List[Dict[str, Any]]:
             "session_instance_id": row["session_instance_id"],
             "date": row["date"],
             "last_edit": row["last_edit"],
+            "multiple_on_date": row["multiple_on_date"],
         }
         for row in cur.fetchall()
     ]

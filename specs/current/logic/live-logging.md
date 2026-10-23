@@ -89,12 +89,17 @@ later than the night it belongs to. Anyone who can log can move it — it's meta
 notes, so it's online-only (never queued for offline replay) and the SSE echo re-dates
 every other open screen.
 
-Two instances of one session **may** share a date (the schema permits it and a few
-sessions genuinely run twice in a day), but it is nearly always a mistake, and a
-date-based URL (`/sessions/<path>/<date>`) resolves to whichever instance is first. So a
-collision is a *soft* stop: the first attempt is rejected with `reason: 'date_conflict'`,
-and the client re-sends with `confirm: true` if the user means it. The prior date is
-preserved by `save_to_history` on `session_instance`.
+Two instances of one session **may** share a date (the schema permits it; a festival's
+rooms are exactly this, and a few sessions genuinely run twice in a day), but for a
+regular session it is nearly always a mistake, and a date-based URL
+(`/sessions/<path>/<date>`) then names none of them: the server sends it to the session's
+Logs tab (the day's list) rather than guess. Every payload that lists nights says per night
+whether others share its date (`multiple_on_date`), and a link to such a night carries its
+id instead — one rule, `frontend/src/shared/nights.js` and `HomeRules.nightPath`, so a
+link shared from Home, the directory, the admin sheet or the app's Share lands on the
+night you were looking at. So a collision is a *soft* stop: the first attempt is rejected
+with `reason: 'date_conflict'`, and the client re-sends with `confirm: true` if the user
+means it. The prior date is preserved by `save_to_history` on `session_instance`.
 
 The live screen's URL is `/live/instances/<id>`, so re-dating never invalidates the page
 you are standing on. The bootstrap returns both `session_date` (the header's display

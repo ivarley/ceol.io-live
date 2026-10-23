@@ -7,6 +7,7 @@
   // behavior-for-behavior: details come from the same admin logs endpoint,
   // delete calls the same DELETE route; failures surface inline in the sheet.
   import { parseLocalDate } from '../shared/parse.js'
+  import { nightHref } from '../shared/nights.js'
   import { LoadError, Sheet, toast, ServerError, t, tn, formatDate } from '../lib/index.js'
 
   // onChanged: the row's Held/Cancelled chip lives in the parent's table, so a flip
@@ -185,7 +186,7 @@
       <div class="instance-info-row">
         <span class="instance-info-label">{t('Tunes Played:')}</span>
         <span class="instance-info-value">
-          <a href="/sessions/{sessionPath}/{instance.date}" target="_blank">
+          <a href={nightHref(sessionPath, instance)} target="_blank">
             {tn(instance.tune_count, '{n} tune', '{n} tunes')}
           </a>
         </span>
@@ -204,10 +205,10 @@
     {/if}
 
     <div class="instance-modal-actions">
-      <a href="/sessions/{sessionPath}/{instance.date}" class="instance-action-btn instance-action-btn-primary" target="_blank">
+      <a href={nightHref(sessionPath, instance)} class="instance-action-btn instance-action-btn-primary" target="_blank">
         {t('View Full Log')}
       </a>
-      <a href="/sessions/{sessionPath}/{instance.date}?mode=edit" class="instance-action-btn instance-action-btn-secondary">
+      <a href="{nightHref(sessionPath, instance)}?mode=edit" class="instance-action-btn instance-action-btn-secondary">
         {t('Edit Log')}
       </a>
       <button class="instance-action-btn instance-action-btn-danger" onclick={showDeleteConfirmation}>

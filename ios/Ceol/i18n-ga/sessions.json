@@ -377,5 +377,6 @@
   "thesession.org session %@": "Seisiún %@ ar thesession.org",
   "thesession.org session link or id": "Nasc nó aitheantas seisiúin thesession.org",
   "✓ This session has been fully logged": "✓ Logáladh an seisiún seo go hiomlán",
-  "＋ Add This Tune": "＋ Cuir an fonn seo leis"
+  "＋ Add This Tune": "＋ Cuir an fonn seo leis",
+  "%@ has %lld sessions on now: open the list": "Tá %lld seisiún ar siúl anois ag %@: oscail an liosta"
 }

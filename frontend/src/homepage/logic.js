@@ -9,6 +9,7 @@
 
 import { parseLocalDate } from '../shared/parse.js'
 import { formatTime, instanceTimeLabel } from '../shared/format.js'
+import { nightHref } from '../shared/nights.js'
 import { t, tn, formatDate } from '../lib/i18n/index.js'
 
 /**
@@ -106,10 +107,87 @@ export function tallyLabel(session) {
     : tn(n, '{n} tune logged', '{n} tunes logged')
 }
 
-/** Where the card and its View button go: that night's log. */
+/** Where the card and its View button go: that night's log (shared/nights.js: by
+ *  date, or by id when several nights of the session share the date). */
 export function sessionInstanceHref(session) {
-  if (!session?.path || !session?.date) return null
-  return `/sessions/${session.path}/${session.date}`
+  return nightHref(session?.path, session)
+}
+
+/**
+ * The Today cards and the week's rows, with a session's several nights on one day
+ * folded into ONE item.
+ *
+ * At a festival every room is a night of the one session, so a day has a dozen of
+ * them at once. A dozen cards is a strip nobody can page through, and a dozen rows is
+ * a wall that buries the rest of the week. The thing to see is the festival itself —
+ * "12 sessions today, 4 on now" — and the day's list is where you pick your room. A
+ * night on its own (every regular session) is an item as before.
+ *
+ * Items keep the payload's order (date, then start time). A single night is
+ * `{ kind: 'night', night }`; a fold is `{ kind: 'group', ... }` with the nights, the
+ * ones on now, and where it opens: the session's list of nights.
+ */
+export function nightItems(nights) {
+  const items = []
+  const byKey = new Map()
+  for (const night of nights || []) {
+    const key = `${night.session_id ?? night.path}|${night.date}`
+    let group = byKey.get(key)
+    if (!group) {
+      group = { kind: 'group', key, name: night.name, path: night.path, date: night.date, nights: [] }
+      byKey.set(key, group)
+      items.push(group)
+    }
+    group.nights.push(night)
+  }
+  return items.map((g) => {
+    if (g.nights.length === 1) return { kind: 'night', key: `night-${g.nights[0].session_instance_id}`, night: g.nights[0] }
+    const live = g.nights.filter((n) => n.is_active)
+    return {
+      ...g,
+      live,
+      liveRooms: live.map((n) => n.location_name).filter(Boolean),
+      tunesLogged: g.nights.reduce((sum, n) => sum + (n.tunes_logged || 0), 0),
+      allFinished: g.nights.every((n) => n.log_complete_date),
+      href: g.path ? `/sessions/${g.path}/logs` : null,
+    }
+  })
+}
+
+/** A fold's status chip: how many are on now; else finished, or when the first starts. */
+export function groupStatus(group) {
+  if (group.live.length) return 'live'
+  if (group.allFinished) return 'finished'
+  return 'upcoming'
+}
+
+export function groupStatusLabel(group) {
+  const status = groupStatus(group)
+  if (status === 'live') return tn(group.live.length, '{n} on now', '{n} on now')
+  if (status === 'finished') return t('Finished')
+  const start = formatTime(group.nights[0]?.start_time)
+  return start ? t('Starts {time}', { time: start }) : t('Today')
+}
+
+/** A fold's second line: how many sessions the day holds. */
+export function groupSubtitle(group) {
+  return tn(group.nights.length, '{n} session today', '{n} sessions today')
+}
+
+/** A fold's third line: the rooms on now by name — the thing you are choosing
+ *  between — or, with none on, the day's tally. */
+export function groupTally(group) {
+  if (group.liveRooms.length) return group.liveRooms.join(', ')
+  return tallyLabel({ tunes_logged: group.tunesLogged, is_active: false })
+}
+
+/** A week row for a fold: the count, and the ones on now or that it is all logged. */
+export function groupWeekSubtitle(group, todayStr) {
+  const parts = [tn(group.nights.length, '{n} session', '{n} sessions')]
+  if (group.live.length) parts.push(tn(group.live.length, '{n} on now', '{n} on now'))
+  else if (group.allFinished) parts.push(t('logged'))
+  else if (todayStr && group.date < todayStr) parts.push(t('not logged'))
+  return parts.join(' · ')
 }
 
 /** A week row's second line: the time, and whether you have been yet. */
@@ -169,7 +247,7 @@ export function continueItems(payload, currentYear) {
     date: l.date,
     lastEdit: l.last_edit,
     detail: shortDate(l.date, year),
-    href: `/sessions/${l.path}/${l.date}`,
+    href: nightHref(l.path, l),
   }))
   const recordings = (payload?.in_progress_recordings || []).map((r) => ({
     kind: 'recording',

@@ -21,10 +21,16 @@ public struct HomeNight: Sendable, Equatable {
     public var logComplete: Bool
     public var peopleHere: Int
     public var tunesLogged: Int
+    /// The night's id, to open it; nil only in fixtures that carry none.
+    public var sessionInstanceID: Int?
+    /// Other nights of the session share the date (a festival's rooms): the night's
+    /// web link is then by id, because the date URL cannot tell them apart.
+    public var multipleOnDate: Bool
 
     public init(
         name: String, path: String?, date: String, startTime: String?, endTime: String?,
-        locationName: String?, isActive: Bool, logComplete: Bool, peopleHere: Int, tunesLogged: Int
+        locationName: String?, isActive: Bool, logComplete: Bool, peopleHere: Int, tunesLogged: Int,
+        sessionInstanceID: Int? = nil, multipleOnDate: Bool = false
     ) {
         self.name = name
         self.path = path
@@ -36,6 +42,42 @@ public struct HomeNight: Sendable, Equatable {
         self.logComplete = logComplete
         self.peopleHere = peopleHere
         self.tunesLogged = tunesLogged
+        self.sessionInstanceID = sessionInstanceID
+        self.multipleOnDate = multipleOnDate
+    }
+}
+
+/// A session's several nights on one day, folded into one Home item (a festival's rooms).
+public struct HomeGroup: Sendable, Equatable {
+    public var name: String
+    public var path: String?
+    public var date: String
+    public var nights: [HomeNight]
+    /// The ones on now, in the payload's order.
+    public var live: [HomeNight]
+    /// The rooms on now, by name: what you are choosing between.
+    public var liveRooms: [String]
+    public var tunesLogged: Int
+    public var allFinished: Bool
+}
+
+/// One Today card or week row: a night on its own, or a day's fold of one session.
+public enum HomeItem: Sendable, Equatable, Identifiable {
+    case night(HomeNight)
+    case group(HomeGroup)
+
+    public var id: String {
+        switch self {
+        case .night(let n): return "night-\(n.sessionInstanceID.map(String.init) ?? "\(n.path ?? "")|\(n.date)")"
+        case .group(let g): return "group-\(g.path ?? "")|\(g.date)"
+        }
+    }
+
+    public var date: String {
+        switch self {
+        case .night(let n): return n.date
+        case .group(let g): return g.date
+        }
     }
 }
 
@@ -47,6 +89,81 @@ public enum HomeRules {
     public static func todaysSessions(_ upcoming: [HomeNight], today: String?) -> [HomeNight] {
         guard let today else { return [] }
         return upcoming.filter { $0.date == today }
+    }
+
+    /// The web path of a night's page: its date, or its id when several nights of the
+    /// session share the date (the server's `multiple_on_date`) — the date URL would
+    /// land every room of a festival on the same log. The rule frontend/src/shared/nights.js
+    /// states, so a link shared from the app and one from the web are the same link.
+    public static func nightPath(sessionPath: String, date: String?, id: Int?, multipleOnDate: Bool) -> String {
+        if let id, multipleOnDate || date == nil || date == "" { return "/sessions/\(sessionPath)/\(id)" }
+        return "/sessions/\(sessionPath)/\(date ?? "")"
+    }
+
+    /// The Today cards and the week's rows, with a session's several nights on one day
+    /// folded into one item (the web's homepage/logic.js nightItems). At a festival
+    /// every room is a night of the one session, so a day has a dozen at once; a dozen
+    /// cards is a strip nobody can page through. The fold says "12 sessions today,
+    /// 4 on now", names the rooms on now, and opens the session, where the day's list
+    /// is. Items keep the payload's order; a night on its own is an item as before.
+    public static func nightItems(_ nights: [HomeNight]) -> [HomeItem] {
+        var order: [String] = []
+        var byKey: [String: [HomeNight]] = [:]
+        for n in nights {
+            let key = "\(n.path ?? n.name)|\(n.date)"
+            if byKey[key] == nil { order.append(key) }
+            byKey[key, default: []].append(n)
+        }
+        return order.map { key in
+            let group = byKey[key]!
+            if group.count == 1 { return .night(group[0]) }
+            let live = group.filter(\.isActive)
+            return .group(HomeGroup(
+                name: group[0].name, path: group[0].path, date: group[0].date, nights: group, live: live,
+                liveRooms: live.compactMap { $0.locationName.flatMap { $0.isEmpty ? nil : $0 } },
+                tunesLogged: group.reduce(0) { $0 + $1.tunesLogged },
+                allFinished: group.allSatisfy(\.logComplete)))
+        }
+    }
+
+    public static func groupStatus(_ g: HomeGroup) -> Status {
+        if !g.live.isEmpty { return .live }
+        if g.allFinished { return .finished }
+        return .upcoming
+    }
+
+    /// The fold's chip: how many are on now; else finished, or when the first starts.
+    public static func groupStatusLabel(_ g: HomeGroup) -> String {
+        switch groupStatus(g) {
+        case .live: return "\(g.live.count) on now"
+        case .finished: return "Finished"
+        case .upcoming:
+            let start = formatTime(g.nights.first?.startTime)
+            return start.isEmpty ? "Today" : "Starts \(start)"
+        }
+    }
+
+    public static func groupSubtitle(_ g: HomeGroup) -> String {
+        g.nights.count == 1 ? "1 session today" : "\(g.nights.count) sessions today"
+    }
+
+    /// The rooms on now by name, or, with none on, the day's tally.
+    public static func groupTally(_ g: HomeGroup) -> String {
+        if !g.liveRooms.isEmpty { return g.liveRooms.joined(separator: ", ") }
+        if g.tunesLogged == 0 { return "No tunes logged yet" }
+        return "\(g.tunesLogged) \(g.tunesLogged == 1 ? "tune" : "tunes") logged"
+    }
+
+    public static func groupWeekSubtitle(_ g: HomeGroup, today: String?) -> String {
+        var parts = [g.nights.count == 1 ? "1 session" : "\(g.nights.count) sessions"]
+        if !g.live.isEmpty {
+            parts.append("\(g.live.count) on now")
+        } else if g.allFinished {
+            parts.append("logged")
+        } else if let today, g.date < today {
+            parts.append("not logged")
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// The server's liveness flag wins (it knows the session's timezone); then a
@@ -188,12 +305,17 @@ public enum HomeRules {
 
     public struct UnfinishedLog: Sendable {
         public var sessionInstanceID: Int, name: String, path: String, date: String, lastEdit: String?
-        public init(sessionInstanceID: Int, name: String, path: String, date: String, lastEdit: String?) {
+        public var multipleOnDate: Bool
+        public init(
+            sessionInstanceID: Int, name: String, path: String, date: String, lastEdit: String?,
+            multipleOnDate: Bool = false
+        ) {
             self.sessionInstanceID = sessionInstanceID
             self.name = name
             self.path = path
             self.date = date
             self.lastEdit = lastEdit
+            self.multipleOnDate = multipleOnDate
         }
     }
 
@@ -223,7 +345,8 @@ public enum HomeRules {
             ContinueItem(
                 kind: .log, id: "log-\($0.sessionInstanceID)", title: "Finish logging \($0.name)", date: $0.date,
                 detail: shortDate($0.date, currentYear: currentYear), lastEdit: $0.lastEdit,
-                path: "/sessions/\($0.path)/\($0.date)", sessionPath: $0.path, sessionInstanceID: $0.sessionInstanceID)
+                path: nightPath(sessionPath: $0.path, date: $0.date, id: $0.sessionInstanceID, multipleOnDate: $0.multipleOnDate),
+                sessionPath: $0.path, sessionInstanceID: $0.sessionInstanceID)
         }
         let r = recordings.map {
             ContinueItem(

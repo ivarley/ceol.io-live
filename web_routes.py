@@ -375,7 +375,26 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     JOIN session s ON si.session_id = s.session_id
                     WHERE s.path = %s AND si.date = %s
                     ORDER BY si.session_instance_id ASC
-                    LIMIT 1
+                    LIMIT 2
+                """,
+                    (session_path, date),
+                )
+                if len(cur.fetchmany(2)) > 1:
+                    # Several nights share the date (a festival's rooms), so the date
+                    # does not name one of them. Rather than land on whichever has the
+                    # lowest id, show the day's list and let the reader pick. Links the
+                    # app builds carry the id in this case (`multiple_on_date`).
+                    cur.close()
+                    conn.close()
+                    return redirect(f"/sessions/{session_path}/logs")
+                cur.execute(
+                    """
+                    SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
+                           si.location_override, s.location_name, si.log_complete_date, s.session_id,
+                           si.start_time, si.end_time, s.path, si.is_active, si.logging_mode
+                    FROM session_instance si
+                    JOIN session s ON si.session_id = s.session_id
+                    WHERE s.path = %s AND si.date = %s
                 """,
                     (session_path, date),
                 )

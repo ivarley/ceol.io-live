@@ -25,7 +25,8 @@ extension HomePayload.UpcomingSessionsPayloadPayload {
         HomeNight(
             name: name, path: path, date: date, startTime: startTime, endTime: endTime,
             locationName: locationName, isActive: isActive, logComplete: logCompleteDate != nil,
-            peopleHere: peopleHere, tunesLogged: tunesLogged)
+            peopleHere: peopleHere, tunesLogged: tunesLogged,
+            sessionInstanceID: sessionInstanceId, multipleOnDate: multipleOnDate)
     }
 }
 
@@ -77,20 +78,25 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("home.listen")
                 if !today.isEmpty {
-                    TodayStrip(nights: today) { n in
-                        openNight(n, id: week.first { $0.path == n.path && $0.date == n.date && $0.name == n.name }?.sessionInstanceId)
-                    }
+                    // A session's several nights on one day (a festival's rooms) are one
+                    // card, which opens the session: its screen lists the rooms on now.
+                    TodayStrip(items: HomeRules.nightItems(today), open: open)
                 }
                 VStack(alignment: .leading, spacing: 0) {
                     SectionHeading(title: tr("This week"), icon: "TabSessions")
                     if week.isEmpty {
                         Text("No sessions scheduled this week.").foregroundStyle(CeolTokens.textMuted).padding(.vertical, 16)
                     }
-                    ForEach(week, id: \.sessionInstanceId) { s in
-                        WeekRow(night: s.night, today: todayString) {
-                            openNight(s.night, id: s.sessionInstanceId)
-                        } openSession: {
-                            model.openSession(path: s.path, name: s.name)
+                    ForEach(HomeRules.nightItems(week.map(\.night))) { item in
+                        switch item {
+                        case .night(let n):
+                            WeekRow(night: n, today: todayString) {
+                                open(item)
+                            } openSession: {
+                                if let p = n.path { model.openSession(path: p, name: n.name) }
+                            }
+                        case .group(let g):
+                            GroupWeekRow(group: g, today: todayString) { open(item) }
                         }
                         Rectangle().fill(CeolTokens.borderColor).frame(height: 1)
                     }
@@ -133,7 +139,7 @@ struct HomeView: View {
         let unfinished = HomeRules.continueItems(
             logs: home.inProgressLogs.map {
                 .init(sessionInstanceID: $0.sessionInstanceId, name: $0.name, path: $0.path, date: $0.date,
-                      lastEdit: $0.lastEdit)
+                      lastEdit: $0.lastEdit, multipleOnDate: $0.multipleOnDate)
             },
             recordings: home.inProgressRecordings.map {
                 .init(recordingID: $0.recordingId, label: $0.label, name: $0.name, path: $0.path,
@@ -173,32 +179,40 @@ struct HomeView: View {
     }
 
     /// A night opens its log, as the web's week rows and View button do.
-    private func openNight(_ night: HomeNight, id: Int?) {
-        guard let id else {
-            if let p = night.path { model.openSession(path: p, name: night.name) }
-            return
+    /// A night opens its log; a day's fold opens the session, where the rooms are listed.
+    private func open(_ item: HomeItem) {
+        switch item {
+        case .night(let night):
+            // By the night's own id. Matching on name and date found the FIRST room of
+            // a festival day, whichever card you tapped.
+            guard let id = night.sessionInstanceID else {
+                if let p = night.path { model.openSession(path: p, name: night.name) }
+                return
+            }
+            model.openNight(
+                id: id, title: "\(night.name) · \(HomeText.shortDate(night.date, currentYear: nil))",
+                sessionPath: night.path, sessionName: night.name)
+        case .group(let group):
+            if let p = group.path { model.openSession(path: p, name: group.name) }
         }
-        model.openNight(
-            id: id, title: "\(night.name) · \(HomeText.shortDate(night.date, currentYear: nil))",
-            sessionPath: night.path, sessionName: night.name)
     }
 }
 
 // MARK: - Pieces
 
-/// Today's nights: one card, or a paged strip when there are several — at a festival
-/// the thing to see is that there are three.
+/// Today's items: one card, or a paged strip when there are several — two sessions on
+/// one day. A festival's rooms are one item (HomeRules.nightItems), not a page each.
 private struct TodayStrip: View {
-    let nights: [HomeNight]
-    let open: (HomeNight) -> Void
+    let items: [HomeItem]
+    let open: (HomeItem) -> Void
 
     var body: some View {
-        if nights.count == 1 {
-            TodayCard(night: nights[0], open: open)
+        if items.count == 1 {
+            TodayCard(item: items[0], open: open)
         } else {
             TabView {
-                ForEach(Array(nights.enumerated()), id: \.offset) { _, night in
-                    TodayCard(night: night, open: open).padding(.bottom, 30)
+                ForEach(items) { item in
+                    TodayCard(item: item, open: open).padding(.bottom, 30)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
@@ -208,27 +222,57 @@ private struct TodayStrip: View {
 }
 
 /// The web's today card: a green left edge, "TODAY" in capitals, the status pill, the
-/// session, what's been logged, and a green View button into the night.
+/// session, what's been logged, and a green View button into the night — or, for a
+/// day's fold, how many sessions, how many on now and which rooms they are.
 private struct TodayCard: View {
-    let night: HomeNight
-    let open: (HomeNight) -> Void
+    let item: HomeItem
+    let open: (HomeItem) -> Void
+
+    private var status: HomeRules.Status {
+        switch item {
+        case .night(let n): HomeRules.status(n)
+        case .group(let g): HomeRules.groupStatus(g)
+        }
+    }
+    private var name: String {
+        switch item {
+        case .night(let n): n.name
+        case .group(let g): g.name
+        }
+    }
+    private var chip: String {
+        switch item {
+        case .night(let n): HomeText.statusLabel(n)
+        case .group(let g): HomeText.groupStatusLabel(g)
+        }
+    }
+    private var subtitle: String {
+        switch item {
+        case .night(let n): HomeText.todaySubtitle(n)
+        case .group(let g): HomeText.groupSubtitle(g)
+        }
+    }
+    private var tally: (text: String, bright: Bool) {
+        switch item {
+        case .night(let n): (HomeText.tallyLabel(n), n.tunesLogged > 0)
+        case .group(let g): (HomeText.groupTally(g), !g.liveRooms.isEmpty || g.tunesLogged > 0)
+        }
+    }
 
     var body: some View {
-        let status = HomeRules.status(night)
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("TODAY").font(.ceol(size: 13, weight: .medium)).tracking(1.2).foregroundStyle(CeolTokens.textMuted)
                 Spacer()
                 Pill(
-                    text: HomeText.statusLabel(night), style: status == .live ? .filled : .outline,
+                    text: chip, style: status == .live ? .filled : .outline,
                     color: status == .live ? CeolTokens.primaryFill : CeolTokens.textColor)
             }
-            Text(night.name).font(.ceol(size: 22, weight: .semibold, relativeTo: .title2)).foregroundStyle(CeolTokens.textColor)
-            let sub = HomeText.todaySubtitle(night)
-            if !sub.isEmpty { Text(sub).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor.opacity(0.85)) }
-            Text(HomeText.tallyLabel(night)).font(.ceol(size: 15))
-                .foregroundStyle(night.tunesLogged > 0 ? CeolTokens.primary : CeolTokens.textMuted)
-            Button { open(night) } label: {
+            Text(name).font(.ceol(size: 22, weight: .semibold, relativeTo: .title2)).foregroundStyle(CeolTokens.textColor)
+            if !subtitle.isEmpty { Text(subtitle).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor.opacity(0.85)) }
+            Text(tally.text).font(.ceol(size: 15)).lineLimit(2)
+                .foregroundStyle(tally.bright ? CeolTokens.primary : CeolTokens.textMuted)
+            Button { open(item) } label: {
                 Text("View").font(.ceol(size: 17, weight: .medium)).foregroundStyle(.white)
                     .padding(.horizontal, 22).padding(.vertical, 9)
                     .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 6))
@@ -245,7 +289,37 @@ private struct TodayCard: View {
                 .fill(CeolTokens.primary).frame(width: 4)
         }
         .contentShape(Rectangle())
-        .onTapGesture { open(night) }
+        .onTapGesture { open(item) }
+    }
+}
+
+/// A day's fold this week (a festival's rooms): the date block, the session's name,
+/// how many sessions and how many on now. The row opens the session.
+private struct GroupWeekRow: View {
+    let group: HomeGroup
+    let today: String
+    let open: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            DateBlock(weekday: HomeText.dayOfWeek(group.date), day: HomeRules.dayOfMonth(group.date))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name).font(.ceol(size: 18, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                    .multilineTextAlignment(.leading)
+                let sub = HomeText.groupWeekSubtitle(group, today: today)
+                if !sub.isEmpty { Text(sub).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted).lineLimit(1) }
+            }
+            Spacer(minLength: 8)
+            if group.date == today {
+                let live = !group.live.isEmpty
+                Pill(text: live ? tr("Live") : tr("Today"), color: live ? CeolTokens.primary : CeolTokens.textMuted)
+            } else if group.allFinished {
+                Text("Logged").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            }
+        }
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
     }
 }
 
@@ -349,6 +423,44 @@ enum HomeText {
         if n.logComplete {
             parts.append(tr("logged"))
         } else if let today, n.date < today {
+            parts.append(tr("not logged"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // A day's fold (HomeRules.nightItems): the same decisions, in Irish words.
+
+    static func groupStatusLabel(_ g: HomeGroup) -> String {
+        guard irish else { return HomeRules.groupStatusLabel(g) }
+        switch HomeRules.groupStatus(g) {
+        case .live: return tr("\(g.live.count) on now")
+        case .finished: return tr("Finished")
+        case .upcoming:
+            let start = time(g.nights.first?.startTime)
+            return start.isEmpty ? tr("Today") : tr("Starts \(start)")
+        }
+    }
+
+    static func groupSubtitle(_ g: HomeGroup) -> String {
+        guard irish else { return HomeRules.groupSubtitle(g) }
+        return tr("\(g.nights.count) sessions today")
+    }
+
+    static func groupTally(_ g: HomeGroup) -> String {
+        guard irish else { return HomeRules.groupTally(g) }
+        if !g.liveRooms.isEmpty { return g.liveRooms.joined(separator: ", ") }
+        if g.tunesLogged == 0 { return tr("No tunes logged yet") }
+        return g.tunesLogged == 1 ? tr("1 tune logged") : tr("\(g.tunesLogged) tunes logged")
+    }
+
+    static func groupWeekSubtitle(_ g: HomeGroup, today: String?) -> String {
+        guard irish else { return HomeRules.groupWeekSubtitle(g, today: today) }
+        var parts = [tr("\(g.nights.count) sessions")]
+        if !g.live.isEmpty {
+            parts.append(tr("\(g.live.count) on now"))
+        } else if g.allFinished {
+            parts.append(tr("logged"))
+        } else if let today, g.date < today {
             parts.append(tr("not logged"))
         }
         return parts.joined(separator: " · ")

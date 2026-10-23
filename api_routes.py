@@ -6809,7 +6809,8 @@ def get_session_logs_ajax(session_path):
                 si.is_cancelled,
                 si.comments,
                 COUNT(DISTINCT sit.session_instance_tune_id) as tune_count,
-                COUNT(DISTINCT sip.session_instance_person_id) as attendance_count
+                COUNT(DISTINCT sip.session_instance_person_id) as attendance_count,
+                COUNT(*) OVER (PARTITION BY si.date) > 1 as multiple_on_date
             FROM session_instance si
             LEFT JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
                 AND sit.record_type = 'tune' AND sit.deleted = FALSE
@@ -6835,6 +6836,9 @@ def get_session_logs_ajax(session_path):
                     "comments": row[5] or "",
                     "tune_count": row[6] or 0,
                     "attendance_count": row[7] or 0,
+                    # Several nights share the date (a festival's rooms): the sheet's
+                    # links to this one must carry its id, not the date.
+                    "multiple_on_date": bool(row[8]),
                 }
             )
 

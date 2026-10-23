@@ -20,6 +20,11 @@ import {
   adjustedCounts,
   homeTitle,
   isFestival,
+  nightItems,
+  groupStatusLabel,
+  groupSubtitle,
+  groupTally,
+  groupWeekSubtitle,
 } from '../src/homepage/logic.js'
 
 const night = (over = {}) => ({
@@ -174,6 +179,10 @@ describe('tallyLabel', () => {
 describe('sessionInstanceHref', () => {
   it('points at that night, not at the session', () => {
     expect(sessionInstanceHref(night())).toBe('/sessions/austin/mueller/2026-09-22')
+  })
+
+  it("carries the id when the session has several nights on the date: the date URL can't tell a festival's rooms apart", () => {
+    expect(sessionInstanceHref(night({ multiple_on_date: true }))).toBe('/sessions/austin/mueller/120')
   })
 
   it('is null rather than a broken link when the payload is short', () => {
@@ -333,5 +342,65 @@ describe('adjustedCounts', () => {
     const status = { 99: 'want to learn' }
     adjustedCounts(base, [{ ts: 1, type: 'set_status', tune_id: 99, learn_status: 'learning' }], status)
     expect(status).toEqual({ 99: 'want to learn' })
+  })
+})
+
+describe('nightItems', () => {
+  const room = (id, over = {}) =>
+    night({
+      session_id: 7,
+      session_instance_id: id,
+      name: "O'Flaherty's 2026",
+      path: 'oflahertys/2026',
+      session_type: 'festival',
+      date: '2026-10-22',
+      multiple_on_date: true,
+      ...over,
+    })
+
+  it('leaves a night on its own alone, in payload order', () => {
+    const items = nightItems([night({ date: '2026-09-21', session_instance_id: 119 }), night()])
+    expect(items.map((i) => i.kind)).toEqual(['night', 'night'])
+    expect(items[1].night).toEqual(night())
+    expect(items[0].key).not.toBe(items[1].key)
+  })
+
+  it("folds a session's several nights on one day into one item that opens the day's list", () => {
+    const rooms = [
+      room(1, { start_time: '10:00', location_name: 'Room A', is_active: true, tunes_logged: 4 }),
+      room(2, { start_time: '10:00', location_name: 'Room B', is_active: true }),
+      room(3, { start_time: '14:00', location_name: 'Room C', tunes_logged: 2 }),
+    ]
+    const items = nightItems([night({ date: '2026-10-22' }), ...rooms])
+    expect(items.map((i) => i.kind)).toEqual(['night', 'group'])
+    const g = items[1]
+    expect(g.name).toBe("O'Flaherty's 2026")
+    expect(g.nights).toHaveLength(3)
+    expect(g.live.map((n) => n.session_instance_id)).toEqual([1, 2])
+    expect(g.href).toBe('/sessions/oflahertys/2026/logs')
+    expect(groupStatusLabel(g)).toBe('2 on now')
+    expect(groupSubtitle(g)).toBe('3 sessions today')
+    expect(groupTally(g)).toBe('Room A, Room B')
+    expect(groupWeekSubtitle(g, '2026-10-22')).toBe('3 sessions · 2 on now')
+  })
+
+  it('does not fold nights of different sessions, or of the same session on different days', () => {
+    const items = nightItems([room(1), room(2, { date: '2026-10-23' }), night({ date: '2026-10-22' })])
+    expect(items.map((i) => i.kind)).toEqual(['night', 'night', 'night'])
+  })
+
+  it('with none on now, says when the first starts, then that it is finished', () => {
+    const upcoming = nightItems([room(1, { start_time: '19:00' }), room(2, { start_time: '21:00' })])[0]
+    expect(groupStatusLabel(upcoming)).toBe('Starts 7:00pm')
+    expect(groupTally(upcoming)).toBe('No tunes logged yet')
+    const done = nightItems([
+      room(1, { log_complete_date: '2026-10-22T23:00:00Z', tunes_logged: 3 }),
+      room(2, { log_complete_date: '2026-10-22T23:00:00Z', tunes_logged: 5 }),
+    ])[0]
+    expect(groupStatusLabel(done)).toBe('Finished')
+    expect(groupTally(done)).toBe('8 tunes logged')
+    expect(groupWeekSubtitle(done, '2026-10-23')).toBe('2 sessions · logged')
+    const missed = nightItems([room(1), room(2)])[0]
+    expect(groupWeekSubtitle(missed, '2026-10-23')).toBe('2 sessions · not logged')
   })
 })
