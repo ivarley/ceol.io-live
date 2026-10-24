@@ -43,6 +43,15 @@ struct ContentView: View {
         // The web is dark-only (static/css/theme.css), and the tokens are its palette.
         .preferredColorScheme(.dark)
         .task { await model.start() }
+        // A tapped link that opened nothing says why (AppModel.open), over any screen.
+        .alert(
+            tr("Couldn't open that link"),
+            isPresented: Binding(get: { model.linkNotice != nil }, set: { if !$0 { model.linkNotice = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.linkNotice ?? "")
+        }
         // Back in the foreground: fetch what changed, send what waited (Phase 6).
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.appCameForward() } }
         .task {

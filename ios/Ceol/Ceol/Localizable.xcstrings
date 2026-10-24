@@ -3631,6 +3631,16 @@
         }
       }
     },
+    "Couldn't open that link": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir an nasc sin a oscailt"
+          }
+        }
+      }
+    },
     "Couldn't open that page": {
       "localizations": {
         "ga": {
@@ -9121,6 +9131,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níor oibrigh sé sin"
+          }
+        }
+      }
+    },
+    "That link doesn't lead anywhere now. The session or night may have been removed.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ní théann an nasc sin áit ar bith anois. Seans gur baineadh an seisiún nó an oíche."
           }
         }
       }

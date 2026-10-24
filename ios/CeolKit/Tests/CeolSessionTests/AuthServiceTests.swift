@@ -220,6 +220,59 @@ struct AuthLinkTests {
     }
 }
 
+@Suite("PageLink")
+struct PageLinkTests {
+    @Test("session pages carry their path for the server to resolve")
+    func sitePaths() {
+        #expect(PageLink(URL(string: "https://ceol.app/sessions/austin/mueller")!)
+            == PageLink(destination: .site(path: "/sessions/austin/mueller")))
+        #expect(PageLink(URL(string: "https://ceol.app/sessions/austin/mueller/2026-10-03/tunes")!)
+            == PageLink(destination: .site(path: "/sessions/austin/mueller/2026-10-03/tunes")))
+        #expect(PageLink(URL(string: "https://ceol.app/sessions/oflahertys")!)
+            == PageLink(destination: .site(path: "/sessions/oflahertys")))
+        #expect(PageLink(URL(string: "https://ceol.app/live/instances/499")!)
+            == PageLink(destination: .site(path: "/live/instances/499")))
+        // The old domain's links too (AuthLink's hosts).
+        #expect(PageLink(URL(string: "https://ceol.io/sessions/austin/mueller")!)
+            == PageLink(destination: .site(path: "/sessions/austin/mueller")))
+    }
+
+    @Test("?highlight= is read; ?tune= is not")
+    func highlight() {
+        let link = PageLink(URL(string: "https://ceol.io/sessions/austin/mueller/499?highlight=37757&tune=93")!)
+        #expect(link == PageLink(destination: .site(path: "/sessions/austin/mueller/499"), highlight: 37757))
+        #expect(PageLink(URL(string: "https://ceol.app/live/instances/499?highlight=abc")!)?.highlight == nil)
+        #expect(PageLink(URL(string: "https://ceol.app/live/instances/499?highlight=0")!)?.highlight == nil)
+        #expect(PageLink(URL(string: "https://ceol.app/live/instances/499?tune=93")!)?.highlight == nil)
+    }
+
+    @Test("the tabs")
+    func tabs() {
+        #expect(PageLink(URL(string: "https://ceol.app/sessions")!)?.destination == .sessions)
+        #expect(PageLink(URL(string: "https://ceol.app/sessions/")!)?.destination == .sessions)
+        #expect(PageLink(URL(string: "https://ceol.app/my-tunes?status=learning")!)?.destination == .myTunes)
+        #expect(PageLink(URL(string: "https://ceol.app/me")!)?.destination == .me)
+    }
+
+    @Test("anything else is not a page the app opens")
+    func rejects() {
+        for s in [
+            "https://ceol.app/", "https://ceol.app/help", "https://ceol.app/auth/login/abc",
+            "https://ceol.app/live/instances/", "https://ceol.app/live/instances/abc", "https://ceol.app/live/other/1",
+            "https://ceol.app/me/settings", "https://evil.example/sessions/austin/mueller",
+        ] {
+            #expect(PageLink(URL(string: s)!) == nil, "\(s)")
+        }
+    }
+
+    @Test("a development host only when admitted")
+    func devHost() {
+        let url = URL(string: "http://localhost:5031/sessions/austin/mueller")!
+        #expect(PageLink(url) == nil)
+        #expect(PageLink(url, extraHosts: ["localhost"])?.destination == .site(path: "/sessions/austin/mueller"))
+    }
+}
+
 @Suite("Token stores")
 struct TokenStoreTests {
     @Test("memory store")

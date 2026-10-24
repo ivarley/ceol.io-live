@@ -736,6 +736,16 @@ final class NightModel {
         }
     }
 
+    /// A row a link pointed at (?highlight=, spec 052 A7): ringed in Ceol's colour, for
+    /// longer than someone's change is (the web's flash-highlight, 2.6s).
+    func highlight(_ id: RecordID) {
+        flashes[id] = .some(nil)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.6))
+            if self?.flashes[id] == .some(nil) { self?.flashes.removeValue(forKey: id) }
+        }
+    }
+
     /// Me, as the night knows me (for my own rows and my own typing).
     var me: Int? { night?["current_person"]?["person_id"]?.intValue }
 

@@ -215,11 +215,18 @@ final class AppModel {
     }
 
     /// A night, in the Sessions tab, on top of its session so Back goes there.
-    func openNight(id: Int, title: String, sessionPath: String?, sessionName: String) {
+    /// `highlight`: a record of its log to scroll to and flash (a link's ?highlight=).
+    func openNight(id: Int, title: String, sessionPath: String?, sessionName: String, highlight: RecordID? = nil) {
         var stack: [Route] = []
         if let sessionPath { stack.append(.session(path: sessionPath, name: sessionName)) }
-        stack.append(.night(id: id, title: title))
+        stack.append(.night(id: id, title: title, highlight: highlight))
         sessionsPath = stack
+        tab = .sessions
+    }
+
+    /// A festival as a whole (its picker, or the near year), in the Sessions tab.
+    func openFestival(slug: String, name: String) {
+        sessionsPath = [.festival(slug: slug, name: name)]
         tab = .sessions
     }
 
@@ -232,6 +239,9 @@ final class AppModel {
     var linkError: String?
     /// A plain notice for the sign-in screen (e.g. after deleting the account).
     var notice: String?
+    /// Why a tapped page link opened nothing (the server couldn't be reached, or the
+    /// page is gone), for the root to show over whatever is on screen.
+    var linkNotice: String?
     /// An emailed link is being exchanged.
     private(set) var openingLink = false
 
@@ -398,14 +408,67 @@ final class AppModel {
         }
     }
 
-    /// A URL the app was opened with. Sign-in links are exchanged for a session; any
-    /// other ceol.io link is left for the screens that route pages (a later phase).
+    /// A URL the app was opened with (a Universal Link, spec 052 A7). An emailed sign-in
+    /// link is exchanged for a session; a page's link (a session, a night, a festival,
+    /// your tunes, your page) opens that screen, the server saying what the path is
+    /// (PageLink, /api/resolve). Any other link just brings the app forward. A link
+    /// that arrives while launching waits for start() to finish.
     func open(_ url: URL) async {
-        guard let link = AuthLink(url, extraHosts: devHosts) else { return }
         if phase == .launching {
             pendingLink = url
             return
         }
+        if let link = AuthLink(url, extraHosts: devHosts) {
+            await exchange(link)
+        } else if let page = PageLink(url, extraHosts: devHosts) {
+            await open(page)
+        }
+    }
+
+    /// A page's link: the tab it names, or what /api/resolve says its path is.
+    private func open(_ page: PageLink) async {
+        switch page.destination {
+        case .sessions:
+            sessionsPath = []
+            tab = .sessions
+        case .myTunes:
+            openTunes(status: nil)
+        case .me:
+            tab = .me
+        case .site(let path):
+            do {
+                let r = try await auth.client.resolvePath(query: .init(path: path)).ok.body.json
+                switch r.kind {
+                case .instance:
+                    guard let s = r.session, let i = r.instance else { return }
+                    // Named as the session's own list names its nights: a festival's
+                    // room by the room, any other night by its date.
+                    let title = i.locationOverride ?? "\(s.name) · \(SessionsL10n.shortDate(i.date))"
+                    openNight(id: i.sessionInstanceId, title: title, sessionPath: s.path, sessionName: s.name,
+                              highlight: page.highlight.map(RecordID.server))
+                case .session:
+                    guard let s = r.session else { return }
+                    openSession(path: s.path, name: s.name)
+                case .place:
+                    // A festival has a screen (its years); a town's page is the web's,
+                    // so its link lands on the Sessions tab.
+                    if let p = r.place, p.kind == .festival {
+                        openFestival(slug: p.slug, name: p.name)
+                    } else {
+                        sessionsPath = []
+                        tab = .sessions
+                    }
+                }
+            } catch {
+                linkNotice = isConnectionFailure(error)
+                    ? tr("Couldn't reach Ceol to open that link. Check your connection and tap it again.")
+                    : tr("That link doesn't lead anywhere now. The session or night may have been removed.")
+            }
+        }
+    }
+
+    /// An emailed sign-in link: exchanged for a session.
+    private func exchange(_ link: AuthLink) async {
         openingLink = true
         defer { openingLink = false }
         do {

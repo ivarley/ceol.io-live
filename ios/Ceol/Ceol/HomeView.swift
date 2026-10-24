@@ -15,7 +15,9 @@ typealias HomePayload = Components.Schemas.Home
 /// A screen pushed onto a tab's navigation stack.
 enum Route: Hashable {
     case session(path: String, name: String)
-    case night(id: Int, title: String)
+    /// `highlight`: a record of the night's log to scroll to and flash on arrival (a
+    /// link's ?highlight=<session_instance_tune_id>, spec 052 A7).
+    case night(id: Int, title: String, highlight: RecordID? = nil)
     /// A festival as a whole (spec 056): its slug is not a session path.
     case festival(slug: String, name: String)
 }

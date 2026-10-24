@@ -260,6 +260,17 @@ quietly (empty results), nothing is lost.
   ids (`session_id`, `session_instance_id`, both present in the directory/detail payloads)
   and only parse paths when opening a Universal Link — expose that resolution as
   `GET /api/resolve?path=...` so the client never reimplements it.
+- **The app's side, BUILT 2026-10-24** (`CeolSession/PageLink.swift`, `AppModel.open`):
+  the two sign-in links are exchanged (`AuthLink`); `/sessions/...` and
+  `/live/instances/<id>` go to `/api/resolve`, and the answer opens the night (on top of
+  its session, so Back lands there), the session, or the festival's screen; `/sessions`,
+  `/my-tunes` and `/me` switch tabs. `?highlight=<session_instance_tune_id>` rides along
+  on the night's route: once the record is in the log, the screen scrolls to its row and
+  rings it for 2.6s (`NightModel.highlight`), as the web's `highlightFromUrl` does.
+  `?tune=` is ignored on purpose — a tapped link never logs a tune. A link the server
+  can't resolve, or can't be reached for, says so in an alert over the current screen
+  (`AppModel.linkNotice`). The entitlement still claims only `applinks:ceol.app`; a
+  ceol.io link opens Safari, which redirects to ceol.app.
 
 ### A8. Client identification and telemetry
 

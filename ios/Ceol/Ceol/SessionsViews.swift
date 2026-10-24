@@ -31,7 +31,7 @@ struct SessionDestinations: ViewModifier {
         content.navigationDestination(for: Route.self) { route in
             switch route {
             case .session(let path, let name): SessionDetailView(path: path, name: name)
-            case .night(let id, let title): NightView(sessionInstanceID: id, title: title)
+            case .night(let id, let title, let highlight): NightView(sessionInstanceID: id, title: title, highlight: highlight)
             case .festival(let slug, let name): FestivalView(slug: slug, name: name)
             }
         }
@@ -1097,6 +1097,11 @@ struct NightView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     let sessionInstanceID: Int
     let title: String
+    /// A record to scroll to and flash once the log is here (a link's ?highlight=).
+    var highlight: RecordID? = nil
+    @State private var highlighted = false
+    /// The linked record's row, in the log's scroll space, for centring it.
+    @State private var highlightFrame: CGRect?
     @State private var model: NightModel?
     @State private var deepSearching = false
     @FocusState private var composerFocused: Bool
@@ -1127,6 +1132,22 @@ struct NightView: View {
     @State private var joinedHere = false
 
     private var myStatus: SessionPage.MyStatus { SessionPage.MyStatus(rawValue: myStatusRaw) ?? .off }
+    /// The linked record has arrived in the log (and so has a row to scroll to).
+    private var highlightReady: Bool {
+        guard let highlight, let records = model?.log?.records else { return false }
+        return records.contains { $0.recordID == highlight }
+    }
+
+    /// Scroll so the linked row sits in the middle of the visible log (the web's
+    /// scrollIntoView block: center).
+    private func centreHighlight() {
+        guard let f = highlightFrame else { return }
+        let g = scrollGeometry
+        let centre = (g.contentInsets.top + g.containerSize.height - g.contentInsets.bottom) / 2
+        let maxY = max(0, g.contentSize.height - g.containerSize.height + g.contentInsets.bottom)
+        let y = min(max(g.contentOffset.y + f.midY - centre, -g.contentInsets.top), maxY)
+        withAnimation(.easeOut(duration: 0.3)) { scroll.scrollTo(y: y) }
+    }
     private var tunebook: Tunebook? { app.myTunes.value?.tunebook }
     private var tunebookFailed: Bool { app.myTunes.value == nil && app.myTunes.failure != nil && !app.myTunes.refreshing }
 
@@ -1298,6 +1319,24 @@ struct NightView: View {
             Task {
                 try? await Task.sleep(for: .milliseconds(80))
                 withAnimation(.easeOut(duration: 0.25)) { scroll.scrollTo(id: seamScrollID(key), anchor: .bottom) }
+            }
+        }
+        .onChange(of: highlightReady, initial: true) { _, ready in
+            // The linked record is on screen (spec 052 A7, as the web's highlightFromUrl):
+            // scroll to it and flash it, once, a beat after the search row has tucked
+            // itself away so that scroll doesn't take this one's place.
+            guard ready, let highlight, !highlighted else { return }
+            highlighted = true
+            // In two moves: the scroll by id only brings the row into view (at the
+            // bottom, when it was below), and the rows are still sliding into place; once
+            // they have settled, the row's measured frame centres it.
+            Task {
+                try? await Task.sleep(for: .milliseconds(350))
+                scroll.scrollTo(id: rowScrollID(highlight), anchor: .center)
+                try? await Task.sleep(for: .milliseconds(500))
+                centreHighlight()
+                try? await Task.sleep(for: .milliseconds(300))
+                model?.highlight(highlight)
             }
         }
         .onChange(of: model?.selected) { _, id in
@@ -1563,6 +1602,10 @@ struct NightView: View {
                                         .padding(.horizontal, 4)
                                         .nowPlaying(t.recordID != nil && model.player.playingID == t.recordID)
                                         .remoteFlash(model, t.recordID)
+                                        .id(t.recordID.map(rowScrollID))
+                                        .onGeometryChange(for: CGRect?.self) {
+                                            highlight != nil && t.recordID == highlight ? $0.frame(in: .named(nightScrollSpace)) : nil
+                                        } action: { if let f = $0 { highlightFrame = f } }
                                         .transition(.opacity.combined(with: .move(edge: .top)))
                                     }
                                 }

@@ -216,5 +216,7 @@
     "many": "%lld seisiún inniu",
     "other": "%lld seisiún inniu"
   },
-  "Day %lld": "Lá %lld"
+  "Day %lld": "Lá %lld",
+  "Couldn't open that link": "Níorbh fhéidir an nasc sin a oscailt",
+  "That link doesn't lead anywhere now. The session or night may have been removed.": "Ní théann an nasc sin áit ar bith anois. Seans gur baineadh an seisiún nó an oíche."
 }
