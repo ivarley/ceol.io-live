@@ -2661,6 +2661,16 @@
         }
       }
     },
+    "Are you at this festival?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An bhfuil tú ag an bhféile seo?"
+          }
+        }
+      }
+    },
     "As an admin": {
       "localizations": {
         "ga": {

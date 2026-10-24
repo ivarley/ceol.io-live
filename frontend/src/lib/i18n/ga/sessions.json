@@ -327,6 +327,10 @@
     "ga": "An duine áitiúil thú, nó ar cuairt?",
     "review": true
   },
+  "Are you at this festival?": {
+    "ga": "An bhfuil tú ag an bhféile seo?",
+    "review": true
+  },
   "I'm local": {
     "ga": "Is duine áitiúil mé",
     "review": true

@@ -172,6 +172,11 @@ surface built for "a night" broke at that scale:
   night: "Session not found" on renaming a tune from the live logger's sheet.)
 - **Directory.** Web: the "On Now …" list links each room by id. App: with several on at
   once the pill reads "4 on now" and opens the session; it used to open the first room.
+- **Joining.** "Are you a local, or just visiting?" (spec 034) has no answer at a
+  festival, and only membership puts the year's days on Home, so a year's join prompt
+  reads "Are you at this festival? Yes, Add Me" and joins as a member with no question
+  (web `SessionJoin`, app `JoinPrompt`). The role pill and its member/visitor sheet are
+  unchanged for those who already belong.
 
 ## API
 

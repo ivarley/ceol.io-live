@@ -500,7 +500,7 @@ struct SessionDetailView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 20)
                 }
-                JoinPrompt(path: path, permissions: d.permissions) {
+                JoinPrompt(path: path, permissions: d.permissions, festival: festival) {
                     await load()
                     await people.refresh()
                 }

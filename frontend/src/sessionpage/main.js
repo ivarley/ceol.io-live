@@ -80,6 +80,12 @@ if (pageData) {
 
   const joinTarget = document.getElementById('session-join-root')
   if (joinTarget && permissions.is_logged_in && !permissions.is_session_member) {
-    mount(SessionJoin, { target: joinTarget, props: { sessionPath: pageData.session.path } })
+    mount(SessionJoin, {
+      target: joinTarget,
+      props: {
+        sessionPath: pageData.session.path,
+        isFestival: pageData.session.session_type === 'festival',
+      },
+    })
   }
 }

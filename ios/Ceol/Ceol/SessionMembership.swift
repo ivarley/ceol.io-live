@@ -26,11 +26,14 @@ private var unreachable: String { tr("Couldn't reach Ceol, so nothing changed. C
 
 /// The web's join prompt (sessionpage/SessionJoin.svelte), for a signed-in person who
 /// doesn't belong: "Do you attend this session? Yes, Add Me", then local or visiting.
-/// Once you belong, your role is the pill on the session's info card.
+/// A festival year asks nothing (nobody is local to a festival; adding it puts its days
+/// on Home, which only membership does): "Are you at this festival? Yes, Add Me" joins
+/// as a member at once. Once you belong, your role is the pill on the session's info card.
 struct JoinPrompt: View {
     @Environment(AppModel.self) private var model
     let path: String
     let permissions: SessionDetailPayload.PermissionsPayload
+    var festival = false
     /// Reload the session after joining: membership decides much of the page.
     let onChange: () async -> Void
 
@@ -43,9 +46,12 @@ struct JoinPrompt: View {
         if permissions.relationship == nil && (permissions.isLoggedIn || model.isGuest) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text("Do you attend this session?").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                    Text(festival ? "Are you at this festival?" : "Do you attend this session?")
+                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
                     Button(busy ? "Adding…" : "Yes, Add Me") {
-                        if model.isGuest { model.askToSignIn() } else { asking = true }
+                        if model.isGuest { model.askToSignIn() }
+                        else if festival { Task { await join(.member) } }
+                        else { asking = true }
                     }
                         .font(.ceol(size: 16, weight: .semibold))
                         .foregroundStyle(CeolTokens.primary)
