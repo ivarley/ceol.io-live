@@ -124,6 +124,20 @@ final class RecordingStore {
         save(r)
     }
 
+    /// A recording made just listening (no night) is given one after the fact, from the
+    /// recordings list ("Attach to a night"): named for it, and ready to upload by hand
+    /// (it stays kept on the phone until Upload is tapped). A night can be changed the
+    /// same way until the recording has gone up.
+    func attach(_ id: String, instanceID: Int, title: String) {
+        guard var r = items.first(where: { $0.id == id }), [.ready, .failed].contains(r.phase) else { return }
+        r.instanceID = instanceID
+        r.title = title
+        r.phase = .ready
+        r.error = nil
+        if r.keepOnPhone == nil { r.keepOnPhone = true }
+        save(r)
+    }
+
     func finish(id: String, keepOnPhone: Bool = false) {
         guard var r = items.first(where: { $0.id == id }) else { return }
         r.endedAt = Date()

@@ -47,7 +47,12 @@ Made by the product owner, 2026-10-11.
 - **Recording is off by default in Ad-hoc mode** and can be turned on; in Log mode it is
   on, as before. Turned off part-way, the file so far is discarded. A recording made
   with no night can't be uploaded (the server files recordings under a night), so the
-  recordings list keeps it on the phone and offers no Upload.
+  recordings list keeps it on the phone and offers "Attach to a night" instead of
+  Upload (2026-10-24): pick the session, then one of its nights, the ones on the day
+  it was recorded first, or add a night on that day; Upload follows. The list also
+  plays any recording on the phone (▶, a slider), and an uploaded one has "Open in
+  the segmenter" (the web, signed in): uploading it took the same right the segmenter
+  asks, a system admin's or a session admin's with recordings.
 - **"Log automatically at 100%"** is off and disabled when nothing is being logged. The
   meter still goes to its "sure" state at 100% in either mode: the switch is about
   logging, not about saying so.

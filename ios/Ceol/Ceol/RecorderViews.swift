@@ -10,6 +10,7 @@
 import CeolAPI
 import CeolDesign
 import CeolLogic
+import CeolSession
 import SwiftUI
 
 /// Ten segments filled up to `p`: cells 1-5 red, 6-8 orange, 9-10 green.
@@ -669,7 +670,7 @@ extension LocalRecording {
         case .converting: tr("Preparing the file…")
         case .uploading: tr("Uploading…")
         case .confirming: tr("Finishing the upload…")
-        case .uploaded: tr("Uploaded — open it in the segmenter")
+        case .uploaded: tr("Uploaded")
         case .failed: error ?? tr("Upload failed")
         }
     }
@@ -744,12 +745,20 @@ extension View {
     }
 }
 
-/// Every recording on this phone: its night, length, size and where its upload has got to.
+/// Every recording on this phone: its night, length, size and where its upload has got
+/// to; ▶ plays it here; one made just listening can be given a night; an uploaded one
+/// opens in the segmenter (on the web, signed in: uploading it took the same right,
+/// a system admin's or a session admin's with recordings, that the segmenter asks).
 struct RecordingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var deleting: LocalRecording?
     @State private var cancelling: LocalRecording?
+    @State private var attaching: LocalRecording?
+    @State private var player = RecordingPlayer()
+    @State private var page: WebPage?
+    @State private var opening: String?
+    @State private var webFailure: String?
 
     var body: some View {
         let store = app.recordings
@@ -761,16 +770,40 @@ struct RecordingsView: View {
                 }
                 ForEach(store.items) { r in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(r.title).font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
-                        Text(details(r, store)).font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                        HStack(alignment: .top, spacing: 10) {
+                            playButton(r, store)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(r.title).font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                                Text(details(r, store)).font(.ceol(size: 12)).foregroundStyle(CeolTokens.textMuted)
+                            }
+                        }
+                        if player.current == r.id { transport }
                         Text(r.statusText).font(.ceol(size: 13))
                             .foregroundStyle(r.phase == .failed ? CeolTokens.danger : r.phase == .uploaded ? CeolTokens.success : CeolTokens.textMuted)
                         if let p = store.progress[r.id] { ProgressView(value: p).tint(CeolTokens.primary) }
+                        if let webFailure, opening == nil, r.phase == .uploaded {
+                            Text(webFailure).font(.ceol(size: 13)).foregroundStyle(CeolTokens.danger)
+                        }
                         HStack(spacing: 16) {
-                            // one made just listening has no night for the server to file it under
+                            // one made just listening has no night for the server to file it
+                            // under: give it one first
                             if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id, r.instanceID != nil {
                                 Button(r.phase == .failed ? tr("Retry upload") : tr("Upload")) { Task { await store.upload(r.id) } }
                                     .accessibilityIdentifier("recordings.upload")
+                            }
+                            if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id {
+                                Button(r.instanceID == nil ? tr("Attach to a night") : tr("Change the night")) { attaching = r }
+                                    .accessibilityIdentifier("recordings.attach")
+                            }
+                            if r.phase == .uploaded, let id = r.recordingID {
+                                Button { Task { await openSegmenter(id, r.id) } } label: {
+                                    HStack(spacing: 6) {
+                                        if opening == r.id { ProgressView().controlSize(.small) }
+                                        Text("Open in the segmenter")
+                                    }
+                                }
+                                .disabled(opening != nil)
+                                .accessibilityIdentifier("recordings.segmenter")
                             }
                             if [.ready, .failed, .uploaded].contains(r.phase), app.recorder?.recordingID != r.id {
                                 Button("Delete", role: .destructive) { deleting = r }
@@ -804,8 +837,57 @@ struct RecordingsView: View {
                      : tr("It hasn't been uploaded: this is the only copy."))
             }
             .cancelUploadDialog($cancelling, store: store)
+            .sheet(item: $attaching) { r in
+                AttachNightSheet(recording: r) { id, title in store.attach(r.id, instanceID: id, title: title) }
+            }
+            .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
         }
         .preferredColorScheme(.dark)
+        .onDisappear { player.stop() }
+    }
+
+    /// ▶ / ⏸ for a recording's file. Not while the recorder has the microphone, nor
+    /// for the one still being written.
+    private func playButton(_ r: LocalRecording, _ store: RecordingStore) -> some View {
+        let mine = player.current == r.id
+        let canPlay = r.phase != .recording && app.recorder == nil
+        return Button { player.toggle(r.id, file: store.caf(r)) } label: {
+            Image(systemName: mine && player.playing ? "pause.circle.fill" : "play.circle.fill")
+                .font(.system(size: 30))
+                .foregroundStyle(canPlay ? CeolTokens.primary : CeolTokens.textMuted)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canPlay)
+        .accessibilityLabel(mine && player.playing ? tr("Pause") : tr("Play"))
+        .accessibilityIdentifier("recordings.play")
+    }
+
+    /// Where the playing recording has got to, to drag.
+    private var transport: some View {
+        HStack(spacing: 10) {
+            Text(NightRecordingsSheet.clock(Int(player.position * 1000)))
+                .font(.ceol(size: 12).monospacedDigit()).foregroundStyle(CeolTokens.textMuted)
+            Slider(value: Binding(get: { player.position }, set: { player.seek($0) }), in: 0...max(player.duration, 1))
+                .tint(CeolTokens.primary)
+                .accessibilityLabel("Position")
+            Text(NightRecordingsSheet.clock(Int(player.duration * 1000)))
+                .font(.ceol(size: 12).monospacedDigit()).foregroundStyle(CeolTokens.textMuted)
+        }
+    }
+
+    /// The segmenter, signed in, through the one-time handoff link (as a night's
+    /// Recordings sheet opens it).
+    private func openSegmenter(_ recordingID: Int, _ id: String) async {
+        opening = id
+        webFailure = nil
+        defer { opening = nil }
+        do {
+            page = WebPage(url: try await app.auth.webSession(next: "/admin/recordings/\(recordingID)/segment"))
+        } catch let f as AuthFailure {
+            webFailure = f.message
+        } catch {
+            webFailure = tr("Couldn't reach Ceol. Check your connection and try again.")
+        }
     }
 
     private func details(_ r: LocalRecording, _ store: RecordingStore) -> String {

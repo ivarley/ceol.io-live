@@ -204,7 +204,6 @@
   "Upload failed": "Theip ar an uaslódáil",
   "Upload stopped: %@": "Stad an uaslódáil: %@",
   "Upload the recording to Ceol": "Uaslódáil an taifeadadh chuig Ceol",
-  "Uploaded — open it in the segmenter": "Uaslódáilte — oscail sa deighilteoir é",
   "Uploading…": "Á uaslódáil…",
   "Use this setting": "Úsáid an leagan seo",
   "View in ABC Tools": "Féach in ABC Tools",
@@ -239,5 +238,14 @@
   "Stop uploading this recording?": "Stad uaslódáil an taifeadta seo?",
   "Stop upload": "Stad an uaslódáil",
   "It stays on this phone, to upload again later.": "Fanann sé ar an bhfón seo, le huaslódáil arís ar ball.",
-  "Opens the recordings on this phone": "Osclaíonn sé na taifeadtaí ar an bhfón seo"
+  "Opens the recordings on this phone": "Osclaíonn sé na taifeadtaí ar an bhfón seo",
+  "Attach to a night": "Ceangail le hoíche",
+  "Change the night": "Athraigh an oíche",
+  "Uploaded": "Uaslódáilte",
+  "Position": "Suíomh",
+  "Your sessions": "Do sheisiúin",
+  "Other sessions": "Seisiúin eile",
+  "Add a night on %@": "Cuir oíche leis ar %@",
+  "The day it was recorded": "An lá a taifeadadh é",
+  "Other nights": "Oícheanta eile"
 }

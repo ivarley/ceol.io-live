@@ -2149,6 +2149,16 @@
         }
       }
     },
+    "Add a night on %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cuir oíche leis ar %@"
+          }
+        }
+      }
+    },
     "Add a session": {
       "localizations": {
         "ga": {
@@ -2727,6 +2737,16 @@
         }
       }
     },
+    "Attach to a night": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ceangail le hoíche"
+          }
+        }
+      }
+    },
     "Attendance": {
       "localizations": {
         "ga": {
@@ -3116,6 +3136,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Athraigh an dáta"
+          }
+        }
+      }
+    },
+    "Change the night": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Athraigh an oíche"
           }
         }
       }
@@ -6866,6 +6896,26 @@
         }
       }
     },
+    "Other nights": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Oícheanta eile"
+          }
+        }
+      }
+    },
+    "Other sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seisiúin eile"
+          }
+        }
+      }
+    },
     "Other week": {
       "localizations": {
         "ga": {
@@ -7218,6 +7268,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Coitianta anseo"
+          }
+        }
+      }
+    },
+    "Position": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Suíomh"
           }
         }
       }
@@ -9083,6 +9143,16 @@
         }
       }
     },
+    "The day it was recorded": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An lá a taifeadadh é"
+          }
+        }
+      }
+    },
     "The key the session typically plays this tune in.": {
       "extractionState": "stale",
       "localizations": {
@@ -9748,7 +9818,18 @@
         }
       }
     },
+    "Uploaded": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Uaslódáilte"
+          }
+        }
+      }
+    },
     "Uploaded — open it in the segmenter": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -10500,6 +10581,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Do ról"
+          }
+        }
+      }
+    },
+    "Your sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Do sheisiúin"
           }
         }
       }

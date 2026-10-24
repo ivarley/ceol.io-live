@@ -3062,6 +3062,12 @@ segmented blind; item 3 the follower). Open, in rough order:
     retries it; Upload starts it again); the server has no row until the
     confirm, so a stopped upload leaves only an orphaned S3 object
     (`RecordingStore.cancel`).
+    (2026-10-24) The recordings list plays a recording on the phone
+    (`RecordingPlayer`, AVAudioPlayer over the CAF), gives one made just
+    listening a night (`AttachNightSheet`: the session, then a night, or a
+    new one on the day it was recorded; `RecordingStore.attach`), and opens an
+    uploaded one in the segmenter through the web handoff (whoever uploaded it
+    held `can_manage_recordings`, which the segmenter page checks again).
   - Still to measure: a real night with the phone listening: its speed and
     lag on an iPhone, battery and heat over three hours, and that the names
     shown match a server-listened night (they should: the same notes).

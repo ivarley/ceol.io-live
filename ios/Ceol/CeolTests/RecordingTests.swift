@@ -149,3 +149,74 @@ struct CancelUploadTests {
         await #expect(throws: CancellationError.self) { try await encode.value }
     }
 }
+
+/// A recording made just listening is given a night after the fact ("Attach to a
+/// night"): named for it, ready, and left for Upload to send.
+@MainActor
+struct AttachNightTests {
+    @Test func attachingANightReadiesTheRecording() {
+        let store = RecordingStore()
+        let id = "test-attach-\(UUID().uuidString)"
+        store.begin(id: id, instanceID: nil, title: "Listening")
+        store.finish(id: id, keepOnPhone: true)
+        defer { if let r = store.items.first(where: { $0.id == id }) { store.delete(r) } }
+        store.attach(id, instanceID: 42, title: "Mueller Session · Jan 27")
+        let r = store.items.first { $0.id == id }
+        #expect(r?.instanceID == 42)
+        #expect(r?.title == "Mueller Session · Jan 27")
+        #expect(r?.phase == .ready)
+        #expect(r?.keepOnPhone == true, "left for Upload, not sent by itself")
+    }
+
+    /// One that failed for want of a night is ready again once it has one.
+    @Test func attachingClearsAFailureForWantOfANight() {
+        let store = RecordingStore()
+        let id = "test-attach-failed-\(UUID().uuidString)"
+        store.begin(id: id, instanceID: nil, title: "Listening")
+        store.finish(id: id, keepOnPhone: false)
+        defer { if let r = store.items.first(where: { $0.id == id }) { store.delete(r) } }
+        store.attach(id, instanceID: 7, title: "A night")
+        #expect(store.items.first { $0.id == id }?.phase == .ready)
+        #expect(store.items.first { $0.id == id }?.error == nil)
+    }
+}
+
+/// Hearing a recording on the phone (RecordingPlayer): ▶ plays the file, says how
+/// long it is and where it has got to; ▶ again pauses; another recording takes over.
+@MainActor
+struct RecordingPlayerTests {
+    @Test func playsPausesAndSwitches() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "play-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let format = try #require(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 22050, channels: 1, interleaved: true))
+        func write(_ name: String, seconds: Int) throws -> URL {
+            let url = dir.appending(path: "\(name).caf")
+            let file = try AVAudioFile(forWriting: url, settings: format.settings, commonFormat: .pcmFormatInt16, interleaved: true)
+            let frames = AVAudioFrameCount(22050 * seconds)
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+            buffer.frameLength = frames
+            try file.write(from: buffer)
+            return url
+        }
+        let a = try write("a", seconds: 3), b = try write("b", seconds: 5)
+        let player = RecordingPlayer()
+        #expect(player.current == nil)
+        player.toggle("a", file: a)
+        #expect(player.current == "a")
+        #expect(player.playing)
+        #expect(abs(player.duration - 3) < 0.1)
+        player.toggle("a", file: a)
+        #expect(!player.playing, "▶ again pauses")
+        #expect(player.current == "a")
+        player.seek(2)
+        #expect(abs(player.position - 2) < 0.1)
+        player.toggle("b", file: b)
+        #expect(player.current == "b")
+        #expect(player.playing)
+        #expect(abs(player.duration - 5) < 0.1)
+        player.stop()
+        #expect(player.current == nil)
+        #expect(!player.playing)
+    }
+}

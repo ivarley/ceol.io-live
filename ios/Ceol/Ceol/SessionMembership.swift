@@ -198,6 +198,8 @@ struct AddNightView: View {
     let usualVenue: String?
     /// The new night's id, once added.
     let onAdded: (Int, String) -> Void
+    /// A date to start from (the day a recording was made) instead of the next usual one.
+    var initialDate: Date? = nil
 
     @State private var date = Date()
     @State private var hasTimes = false
@@ -249,7 +251,14 @@ struct AddNightView: View {
                         .accessibilityIdentifier("night.add")
                 }
             }
-            .task { await suggest() }
+            .task {
+                if let initialDate {
+                    date = initialDate
+                    suggesting = false
+                } else {
+                    await suggest()
+                }
+            }
         }
     }
 
