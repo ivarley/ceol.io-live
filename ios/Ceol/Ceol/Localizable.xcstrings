@@ -2728,7 +2728,18 @@
         }
       }
     },
+    "At least one of these is required, so sessions near you make sense.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá ceann amháin díobh seo ar a laghad riachtanach, ionas go mbeidh ciall le seisiúin in aice leat."
+          }
+        }
+      }
+    },
     "At least one of these, so sessions near you make sense.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -8862,6 +8873,16 @@
         }
       }
     },
+    "Still needed: %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Fós ag teastáil: %@"
+          }
+        }
+      }
+    },
     "Stop": {
       "localizations": {
         "ga": {
@@ -10577,6 +10598,16 @@
         }
       }
     },
+    "Your first and last name are needed.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tá do chéadainm agus do shloinne ag teastáil."
+          }
+        }
+      }
+    },
     "Your name": {
       "localizations": {
         "ga": {
@@ -11056,6 +11087,16 @@
         }
       }
     },
+    "somewhere you play": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "áit a seinneann tú"
+          }
+        }
+      }
+    },
     "sounds like a tune %lld%%": {
       "localizations": {
         "ga": {
@@ -11192,6 +11233,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "cuairteoir"
+          }
+        }
+      }
+    },
+    "your first name": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "do chéadainm"
+          }
+        }
+      }
+    },
+    "your last name": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "do shloinne"
           }
         }
       }

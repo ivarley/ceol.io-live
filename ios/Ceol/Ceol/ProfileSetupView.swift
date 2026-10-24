@@ -1,7 +1,8 @@
 // Profile setup after a first sign-in, the app's twin of /auth/setup-profile: a name
 // and somewhere you play are required (the server's needs_profile_setup test — a first
 // and last name, and at least one of city, state, country); time zone and instruments
-// are optional. The form won't save what the server would still call incomplete.
+// are optional. Save is always tappable: with the name or the place missing it names
+// what is still needed, under the fields and in a line at the top, instead of saving.
 //
 // The Me tab opens the same form to edit the profile (`editing`): Cancel in place of
 // Sign out, the account's time zone as it is, and it closes when saved.
@@ -31,21 +32,31 @@ struct ProfileSetupView: View {
     @State private var thesession = ""
     @State private var busy = false
     @State private var error: String?
+    @State private var attempted = false
 
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private var complete: Bool {
-        !trimmed(firstName).isEmpty && !trimmed(lastName).isEmpty
-            && !(trimmed(city).isEmpty && trimmed(state).isEmpty && trimmed(country).isEmpty)
+    private var nameMissing: Bool { trimmed(firstName).isEmpty || trimmed(lastName).isEmpty }
+    private var placeMissing: Bool {
+        trimmed(city).isEmpty && trimmed(state).isEmpty && trimmed(country).isEmpty
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 if let loaded {
-                    Section("Your name") {
+                    if let error {
+                        Section { Text(error).foregroundStyle(CeolTokens.danger) }
+                    }
+                    Section {
                         TextField("First name", text: $firstName).textContentType(.givenName)
                         TextField("Last name", text: $lastName).textContentType(.familyName)
+                    } header: {
+                        Text("Your name")
+                    } footer: {
+                        if attempted && nameMissing {
+                            Text("Your first and last name are needed.").foregroundStyle(CeolTokens.danger)
+                        }
                     }
                     Section {
                         TextField("City", text: $city).textContentType(.addressCity)
@@ -54,7 +65,12 @@ struct ProfileSetupView: View {
                     } header: {
                         Text("Where you play")
                     } footer: {
-                        Text("At least one of these, so sessions near you make sense.")
+                        if attempted && placeMissing {
+                            Text("At least one of these is required, so sessions near you make sense.")
+                                .foregroundStyle(CeolTokens.danger)
+                        } else {
+                            Text("At least one of these is required, so sessions near you make sense.")
+                        }
                     }
                     if editing {
                         Section {
@@ -89,9 +105,6 @@ struct ProfileSetupView: View {
                             }
                         }
                     }
-                    if let error {
-                        Section { Text(error).foregroundStyle(CeolTokens.danger) }
-                    }
                 } else if let error {
                     Section {
                         Text(error).foregroundStyle(CeolTokens.danger)
@@ -108,7 +121,7 @@ struct ProfileSetupView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
-                        .disabled(!complete || busy || loaded == nil)
+                        .disabled(busy || loaded == nil)
                         .accessibilityIdentifier("profile.save")
                 }
                 ToolbarItem(placement: .cancellationAction) {
@@ -155,6 +168,15 @@ struct ProfileSetupView: View {
     }
 
     private func save() async {
+        attempted = true
+        var still: [String] = []
+        if trimmed(firstName).isEmpty { still.append(tr("your first name")) }
+        if trimmed(lastName).isEmpty { still.append(tr("your last name")) }
+        if placeMissing { still.append(tr("somewhere you play")) }
+        if !still.isEmpty {
+            error = tr("Still needed: \(still.joined(separator: ", "))")
+            return
+        }
         busy = true
         error = nil
         defer { busy = false }
