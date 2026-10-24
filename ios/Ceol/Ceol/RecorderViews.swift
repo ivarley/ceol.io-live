@@ -676,29 +676,72 @@ extension LocalRecording {
 }
 
 /// While a recording goes up, a slim bar over the tabs (once the recorder's has gone).
+/// Tap it for the recordings list; its × stops the upload.
 struct UploadBar: View {
     let store: RecordingStore
+    /// Opens the recordings list. The shell presents it (MainTabView), not the bar: the
+    /// bar goes when the upload ends, and the list should not go with it.
+    let openRecordings: () -> Void
+    @State private var cancelling: LocalRecording?
 
     var body: some View {
         if let r = store.active {
             HStack(spacing: 10) {
-                Image(systemName: "arrow.up.circle").foregroundStyle(CeolTokens.primary)
-                Text("\(r.title): \(r.statusText)").lineLimit(1).font(.ceol(size: 13))
-                    .foregroundStyle(CeolTokens.textColor)
-                Spacer(minLength: 4)
-                if let p = store.progress[r.id] {
-                    ProgressView(value: p).frame(width: 70).tint(CeolTokens.primary)
+                Button(action: openRecordings) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrow.up.circle").foregroundStyle(CeolTokens.primary)
+                        Text("\(r.title): \(r.statusText)").lineLimit(1).font(.ceol(size: 13))
+                            .foregroundStyle(CeolTokens.textColor)
+                        Spacer(minLength: 4)
+                        if let p = store.progress[r.id] {
+                            ProgressView(value: p).frame(width: 70).tint(CeolTokens.primary)
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("upload.bar")
+                .accessibilityHint("Opens the recordings on this phone")
+                if RecordingStore.cancellable(r) {
+                    Button { cancelling = r } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 18))
+                            .foregroundStyle(CeolTokens.textMuted)
+                            .frame(width: 32, height: Self.height)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cancel upload")
+                    .accessibilityIdentifier("upload.cancel")
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.leading, 14).padding(.trailing, 6)
             .frame(height: Self.height)
             .background(CeolTokens.headerBg)
             .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
-            .accessibilityIdentifier("upload.bar")
+            .cancelUploadDialog($cancelling, store: store)
         }
     }
 
     static let height: CGFloat = 36
+}
+
+extension View {
+    /// "Stop uploading this recording?", for the bar and the list: the recording stays
+    /// on the phone (RecordingStore.cancel).
+    func cancelUploadDialog(_ recording: Binding<LocalRecording?>, store: RecordingStore) -> some View {
+        confirmationDialog("Stop uploading this recording?", isPresented: Binding(
+            get: { recording.wrappedValue != nil }, set: { if !$0 { recording.wrappedValue = nil } }), titleVisibility: .visible
+        ) {
+            Button("Stop upload") {
+                if let r = recording.wrappedValue { store.cancel(r.id) }
+                recording.wrappedValue = nil
+            }
+            .accessibilityIdentifier("upload.cancel.confirm")
+        } message: {
+            Text("It stays on this phone, to upload again later.")
+        }
+    }
 }
 
 /// Every recording on this phone: its night, length, size and where its upload has got to.
@@ -706,6 +749,7 @@ struct RecordingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var deleting: LocalRecording?
+    @State private var cancelling: LocalRecording?
 
     var body: some View {
         let store = app.recordings
@@ -731,6 +775,10 @@ struct RecordingsView: View {
                             if [.ready, .failed, .uploaded].contains(r.phase), app.recorder?.recordingID != r.id {
                                 Button("Delete", role: .destructive) { deleting = r }
                             }
+                            if RecordingStore.cancellable(r) {
+                                Button("Cancel upload") { cancelling = r }
+                                    .accessibilityIdentifier("recordings.cancelUpload")
+                            }
                         }
                         .buttonStyle(.borderless)
                         .font(.ceol(size: 14, weight: .semibold))
@@ -755,6 +803,7 @@ struct RecordingsView: View {
                 Text(deleting?.phase == .uploaded ? tr("It is on the server; this only frees the space here.")
                      : tr("It hasn't been uploaded: this is the only copy."))
             }
+            .cancelUploadDialog($cancelling, store: store)
         }
         .preferredColorScheme(.dark)
     }

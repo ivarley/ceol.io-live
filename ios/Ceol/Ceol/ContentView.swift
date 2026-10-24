@@ -116,6 +116,8 @@ enum AppTab: Hashable, CaseIterable {
 struct MainTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    /// The recordings list, from the upload bar's tap.
+    @State private var showingRecordings = false
 
     /// The tab bar, and the listener's bar above it while it listens (not on its own
     /// tab, where the meter is).
@@ -148,7 +150,7 @@ struct MainTabView: View {
                     if let recorder = model.recorder, model.tab != .listen {
                         RecorderBar(recorder: recorder)
                     } else if model.recordings.active != nil {
-                        UploadBar(store: model.recordings)
+                        UploadBar(store: model.recordings) { showingRecordings = true }
                     }
                     CeolTabBar()
                 }
@@ -159,6 +161,7 @@ struct MainTabView: View {
         .fullScreenCover(item: $model.presentedListen, onDismiss: { model.pendingLog = nil }) { _ in
             ListenCover().environment(model)
         }
+        .sheet(isPresented: $showingRecordings) { RecordingsView() }
         .ceolSharePane()
         .tint(CeolTokens.primary)
     }

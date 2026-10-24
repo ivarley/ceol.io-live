@@ -18,7 +18,10 @@
 // phone gets a connection and when the app starts, at most every ten minutes each:
 // whichever way the night was listened to, its recording reaches the server.
 //
-// The CAF stays until the upload is confirmed; Delete removes a recording by hand.
+// The CAF stays until the upload is confirmed; Delete removes a recording by hand. An
+// upload can be stopped part-way (the bar over the tabs, or the recordings list): the
+// recording is then kept on the phone, to upload again by hand; the server has no row
+// for it yet, so nothing there is left half-made.
 //
 // i18n-converted (spec 057): the messages we set are in the app's language; the
 // server's own `error` is shown as it comes (a later stage), and the label sent with a
@@ -67,6 +70,8 @@ final class RecordingStore {
     @ObservationIgnored private weak var app: AppModel?
     @ObservationIgnored private var monitor: NWPathMonitor?
     @ObservationIgnored private var lastTried: [String: Date] = [:]
+    /// Each recording's encode while it runs, so a cancel can stop it.
+    @ObservationIgnored private var encoding: [String: Task<URL, any Error>] = [:]
     static let retryEvery: TimeInterval = 600
 
     init() {
@@ -84,6 +89,10 @@ final class RecordingStore {
     private func encoded(_ r: LocalRecording) -> URL? { r.uploadName.map { dir.appending(path: $0) } }
 
     var active: LocalRecording? { items.first { [.converting, .uploading, .confirming].contains($0.phase) } }
+
+    /// Whether Cancel is offered: while the file is prepared or goes up. Confirming is
+    /// one quick request after the file has landed, too late to be worth stopping.
+    static func cancellable(_ r: LocalRecording) -> Bool { [.converting, .uploading].contains(r.phase) }
 
     /// Hours, minutes, seconds of a recording on disk.
     func duration(_ r: LocalRecording) -> TimeInterval {
@@ -203,13 +212,23 @@ final class RecordingStore {
         // 1. FLAC (or WAV), off the main thread
         let source = caf(r)
         let dir = self.dir
+        let encode = Task.detached { try AudioEncode.encode(source, into: dir, name: id) }
+        encoding[id] = encode
+        defer { if encoding[id] == encode { encoding[id] = nil } }
         let encodedURL: URL
         do {
-            encodedURL = try await Task.detached { try AudioEncode.encode(source, into: dir, name: id) }.value
+            encodedURL = try await encode.value
         } catch {
+            // cancelled meanwhile: cancel() has already put the recording back
+            guard items.first(where: { $0.id == id })?.phase == .converting else { return }
             return fail(id, tr("Couldn't prepare the file: \(error.localizedDescription)"))
         }
+        guard items.first(where: { $0.id == id })?.phase == .converting else {
+            try? FileManager.default.removeItem(at: encodedURL)
+            return
+        }
         r.uploadName = encodedURL.lastPathComponent
+        save(r)
         // 2. a signed upload
         let (status, body) = (try? await app.postJSON(
             "/api/recordings/upload-url",
@@ -218,8 +237,11 @@ final class RecordingStore {
         guard status == 200, let put = body["upload_url"]?.stringValue.flatMap(URL.init(string:)),
             let key = body["storage_key"]?.stringValue, let type = body["content_type"]?.stringValue
         else {
+            guard items.first(where: { $0.id == id })?.phase == .converting else { return }
             return fail(id, body["error"]?.stringValue ?? (status == 0 ? tr("Offline — try again later") : tr("The server refused the upload (\(status))")))
         }
+        // cancelled while the upload was being signed
+        guard items.first(where: { $0.id == id })?.phase == .converting else { return }
         r.storageKey = key
         r.phase = .uploading
         save(r)
@@ -229,6 +251,28 @@ final class RecordingStore {
         request.httpMethod = "PUT"
         request.setValue(type, forHTTPHeaderField: "Content-Type")
         uploadSession().put(request, file: encodedURL, id: id)
+    }
+
+    /// Stop an upload part-way: the encode or the PUT is cancelled, and the recording
+    /// stays on the phone as one kept there (nothing retries it; Upload in the list
+    /// starts it again from the beginning). The server has no row for it yet; an
+    /// object left in S3 is nothing to it (recording_routes: the orphan is "the right
+    /// way round").
+    func cancel(_ id: String) {
+        guard var r = items.first(where: { $0.id == id }), Self.cancellable(r) else { return }
+        encoding[id]?.cancel()
+        uploads?.cancel(id)
+        // the file prepared for the server, named or (an encode under way) not yet
+        for url in [encoded(r)].compactMap({ $0 }) + ["flac", "wav"].map({ dir.appending(path: "\(id).\($0)") }) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        r.phase = .ready
+        r.keepOnPhone = true
+        r.storageKey = nil
+        r.uploadName = nil
+        r.error = nil
+        progress[id] = nil
+        save(r)
     }
 
     /// The file is in S3: tell the server, which starts its ingest.
@@ -347,10 +391,17 @@ nonisolated enum AudioEncode {
         }
         let chunk: AVAudioFrameCount = 22050 * 30
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunk) else { throw CocoaError(.fileWriteUnknown) }
-        while input.framePosition < input.length {
-            try input.read(into: buffer, frameCount: min(chunk, AVAudioFrameCount(input.length - input.framePosition)))
-            if buffer.frameLength == 0 { break }
-            try out.write(from: buffer)
+        do {
+            while input.framePosition < input.length {
+                // cancelled (RecordingStore.cancel): stop, and leave no half-written file
+                try Task.checkCancellation()
+                try input.read(into: buffer, frameCount: min(chunk, AVAudioFrameCount(input.length - input.framePosition)))
+                if buffer.frameLength == 0 { break }
+                try out.write(from: buffer)
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            throw error
         }
         return url
     }
@@ -385,6 +436,13 @@ nonisolated final class UploadSession: NSObject, URLSessionTaskDelegate, @unchec
         task.resume()
     }
 
+    /// Stop this recording's PUT, if it is in flight (RecordingStore.cancel).
+    func cancel(_ id: String) {
+        session.getAllTasks { tasks in
+            for task in tasks where task.taskDescription == id { task.cancel() }
+        }
+    }
+
     func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData _: Int64,
                     totalBytesSent sent: Int64, totalBytesExpectedToSend total: Int64) {
         guard let id = task.taskDescription, total > 0 else { return }
@@ -395,6 +453,8 @@ nonisolated final class UploadSession: NSObject, URLSessionTaskDelegate, @unchec
         guard let id = task.taskDescription else { return }
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         if let error {
+            // cancelled by the store, which has already put the recording back
+            if (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled { return }
             onDone(id, tr("Upload stopped: \(error.localizedDescription)"))
         } else if !(200..<300).contains(status) {
             onDone(id, tr("S3 refused the upload (\(status))"))

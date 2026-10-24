@@ -3056,6 +3056,12 @@ segmented blind; item 3 the follower). Open, in rough order:
     straight to S3 (a presigned PUT in a background session); an upload that
     failed is now tried again by itself whenever the phone gets a
     connection and when the app starts, each at most every ten minutes.
+    (2026-10-23) An upload can be stopped part-way: the bar over the tabs
+    opens the recordings list and carries a ×, and an in-progress row in the
+    list has Cancel upload. The recording is then kept on the phone (nothing
+    retries it; Upload starts it again); the server has no row until the
+    confirm, so a stopped upload leaves only an orphaned S3 object
+    (`RecordingStore.cancel`).
   - Still to measure: a real night with the phone listening: its speed and
     lag on an iPhone, battery and heat over three hours, and that the names
     shown match a server-listened night (they should: the same notes).

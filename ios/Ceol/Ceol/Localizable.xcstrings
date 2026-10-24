@@ -3020,6 +3020,16 @@
         }
       }
     },
+    "Cancel upload": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cealaigh an uaslódáil"
+          }
+        }
+      }
+    },
     "Cancelled": {
       "localizations": {
         "ga": {
@@ -4806,6 +4816,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Tá sé ar an bhfreastalaí; ní dhéanann sé seo ach an spás anseo a shaoradh."
+          }
+        }
+      }
+    },
+    "It stays on this phone, to upload again later.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Fanann sé ar an bhfón seo, le huaslódáil arís ar ball."
           }
         }
       }
@@ -6812,6 +6832,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Osclaíonn sé an nodaireacht ar an scáileán iomlán"
+          }
+        }
+      }
+    },
+    "Opens the recordings on this phone": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Osclaíonn sé na taifeadtaí ar an bhfón seo"
           }
         }
       }
@@ -8829,6 +8859,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Stad taifeadadh na hoíche seo?"
+          }
+        }
+      }
+    },
+    "Stop upload": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stad an uaslódáil"
+          }
+        }
+      }
+    },
+    "Stop uploading this recording?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stad uaslódáil an taifeadta seo?"
           }
         }
       }

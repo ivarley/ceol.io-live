@@ -1,4 +1,5 @@
 import AVFoundation
+import CeolSession
 import Foundation
 import Testing
 @testable import Ceol
@@ -81,5 +82,70 @@ struct KeepOnPhoneTests {
         store.finish(id: id, keepOnPhone: false)
         #expect(store.items.first { $0.id == id }?.statusText == "Not uploaded yet")
         if let r = store.items.first(where: { $0.id == id }) { store.delete(r) }
+    }
+}
+
+/// An upload stopped part-way (the bar's ×, or Cancel upload in the list): the
+/// recording is kept on the phone, nothing retries it, and the file being prepared
+/// for the server is gone.
+@MainActor
+struct CancelUploadTests {
+    @Test func cancellingWhileTheFileIsPreparedKeepsTheRecording() async throws {
+        let app = AppModel(server: URL(string: "http://127.0.0.1:9")!, store: MemoryTokenStore())
+        let store = app.recordings
+        store.resume(app: app)
+        let id = "test-cancel-\(UUID().uuidString)"
+        store.begin(id: id, instanceID: 1, title: "A night")
+        // Something for the encoder to chew on: a few seconds of tone.
+        let format = try #require(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 22050, channels: 1, interleaved: true))
+        let r0 = try #require(store.items.first { $0.id == id })
+        do {
+            let file = try AVAudioFile(forWriting: store.caf(r0), settings: format.settings, commonFormat: .pcmFormatInt16, interleaved: true)
+            let frames: AVAudioFrameCount = 22050 * 5
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+            buffer.frameLength = frames
+            try file.write(from: buffer)
+        }
+        store.finish(id: id, keepOnPhone: true)
+        defer { if let r = store.items.first(where: { $0.id == id }) { store.delete(r) } }
+
+        let upload = Task { await store.upload(id) }
+        // upload() marks the recording converting before its first await
+        for _ in 0..<200 where store.items.first(where: { $0.id == id })?.phase != .converting { await Task.yield() }
+        #expect(store.items.first { $0.id == id }?.phase == .converting)
+        #expect(RecordingStore.cancellable(try #require(store.items.first { $0.id == id })))
+        store.cancel(id)
+        await upload.value
+
+        let r = try #require(store.items.first { $0.id == id })
+        #expect(r.phase == .ready)
+        #expect(r.keepOnPhone == true)
+        #expect(r.error == nil)
+        #expect(r.uploadName == nil)
+        #expect(store.progress[id] == nil)
+        #expect(store.active == nil)
+        #expect(!RecordingStore.cancellable(r))
+        for ext in ["flac", "wav"] {
+            #expect(!FileManager.default.fileExists(atPath: store.dir.appending(path: "\(id).\(ext)").path), Comment(rawValue: ext))
+        }
+    }
+
+    /// The encoder stops when its task is cancelled, rather than finishing the file.
+    @Test func theEncoderHonoursCancellation() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "rec-cancel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let format = try #require(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 22050, channels: 1, interleaved: true))
+        let caf = dir.appending(path: "night.caf")
+        do {
+            let file = try AVAudioFile(forWriting: caf, settings: format.settings, commonFormat: .pcmFormatInt16, interleaved: true)
+            let frames: AVAudioFrameCount = 22050 * 60
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+            buffer.frameLength = frames
+            try file.write(from: buffer)
+        }
+        let encode = Task.detached { try AudioEncode.encode(caf, into: dir, name: "night") }
+        encode.cancel()
+        await #expect(throws: CancellationError.self) { try await encode.value }
     }
 }
