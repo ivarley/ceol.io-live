@@ -114,6 +114,37 @@ class TestPublicBootstrap:
         resp = client.get(f"/api/live/instances/{public_instance['instance_id']}/bootstrap")
         assert resp.get_json()["instance_active"] is False
 
+    def test_bootstrap_says_whether_the_viewer_belongs_to_the_session(
+        self, client, authenticated_user, public_instance
+    ):
+        """A festival night asks "Are you at {festival}?" of whoever doesn't belong yet,
+        so the payload says who does: any session_person row, visitor included."""
+        url = f"/api/live/instances/{public_instance['instance_id']}/bootstrap"
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            with authenticated_user:
+                assert client.get(url).get_json()["viewer_is_member"] is False
+                cur.execute(
+                    "INSERT INTO session_person (session_id, person_id, relationship, confirmed, archived, is_admin) "
+                    "VALUES (%s, %s, 'visitor', FALSE, FALSE, FALSE)",
+                    (public_instance["session_id"], authenticated_user.person_id),
+                )
+                conn.commit()
+                assert client.get(url).get_json()["viewer_is_member"] is True
+        finally:
+            cur.execute(
+                "DELETE FROM session_person WHERE session_id = %s AND person_id = %s",
+                (public_instance["session_id"], authenticated_user.person_id),
+            )
+            conn.commit()
+            conn.close()
+
+    def test_signed_out_nobody_belongs(self, client, public_instance):
+        """Signed out, the banner would only ever lead to sign-in: the flag is false."""
+        resp = client.get(f"/api/live/instances/{public_instance['instance_id']}/bootstrap")
+        assert resp.get_json()["viewer_is_member"] is False
+
 
 class TestPublicIsReadOnly:
     def test_ops_still_require_auth(self, client, public_instance):

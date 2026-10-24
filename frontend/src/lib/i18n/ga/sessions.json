@@ -327,8 +327,16 @@
     "ga": "An duine áitiúil thú, nó ar cuairt?",
     "review": true
   },
-  "Are you at this festival?": {
-    "ga": "An bhfuil tú ag an bhféile seo?",
+  "Are you at {name}?": {
+    "ga": "An bhfuil tú ag {name}?",
+    "review": true
+  },
+  "Tap to add it to your sessions": {
+    "ga": "Tapáil chun é a chur le do sheisiúin",
+    "review": true
+  },
+  "Sign in to add it to your sessions": {
+    "ga": "Sínigh isteach chun é a chur le do sheisiúin",
     "review": true
   },
   "I'm local": {

@@ -39,6 +39,10 @@
             <svg class="session-band-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
 
+        {# "Are you at {festival}?" -- a festival year's join prompt, for whoever doesn't
+           belong to it yet; mounted by the Svelte bundle (spec 056). #}
+        <div id="festival-join-root"></div>
+
         {# On now: the one thing you came to this page for mid-session, so it leads.
            Opens the log in view mode (the logger's default), since most people at a
            session are reading the log, not writing it. A festival can have several

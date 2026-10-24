@@ -2661,7 +2661,18 @@
         }
       }
     },
+    "Are you at %@?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "An bhfuil tú ag %@?"
+          }
+        }
+      }
+    },
     "Are you at this festival?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -8999,6 +9010,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Tapáil an fonn má tá sé mícheart nó má d'athraigh sé."
+          }
+        }
+      }
+    },
+    "Tap to add it to your sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tapáil chun é a chur le do sheisiúin"
           }
         }
       }

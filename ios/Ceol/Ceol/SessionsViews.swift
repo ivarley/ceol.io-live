@@ -471,6 +471,16 @@ struct SessionDetailView: View {
                 .accessibilityValue(infoOpen ? "details shown" : "details hidden")
                 .accessibilityHint("Shows the session's details")
                 .padding(.horizontal, 20)
+                if festival {
+                    FestivalJoinBanner(
+                        path: path, name: d.session.name, belongs: d.permissions.relationship != nil,
+                        signedIn: d.permissions.isLoggedIn
+                    ) {
+                        await load()
+                        await people.refresh()
+                    }
+                    .padding(.horizontal, 20)
+                }
                 if infoOpen {
                     about(d)
                         .padding(.horizontal, 20)
@@ -500,11 +510,13 @@ struct SessionDetailView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 20)
                 }
-                JoinPrompt(path: path, permissions: d.permissions, festival: festival) {
-                    await load()
-                    await people.refresh()
+                if !festival {
+                    JoinPrompt(path: path, permissions: d.permissions) {
+                        await load()
+                        await people.refresh()
+                    }
+                    .padding(.horizontal, 20)
                 }
-                .padding(.horizontal, 20)
                 VStack(spacing: 0) {
                     tabStrip(tabs, d, festival: festival)
                         // Scrolled off the top, the pinned copy takes over (and speaks for it).
@@ -1111,6 +1123,8 @@ struct NightView: View {
     @State private var showingRecordings = false
     @State private var settingListStatus = false
     @State private var actionFailure: String?
+    /// Joined the festival from this night's banner: it goes until the next bootstrap says so.
+    @State private var joinedHere = false
 
     private var myStatus: SessionPage.MyStatus { SessionPage.MyStatus(rawValue: myStatusRaw) ?? .off }
     private var tunebook: Tunebook? { app.myTunes.value?.tunebook }
@@ -1427,6 +1441,15 @@ struct NightView: View {
             .background(CeolTokens.headerBg.opacity(0.5))
             .contentShape(Rectangle())
             .onTapGesture { showingDetails = true }
+            // A festival night asks whoever doesn't belong to the festival yet (spec 056).
+            if b["session_type"]?.stringValue == "festival", let path = b["session_path"]?.stringValue {
+                FestivalJoinBanner(
+                    path: path, name: b["session_name"]?.stringValue ?? "",
+                    belongs: joinedHere || (b["viewer_is_member"]?.boolValue ?? true),
+                    signedIn: b["can_edit"]?.boolValue ?? false
+                ) { joinedHere = true }
+                .padding(.horizontal, 20).padding(.top, 10)
+            }
             if finding {
                 // What the log is narrowed to, and how much of it that is.
                 NightPills(

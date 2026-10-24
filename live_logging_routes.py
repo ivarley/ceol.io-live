@@ -3228,6 +3228,20 @@ def live_bootstrap(session_instance_id):
 
         manages_recordings = can_manage_recordings(cur, meta[0]) if meta else False
 
+        # Whether the viewer belongs to the session (any session_person row, member or
+        # visitor). A festival night shows "Are you at {festival}?" to whoever doesn't,
+        # since the QR code at the door lands here, not on the session's page.
+        viewer_is_member = False
+        viewer_person_id = (
+            getattr(current_user, "person_id", None) if can_edit else None
+        )
+        if meta and viewer_person_id:
+            cur.execute(
+                "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+                (meta[0], viewer_person_id),
+            )
+            viewer_is_member = cur.fetchone() is not None
+
         cur.execute(
             "SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s",
             (session_instance_id,),
@@ -3245,6 +3259,7 @@ def live_bootstrap(session_instance_id):
                 "session_instance_id": int(session_instance_id),
                 "can_edit": can_edit,
                 "can_manage_recordings": manages_recordings,
+                "viewer_is_member": viewer_is_member,
                 "current_person": {
                     "person_id": getattr(current_user, "person_id", None),
                     "first_name": getattr(current_user, "first_name", ""),

@@ -1,8 +1,6 @@
-// "Do you attend this session?" (spec 034) and its festival shape (spec 056).
-//
-// A regular session asks one question before joining: local, or just visiting. A
-// festival year asks nothing: nobody is local to a festival, and adding one is about
-// having its days on Home, so "Yes, Add Me" joins as a member at once.
+// "Do you attend this session?" (spec 034): a regular session asks one question before
+// joining, local or just visiting. (A festival year's prompt is the banner under its
+// band, festivaljoinbanner.test.js.)
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, waitFor, screen } from "@testing-library/svelte";
 import SessionJoin from "../src/sessionpage/SessionJoin.svelte";
@@ -39,22 +37,5 @@ describe("SessionJoin", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/sessions/austin/mueller/join");
     expect(JSON.parse(init.body)).toEqual({ relationship: "visitor" });
-  });
-
-  it("asks a festival's joiner nothing and joins them as a member", async () => {
-    render(SessionJoin, { sessionPath: "oflahertys/2026", isFestival: true });
-    expect(screen.getByText("Are you at this festival?")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Do you attend this session?"),
-    ).not.toBeInTheDocument();
-
-    await fireEvent.click(addMe());
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText("Are you a local, or just visiting?"),
-    ).not.toBeInTheDocument();
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/sessions/oflahertys/2026/join");
-    expect(JSON.parse(init.body)).toEqual({ relationship: "member" });
   });
 });

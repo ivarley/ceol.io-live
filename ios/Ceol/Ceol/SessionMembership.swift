@@ -26,14 +26,13 @@ private var unreachable: String { tr("Couldn't reach Ceol, so nothing changed. C
 
 /// The web's join prompt (sessionpage/SessionJoin.svelte), for a signed-in person who
 /// doesn't belong: "Do you attend this session? Yes, Add Me", then local or visiting.
-/// A festival year asks nothing (nobody is local to a festival; adding it puts its days
-/// on Home, which only membership does): "Are you at this festival? Yes, Add Me" joins
-/// as a member at once. Once you belong, your role is the pill on the session's info card.
+/// A festival year doesn't show this: nobody is local to a festival, so its prompt is the
+/// FestivalJoinBanner under its band. Once you belong, your role is the pill on the
+/// session's info card.
 struct JoinPrompt: View {
     @Environment(AppModel.self) private var model
     let path: String
     let permissions: SessionDetailPayload.PermissionsPayload
-    var festival = false
     /// Reload the session after joining: membership decides much of the page.
     let onChange: () async -> Void
 
@@ -46,12 +45,9 @@ struct JoinPrompt: View {
         if permissions.relationship == nil && (permissions.isLoggedIn || model.isGuest) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text(festival ? "Are you at this festival?" : "Do you attend this session?")
-                        .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+                    Text("Do you attend this session?").font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
                     Button(busy ? "Adding…" : "Yes, Add Me") {
-                        if model.isGuest { model.askToSignIn() }
-                        else if festival { Task { await join(.member) } }
-                        else { asking = true }
+                        if model.isGuest { model.askToSignIn() } else { asking = true }
                     }
                         .font(.ceol(size: 16, weight: .semibold))
                         .foregroundStyle(CeolTokens.primary)
@@ -83,6 +79,73 @@ struct JoinPrompt: View {
             {
             case .ok:
                 await onChange()
+            case .default(_, let error):
+                failure = refusal(error) ?? tr("Couldn't add you to this session. Try again.")
+            }
+        } catch {
+            failure = unreachable
+        }
+    }
+}
+
+/// "Are you at {festival}?" (spec 056): a festival year's join prompt, a bright strip
+/// under the band of the year's screen and of each of its nights, for whoever doesn't
+/// belong yet. The QR code at the door lands on a night, not on the session's page, so
+/// the night asks too. One tap joins as a member, with no local-or-visiting question:
+/// nobody is local to a festival, and only membership puts its days on Home. A guest's
+/// tap opens the sign-in sheet (spec 060).
+struct FestivalJoinBanner: View {
+    @Environment(AppModel.self) private var model
+    let path: String
+    let name: String
+    /// Whether the viewer already belongs (member or visitor): then there is nothing to ask.
+    let belongs: Bool
+    let signedIn: Bool
+    let onJoined: () async -> Void
+
+    @State private var busy = false
+    @State private var failure: String?
+
+    var body: some View {
+        if !belongs && (signedIn || model.isGuest) {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    if model.isGuest { model.askToSignIn() } else { Task { await join() } }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.badge.plus").font(.system(size: 20, weight: .semibold))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Are you at \(name)?").font(.ceol(size: 17, weight: .semibold))
+                                .multilineTextAlignment(.leading)
+                            Text(busy ? "Adding…" : "Tap to add it to your sessions").font(.ceol(size: 14))
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(CeolTokens.bgColor)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(CeolTokens.warning, in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+                .accessibilityIdentifier("festival.join")
+                if let failure { Text(failure).font(.ceol(size: 13)).foregroundStyle(CeolTokens.danger) }
+            }
+        }
+    }
+
+    private func join() async {
+        busy = true
+        failure = nil
+        defer { busy = false }
+        do {
+            switch try await model.auth.client.joinSession(
+                path: .init(sessionPath: path), body: .json(.init(relationship: .member)))
+            {
+            case .ok:
+                await onJoined()
             case .default(_, let error):
                 failure = refusal(error) ?? tr("Couldn't add you to this session. Try again.")
             }

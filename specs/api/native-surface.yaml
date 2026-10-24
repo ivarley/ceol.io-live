@@ -980,7 +980,8 @@ components:
       type: object
       required: [success, session_instance_id, can_edit, current_person, session_timezone, session_id,
                  session_name, session_path, session_date, instance_date, instance_name, start_time, end_time,
-                 session_type, instance_active, log_complete, records, sets, last_event_id, multiple_on_date]
+                 session_type, instance_active, log_complete, records, sets, last_event_id, multiple_on_date,
+                 viewer_is_member]
       properties:
         success: { type: boolean, const: true }
         session_instance_id: { type: integer }
@@ -988,6 +989,9 @@ components:
         # Whether the viewer may manage the night's recordings (a system admin, or a
         # session admin granted it): the app's night menu offers Recordings on it.
         can_manage_recordings: { type: boolean }
+        # Whether the viewer belongs to the night's session (member or visitor); false
+        # signed out. A festival night shows "Are you at {festival}?" to whoever doesn't.
+        viewer_is_member: { type: boolean }
         current_person: { type: [object, "null"] }
         user_timezone: { type: [string, "null"] }
         session_timezone: { type: string }

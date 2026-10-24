@@ -174,9 +174,15 @@ surface built for "a night" broke at that scale:
   once the pill reads "4 on now" and opens the session; it used to open the first room.
 - **Joining.** "Are you a local, or just visiting?" (spec 034) has no answer at a
   festival, and only membership puts the year's days on Home, so a year's join prompt
-  reads "Are you at this festival? Yes, Add Me" and joins as a member with no question
-  (web `SessionJoin`, app `JoinPrompt`). The role pill and its member/visitor sheet are
-  unchanged for those who already belong.
+  is a bright full-width banner under the band — "Are you at {festival}? Tap to add it
+  to your sessions" — that joins as a member with no question (web
+  `shared/FestivalJoinBanner.svelte`, app `FestivalJoinBanner`). It shows on the year's
+  page AND on each of its nights, because the QR code at the door lands on a night: the
+  night payload (`live_bootstrap`) carries `viewer_is_member` (any `session_person`
+  row; false signed out) for it. Signed out, the banner goes to sign-in and back (the
+  app: the sign-in sheet). The regular "Do you attend this session?" box is not mounted
+  at a festival; the role pill and its member/visitor sheet are unchanged for those who
+  already belong.
 
 ## API
 

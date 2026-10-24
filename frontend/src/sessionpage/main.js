@@ -16,6 +16,7 @@ import SessionAbout from './SessionAbout.svelte'
 import SessionRole from './SessionRole.svelte'
 import SessionJoin from './SessionJoin.svelte'
 import YearSwitcher from '../festival/YearSwitcher.svelte'
+import FestivalJoinBanner from '../shared/FestivalJoinBanner.svelte'
 
 const pageData = window.__PAGE_DATA__
 const ctx = window.__PAGE_CTX__ || {}
@@ -78,14 +79,26 @@ if (pageData) {
     })
   }
 
-  const joinTarget = document.getElementById('session-join-root')
-  if (joinTarget && permissions.is_logged_in && !permissions.is_session_member) {
-    mount(SessionJoin, {
-      target: joinTarget,
+  // A festival year asks under its band, of everyone who doesn't belong (spec 056);
+  // a regular session asks "Do you attend this session?" under its details.
+  const isFestival = pageData.session.session_type === 'festival'
+  const bannerTarget = document.getElementById('festival-join-root')
+  if (bannerTarget && isFestival && !permissions.is_session_member) {
+    mount(FestivalJoinBanner, {
+      target: bannerTarget,
       props: {
         sessionPath: pageData.session.path,
-        isFestival: pageData.session.session_type === 'festival',
+        name: pageData.session.name,
+        signedIn: !!permissions.is_logged_in,
+        // Membership is part of the server-rendered permissions block, so repaint from
+        // the server.
+        onJoined: () => setTimeout(() => window.location.reload(), 900),
       },
     })
+  }
+
+  const joinTarget = document.getElementById('session-join-root')
+  if (joinTarget && !isFestival && permissions.is_logged_in && !permissions.is_session_member) {
+    mount(SessionJoin, { target: joinTarget, props: { sessionPath: pageData.session.path } })
   }
 }

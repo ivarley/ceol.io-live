@@ -12,14 +12,14 @@
    * point: people-visibility is granted by the session, never claimed by joining it. We say
    * so plainly rather than letting the missing tab be a mystery.
    *
-   * A festival year (spec 056) asks nothing: nobody is "local" to a festival, and the
-   * reason to add one is to have its days on your Home page this week, which only
-   * membership does. So "Are you at this festival? Yes, Add Me" joins as a member at once.
+   * A festival year (spec 056) doesn't mount this: nobody is "local" to a festival, so its
+   * prompt is the banner under its band (shared/FestivalJoinBanner.svelte), which joins as
+   * a member with no question.
    */
   import { Sheet, toast, ServerError, t } from '../lib/index.js'
   import { toastFailed } from './failure.js'
 
-  let { sessionPath, isFestival = false } = $props()
+  let { sessionPath } = $props()
 
   let open = $state(false)
   let joining = $state(false)
@@ -54,8 +54,8 @@
 
 <div class="sj">
   <p>
-    {isFestival ? t('Are you at this festival?') : t('Do you attend this session?')}
-    <button class="sj-link" onclick={() => (isFestival ? join('member') : (open = true))} disabled={joining}>
+    {t('Do you attend this session?')}
+    <button class="sj-link" onclick={() => (open = true)} disabled={joining}>
       {joining ? t('Adding…') : t('Yes, Add Me')}
     </button>
   </p>

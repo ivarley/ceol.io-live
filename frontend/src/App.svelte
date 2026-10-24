@@ -11,6 +11,7 @@
   import { labelName, activityLine } from './livelabels.js'
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
+  import FestivalJoinBanner from './shared/FestivalJoinBanner.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, optimisticBetween } from './fracindex.js'
   // The "is this notation?" rules are shared with every other search box in the app
@@ -345,6 +346,9 @@
   // anywhere else it's the exception ("a night somewhere other than the usual place").
   // Nothing is gated on it — the same fields are editable either way.
   let sessionType = $state(untrack(() => config.sessionType) || 'regular')
+  // Whether the viewer belongs to this session (bootstrap says). True until it does, so
+  // the festival banner never flashes at someone who is already a member.
+  let viewerIsMember = $state(true)
   const isFestival = $derived(sessionType === 'festival')
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('') // server-truth session notes
@@ -3276,6 +3280,8 @@
     if ('start_time' in snap) instanceStart = snap.start_time || ''
     if ('end_time' in snap) instanceEnd = snap.end_time || ''
     if (snap.session_type) sessionType = snap.session_type
+    // Key presence: a cached snapshot has no say in whether you belong.
+    if ('viewer_is_member' in snap) viewerIsMember = snap.viewer_is_member === true
     // Key presence again: a snapshot cached before this flag existed must not reinstate
     // a night the shell already painted as cancelled.
     if ('is_cancelled' in snap) instanceCancelled = snap.is_cancelled === true
@@ -3838,6 +3844,17 @@
            tray now, with a title, a Done button and the same grouped rows as the rest
            of the app, and it is where "go to the session" finally has an obvious home. -->
     </header>
+
+    <!-- "Are you at {festival}?": the QR code at a festival's door lands here, not on the
+         session's page, so a festival night asks whoever doesn't belong yet (spec 056). -->
+    {#if sessionType === 'festival' && !viewerIsMember}
+      <FestivalJoinBanner
+        sessionPath={config.sessionPath}
+        name={sessionName}
+        signedIn={!readOnly}
+        onJoined={() => (viewerIsMember = true)}
+      />
+    {/if}
   </div>
 
   <!-- Transient toasts (other users' activity, reconnect summary) hover just below
