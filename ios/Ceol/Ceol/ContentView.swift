@@ -196,10 +196,14 @@ struct CeolTabBar: View {
                     layout {
                         Image(tab.icon).renderingMode(.template).resizable().scaledToFit()
                             .frame(width: landscape ? 20 : 24, height: landscape ? 20 : 24)
+                        // One line, whatever the phone's width or text size: a name that
+                        // would wrap ("Sessions" on a narrow phone) shrinks a little instead.
                         Text(tab.title).font(.ceol(size: 11, weight: on ? .semibold : .medium, relativeTo: .caption2))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                     .foregroundStyle(on ? CeolTokens.primary : CeolTokens.logoGreenSoft)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, landscape ? 3 : 5)
                     // Where you are, at a glance: a soft green lozenge behind the tab.
                     .background(on ? CeolTokens.primary.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 12))
@@ -215,6 +219,9 @@ struct CeolTabBar: View {
         .padding(.top, landscape ? 2 : 6)
         .background(CeolTokens.bgColor.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(CeolTokens.borderColor).frame(height: 1) }
+        // The names grow with the text size only so far, as the system's tab bar's do:
+        // five of them have to share the width.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 
