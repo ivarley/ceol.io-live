@@ -15,9 +15,12 @@
 // Offline (plan Phase 5d), as the web logger (spec 024 §G): the night and its unsent
 // changes are kept on the phone (NightStore). A change that can't be sent waits there,
 // marked "offline" on its row, with every later change queued behind it; when the
-// connection is back (the stream reconnects, a load succeeds, the network returns, the
-// app comes forward) the queue is sent in order. Changes refused then are listed for
-// review. Opening a night without a connection shows the saved copy.
+// connection is back (the stream reconnects or brings its next event, a load succeeds,
+// the network returns, the app comes forward) the queue is sent in order. Changes
+// refused then are listed for review. Opening a night without a connection shows the
+// saved copy. A send can fail while the stream stays up (a blip with the phone locked
+// and the meter logging, say): the stream's next ping, 15 seconds on at most, is the
+// proof the server is back, and sends the queue; nothing waits for the stream to reopen.
 //
 // Editing (plan Phase 5b): "Edit" reopens the stream with mode=edit (which is what shows
 // you as logging to the others), and each change goes through LiveLog's optimistic
@@ -167,10 +170,18 @@ final class NightModel {
         if status != .offline { Task { [app, instanceID] in await KnownTunes.refresh(instanceID, app: app) } }
     }
 
-    /// The phone has a network again: reconnect if we're not live.
+    /// The phone has a network again: reconnect if we're not live; live, send what waited.
     private func networkBack() async {
-        guard running, status != .live, status != .finished, status != .connecting else { return }
+        guard running, status != .finished, status != .connecting else { return }
+        if status == .live { return await flushIfWaiting() }
         await connect()
+    }
+
+    /// A change that failed to send waits for the connection; this is a sign it is back
+    /// (the stream carried an event, the network returned, the app came forward).
+    private func flushIfWaiting() async {
+        guard waitingForNetwork, sender == nil, !outbox.isEmpty else { return }
+        await flush()
     }
 
     /// Test hook: pretend the phone has lost (or regained) its signal.
@@ -197,9 +208,11 @@ final class NightModel {
         watchdog = nil
     }
 
-    /// Back in the foreground: a stream the phone suspended is likely dead.
+    /// Back in the foreground: a stream the phone suspended is likely dead. One that is
+    /// still live just sends anything that waited.
     func resume() async {
-        guard running, status != .finished, status != .live || Date().timeIntervalSince(lastAlive) > 20 else { return }
+        guard running, status != .finished else { return }
+        if status == .live && Date().timeIntervalSince(lastAlive) <= 20 { return await flushIfWaiting() }
         await connect()
     }
 
@@ -360,6 +373,9 @@ final class NightModel {
     }
 
     private func handle(_ event: SSEEvent) {
+        // Anything from the server, a ping included, says it can be reached: a change
+        // that failed to send goes again now.
+        if waitingForNetwork { Task { await flushIfWaiting() } }
         guard let json = try? JSONDecoder().decode(JSONValue.self, from: Data(event.data.utf8)) else { return }
         switch event.type {
         case "op":
