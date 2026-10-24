@@ -27,11 +27,14 @@ private func decode<T: Decodable>(_ type: T.Type, _ name: String) throws -> T {
 /// with no row here fails `everyFixtureIsDecoded`, so none is silently skipped.
 private let decoders: [String: @Sendable (String) throws -> Void] = [
     "ActiveInstance": { _ = try decode(Components.Schemas.ActiveInstance.self, $0) },
+    "AddSessionOptions": { _ = try decode(Components.Schemas.AddSessionOptions.self, $0) },
     "AppConfig": { _ = try decode(Components.Schemas.AppConfig.self, $0) },
     "CommonTunes": { _ = try decode(Components.Schemas.CommonTunes.self, $0) },
+    "DeciderData": { _ = try decode(Components.Schemas.DeciderData.self, $0) },
     "DeepSearch": { _ = try decode(Components.Schemas.DeepSearch.self, $0) },
     "Home": { _ = try decode(Components.Schemas.Home.self, $0) },
     "LiveBootstrap": { _ = try decode(Components.Schemas.LiveBootstrap.self, $0) },
+    "LiveMatch": { _ = try decode(Components.Schemas.LiveMatch.self, $0) },
     "LiveVocabulary": { _ = try decode(Components.Schemas.LiveVocabulary.self, $0) },
     "Me": { _ = try decode(Components.Schemas.Me.self, $0) },
     "MyTunes": { _ = try decode(Components.Schemas.MyTunes.self, $0) },
@@ -43,11 +46,16 @@ private let decoders: [String: @Sendable (String) throws -> Void] = [
     // A bare festival prefix (spec 056), from production: kind place, with its years.
     "ResolveFestival": { _ = try decode(Components.Schemas.Resolve.self, $0) },
     "SessionDetail": { _ = try decode(Components.Schemas.SessionDetail.self, $0) },
+    "SessionLoggedTunes": { _ = try decode(Components.Schemas.SessionLoggedTunes.self, $0) },
     "SessionLogs": { _ = try decode(Components.Schemas.SessionLogs.self, $0) },
     // A festival year's nights, grouped by day (spec 056), from production.
     "SessionLogsFestival": { _ = try decode(Components.Schemas.SessionLogs.self, $0) },
     "SessionPeople": { _ = try decode(Components.Schemas.SessionPeople.self, $0) },
+    "SessionPersonDetail": { _ = try decode(Components.Schemas.SessionPersonDetail.self, $0) },
+    "SessionTuneLogInstances": { _ = try decode(Components.Schemas.SessionTuneLogInstances.self, $0) },
+    "SessionTunesRemaining": { _ = try decode(Components.Schemas.SessionTunesRemaining.self, $0) },
     "SessionsDirectory": { _ = try decode(Components.Schemas.SessionsDirectory.self, $0) },
+    "TopTunes": { _ = try decode(Components.Schemas.TopTunes.self, $0) },
     "TuneDetail": { _ = try decode(Components.Schemas.TuneDetail.self, $0) },
     "TunePreview": { _ = try decode(Components.Schemas.TunePreview.self, $0) },
     "TuneSearch": { _ = try decode(Components.Schemas.TuneSearch.self, $0) },

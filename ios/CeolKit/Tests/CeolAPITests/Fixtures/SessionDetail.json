@@ -1,7 +1,7 @@
 {
   "active_instances": [
     {
-      "date": "2026-10-22",
+      "date": "2026-10-24",
       "end_time": "22:00:00",
       "location_override": null,
       "multiple_on_date": false,
@@ -172,7 +172,7 @@
     "unlisted_address": false
   },
   "success": true,
-  "today_in_session_tz": "2026-10-23",
+  "today_in_session_tz": "2026-10-24",
   "total_logs_count": 15,
   "total_people_count": 9,
   "total_tunes_count": 16,

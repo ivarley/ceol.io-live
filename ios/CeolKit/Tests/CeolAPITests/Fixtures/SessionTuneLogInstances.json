@@ -1,0 +1,55 @@
+{
+  "instances": [
+    {
+      "positions": [
+        {
+          "name": "Drowsy Maggie",
+          "position_in_set": 1,
+          "session_instance_tune_id": 1,
+          "set_number": 1
+        }
+      ],
+      "session_instance_id": 1
+    },
+    {
+      "positions": [
+        {
+          "name": "Drowsy Maggie",
+          "position_in_set": 1,
+          "session_instance_tune_id": 123,
+          "set_number": 5
+        }
+      ],
+      "session_instance_id": 7
+    },
+    {
+      "positions": [
+        {
+          "name": "Drowsy Maggie",
+          "position_in_set": 1,
+          "session_instance_tune_id": 143,
+          "set_number": 1
+        }
+      ],
+      "session_instance_id": 9
+    },
+    {
+      "positions": [
+        {
+          "name": "Drowsy Maggie",
+          "position_in_set": 1,
+          "session_instance_tune_id": 658,
+          "set_number": 1
+        }
+      ],
+      "session_instance_id": 90
+    }
+  ],
+  "session_instance_ids": [
+    1,
+    7,
+    9,
+    90
+  ],
+  "success": true
+}

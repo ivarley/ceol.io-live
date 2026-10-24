@@ -10,11 +10,12 @@
     "tune_id": 116,
     "tune_type": "Reel"
   },
-  "today": "2026-10-23",
+  "today": "2026-10-24",
   "upcoming_sessions": [
     {
-      "date": "2026-10-22",
+      "date": "2026-10-24",
       "end_time": "22:00:00",
+      "festival_day": null,
       "is_active": true,
       "location_name": "BD Riley's Irish Pub",
       "log_complete_date": null,
@@ -29,8 +30,9 @@
       "tunes_logged": 0
     },
     {
-      "date": "2026-10-22",
+      "date": "2026-10-24",
       "end_time": "23:00:00",
+      "festival_day": null,
       "is_active": true,
       "location_name": "The Driskill Hotel Bar",
       "log_complete_date": null,

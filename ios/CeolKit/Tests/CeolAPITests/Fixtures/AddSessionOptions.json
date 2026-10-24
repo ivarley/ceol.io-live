@@ -1,0 +1,185 @@
+{
+  "default_timezone": "America/Chicago",
+  "success": true,
+  "timezone_options": [
+    {
+      "label": "UTC (UTC+00:00)",
+      "value": "UTC"
+    },
+    {
+      "label": "US Eastern (UTC-04:00)",
+      "value": "America/New_York"
+    },
+    {
+      "label": "US Central (UTC-05:00)",
+      "value": "America/Chicago"
+    },
+    {
+      "label": "US Mountain (UTC-06:00)",
+      "value": "America/Denver"
+    },
+    {
+      "label": "America/Phoenix (UTC-07:00)",
+      "value": "America/Phoenix"
+    },
+    {
+      "label": "US Pacific (UTC-07:00)",
+      "value": "America/Los_Angeles"
+    },
+    {
+      "label": "US Alaska (UTC-08:00)",
+      "value": "America/Anchorage"
+    },
+    {
+      "label": "US Hawaii (UTC-10:00)",
+      "value": "Pacific/Honolulu"
+    },
+    {
+      "label": "Canada Eastern (UTC-04:00)",
+      "value": "America/Toronto"
+    },
+    {
+      "label": "Canada Pacific (UTC-07:00)",
+      "value": "America/Vancouver"
+    },
+    {
+      "label": "Mexico City (UTC-06:00)",
+      "value": "America/Mexico_City"
+    },
+    {
+      "label": "Argentina (UTC-03:00)",
+      "value": "America/Buenos_Aires"
+    },
+    {
+      "label": "Brazil (São Paulo) (UTC-03:00)",
+      "value": "America/Sao_Paulo"
+    },
+    {
+      "label": "UK/London (UTC+01:00)",
+      "value": "Europe/London"
+    },
+    {
+      "label": "Ireland/Dublin (UTC+01:00)",
+      "value": "Europe/Dublin"
+    },
+    {
+      "label": "France/Paris (UTC+02:00)",
+      "value": "Europe/Paris"
+    },
+    {
+      "label": "Germany/Berlin (UTC+02:00)",
+      "value": "Europe/Berlin"
+    },
+    {
+      "label": "Italy/Rome (UTC+02:00)",
+      "value": "Europe/Rome"
+    },
+    {
+      "label": "Spain/Madrid (UTC+02:00)",
+      "value": "Europe/Madrid"
+    },
+    {
+      "label": "Netherlands (UTC+02:00)",
+      "value": "Europe/Amsterdam"
+    },
+    {
+      "label": "Belgium (UTC+02:00)",
+      "value": "Europe/Brussels"
+    },
+    {
+      "label": "Switzerland (UTC+02:00)",
+      "value": "Europe/Zurich"
+    },
+    {
+      "label": "Sweden (UTC+02:00)",
+      "value": "Europe/Stockholm"
+    },
+    {
+      "label": "Norway (UTC+02:00)",
+      "value": "Europe/Oslo"
+    },
+    {
+      "label": "Denmark (UTC+02:00)",
+      "value": "Europe/Copenhagen"
+    },
+    {
+      "label": "Finland (UTC+03:00)",
+      "value": "Europe/Helsinki"
+    },
+    {
+      "label": "Greece (UTC+03:00)",
+      "value": "Europe/Athens"
+    },
+    {
+      "label": "Russia/Moscow (UTC+03:00)",
+      "value": "Europe/Moscow"
+    },
+    {
+      "label": "Egypt/Cairo (UTC+03:00)",
+      "value": "Africa/Cairo"
+    },
+    {
+      "label": "South Africa (UTC+02:00)",
+      "value": "Africa/Johannesburg"
+    },
+    {
+      "label": "Nigeria/Lagos (UTC+01:00)",
+      "value": "Africa/Lagos"
+    },
+    {
+      "label": "UAE/Dubai (UTC+04:00)",
+      "value": "Asia/Dubai"
+    },
+    {
+      "label": "Israel (UTC+03:00)",
+      "value": "Asia/Jerusalem"
+    },
+    {
+      "label": "India (UTC+05:30)",
+      "value": "Asia/Kolkata"
+    },
+    {
+      "label": "Thailand (UTC+07:00)",
+      "value": "Asia/Bangkok"
+    },
+    {
+      "label": "Singapore (UTC+08:00)",
+      "value": "Asia/Singapore"
+    },
+    {
+      "label": "Hong Kong (UTC+08:00)",
+      "value": "Asia/Hong_Kong"
+    },
+    {
+      "label": "China/Shanghai (UTC+08:00)",
+      "value": "Asia/Shanghai"
+    },
+    {
+      "label": "Japan/Tokyo (UTC+09:00)",
+      "value": "Asia/Tokyo"
+    },
+    {
+      "label": "South Korea (UTC+09:00)",
+      "value": "Asia/Seoul"
+    },
+    {
+      "label": "Australia/Perth (UTC+08:00)",
+      "value": "Australia/Perth"
+    },
+    {
+      "label": "Australia/Sydney (UTC+11:00)",
+      "value": "Australia/Sydney"
+    },
+    {
+      "label": "Australia/Melbourne (UTC+11:00)",
+      "value": "Australia/Melbourne"
+    },
+    {
+      "label": "New Zealand (UTC+13:00)",
+      "value": "Pacific/Auckland"
+    }
+  ],
+  "viewer": {
+    "logged_in": true
+  }
+}
