@@ -10204,11 +10204,22 @@
       }
     },
     "What tune am I hearing right now?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Cén fonn atá á chloisteáil agam anois?"
+          }
+        }
+      }
+    },
+    "What tune is this?": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cén fonn é seo?"
           }
         }
       }

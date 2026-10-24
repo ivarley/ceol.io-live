@@ -69,7 +69,7 @@ struct HomeView: View {
                     .foregroundStyle(CeolTokens.textColor)
                 // The meter, with no night in mind (spec 059).
                 Button { model.openListen() } label: {
-                    Label { Text("What tune am I hearing right now?") } icon: { EarGlyph(size: 22) }
+                    Label { Text("What tune is this?") } icon: { EarGlyph(size: 22) }
                         .font(.ceol(size: 17, weight: .semibold)).foregroundStyle(CeolTokens.primary)
                         .frame(maxWidth: .infinity, minHeight: 50)
                         .background(CeolTokens.headerBg, in: RoundedRectangle(cornerRadius: 10))

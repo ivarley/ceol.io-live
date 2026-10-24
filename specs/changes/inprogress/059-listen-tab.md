@@ -31,7 +31,7 @@ Made by the product owner, 2026-10-11.
     that row alone). The server still merges two adds of the same tune into the open
     set when they cross on the way (spec 024 §H30).
   - **Ad-hoc mode**: the meter only says what is playing. It is the mode you arrive in
-    from the tab, from Home ("What tune am I hearing right now?") and from the three
+    from the tab, from Home ("What tune is this?") and from the three
     "Add a tune" searches (your tunebook, a session's list, a night's log), each of
     which has **Listen To What's Playing Now** under its empty search box. If the meter
     is already logging a night, that button opens it as it is, still logging.
@@ -77,5 +77,5 @@ Made by the product owner, 2026-10-11.
   the listen screen.
 - `DeepSearchSheet`: the Listen button under the empty field, and the full-screen
   listen cover with the search's own pick as the sure tune's action.
-- `HomeView`: "What tune am I hearing right now?".
+- `HomeView`: "What tune is this?" ("Cén fonn é seo?": short enough to stay on one line beside the ear).
 - `RecordingStore`: `instanceID` optional; no upload without one.
