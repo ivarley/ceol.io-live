@@ -1124,5 +1124,9 @@
   "If the session plays a specific setting of the tune, page through them and pick it.": {
     "ga": "Má sheinntear leagan ar leith den fhonn ag an seisiún, téigh tríd na leaganacha agus roghnaigh é.",
     "review": true
+  },
+  "Matched a tag, not the name": {
+    "ga": "Meaitseáil le clib, ní leis an ainm",
+    "review": true
   }
 }

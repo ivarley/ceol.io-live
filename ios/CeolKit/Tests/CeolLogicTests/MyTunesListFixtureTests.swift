@@ -52,13 +52,14 @@ let myTunesAdapters = ModuleAdapters(
                     o["_instDimmed"] = .bool(row.dimmed)
                     o["_abcOnly"] = .bool(row.abcOnly)
                 }
+                if !row.matchedTags.isEmpty { o["_tagOnly"] = .array(row.matchedTags.map(JSONValue.string)) }
                 return .object(o)
             })
         },
         "resultsCountText": { args in
             let filtered = try args.require("filtered", \.arrayValue)
             let rows = filtered.map {
-                MyTunesList.Row(item: .init(tuneID: 0, name: "", type: nil, status: ""), dimmed: $0["_instDimmed"]?.boolValue ?? false, abcOnly: false)
+                MyTunesList.Row(item: .init(tuneID: 0, name: "", type: nil, status: ""), dimmed: $0["_instDimmed"]?.boolValue ?? false, abcOnly: false, matchedTags: [])
             }
             return .string(MyTunesList.resultsCountText(rows, total: args["total"]?.intValue ?? 0, filters: filters(args["filters"])))
         },

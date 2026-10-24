@@ -8,7 +8,9 @@
     "  - filterAndSort keeps input order until it sorts, returns copies, and marks a tune",
     "    _instDimmed when an instrument filter is on and the tune isn't on that instrument",
     "    (kept, sorted below the matches, never dropped). Search is accent- and",
-    "    smart-quote-insensitive over the name and notes, or a pasted thesession id or link.",
+    "    smart-quote-insensitive over the name, notes and tags, or a pasted thesession id or",
+    "    link. A hyphenated tag also matches typed with spaces; a tune kept on its tags alone",
+    "    carries _tagOnly, the tags that matched.",
     "  - alpha sorts with localeCompare (ICU); counts sort numerically, a null as 0, and",
     "    ties keep input order (Array.prototype.sort is stable). abcIds is not fixtured",
     "    (a Set); leaving it out is name-only matching.",
@@ -4252,6 +4254,385 @@
             "instruments": []
           },
           "expected": []
+        },
+        {
+          "name": "search finds a tag",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "pub-set",
+                  "fast"
+                ]
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "pub-set"
+                ]
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": []
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "slow-session"
+                ]
+              }
+            ],
+            "filters": {
+              "search": "pub-set",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": "",
+              "tag": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": []
+          },
+          "expected": [
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 100,
+              "heard_count": 1,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "tags": [
+                "pub-set",
+                "fast"
+              ],
+              "_tagOnly": [
+                "pub-set"
+              ]
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 100,
+              "heard_count": 1,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "tags": [
+                "pub-set"
+              ],
+              "_tagOnly": [
+                "pub-set"
+              ]
+            }
+          ],
+          "note": "Kept on a tag alone: _tagOnly names the tags that matched."
+        },
+        {
+          "name": "search finds a tag typed with spaces",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "pub-set",
+                  "fast"
+                ]
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "pub-set"
+                ]
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": []
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "slow-session"
+                ]
+              }
+            ],
+            "filters": {
+              "search": "Pub Set",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": "",
+              "tag": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": []
+          },
+          "expected": [
+            {
+              "tune_id": 1,
+              "tune_name": "Cooley's",
+              "tune_type": "reel",
+              "learn_status": "learned",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 100,
+              "heard_count": 1,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "tags": [
+                "pub-set",
+                "fast"
+              ],
+              "_tagOnly": [
+                "pub-set"
+              ]
+            },
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 100,
+              "heard_count": 1,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "tags": [
+                "pub-set"
+              ],
+              "_tagOnly": [
+                "pub-set"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "a name match carries no tag mark",
+          "input": {
+            "allTunes": [
+              {
+                "tune_id": 1,
+                "tune_name": "Cooley's",
+                "tune_type": "reel",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "pub-set",
+                  "fast"
+                ]
+              },
+              {
+                "tune_id": 2,
+                "tune_name": "The Kesh",
+                "tune_type": "jig",
+                "learn_status": "learning",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "pub-set"
+                ]
+              },
+              {
+                "tune_id": 3,
+                "tune_name": "Inisheer",
+                "tune_type": "waltz",
+                "learn_status": "want to learn",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": []
+              },
+              {
+                "tune_id": 4,
+                "tune_name": "Banish Misfortune",
+                "tune_type": "jig",
+                "learn_status": "learned",
+                "notes": null,
+                "created_date": "2026-01-01T12:00:00+00:00",
+                "tunebook_count": 100,
+                "heard_count": 1,
+                "member_play_count": 0,
+                "attended_play_count": 0,
+                "session_play_count": 0,
+                "instrument_status": {},
+                "tags": [
+                  "slow-session"
+                ]
+              }
+            ],
+            "filters": {
+              "search": "kesh",
+              "type": "",
+              "status": "",
+              "instrument": "",
+              "rel": "",
+              "addedDir": "after",
+              "addedDate": "",
+              "tag": ""
+            },
+            "sort": {
+              "type": "alpha",
+              "dir": "asc",
+              "type2": null,
+              "dir2": null
+            },
+            "instruments": []
+          },
+          "expected": [
+            {
+              "tune_id": 2,
+              "tune_name": "The Kesh",
+              "tune_type": "jig",
+              "learn_status": "learning",
+              "notes": null,
+              "created_date": "2026-01-01T12:00:00+00:00",
+              "tunebook_count": 100,
+              "heard_count": 1,
+              "member_play_count": 0,
+              "attended_play_count": 0,
+              "session_play_count": 0,
+              "instrument_status": {},
+              "tags": [
+                "pub-set"
+              ]
+            }
+          ]
         }
       ]
     },

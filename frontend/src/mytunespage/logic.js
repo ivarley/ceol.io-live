@@ -74,8 +74,12 @@ function accentIncludes(haystack, needle) {
 
 // Filter + sort the list. Returns a NEW array of the visible tunes; each carries
 // `_instDimmed` when an instrument filter is active and the tune isn't on that
-// instrument (kept but dimmed and sorted below the matches, never dropped), and
-// `_abcOnly` when it survived on NOTATION alone (see below).
+// instrument (kept but dimmed and sorted below the matches, never dropped),
+// `_abcOnly` when it survived on NOTATION alone (see below), and `_tagOnly` (the tags
+// that matched) when it survived on your TAGS alone, so the card can say why it is here.
+//
+// The search reads the name, your notes and your tags. Tags are kept lower-case and
+// hyphenated ("pub-set"), so a tag also matches typed with spaces ("pub set").
 //
 // `abcIds` is the set of tune ids whose ABC matches a note-shaped query, resolved by the
 // server (shared/abcfilter.svelte.js) because the page payload deliberately carries no
@@ -84,14 +88,21 @@ export function filterAndSort(allTunes, filters, sort, instruments, abcIds = nul
   const out = []
   for (const tune of allTunes) {
     let abcOnly = false
+    let tagOnly = null
     if (filters.search) {
-      const tuneId = extractTuneId(filters.search)
-      const nameMatch = accentIncludes(tune.tune_name || '', filters.search)
-      const notesMatch = accentIncludes(tune.notes || '', filters.search)
+      const q = filters.search
+      const tuneId = extractTuneId(q)
+      const nameMatch = accentIncludes(tune.tune_name || '', q)
+      const notesMatch = accentIncludes(tune.notes || '', q)
+      const tagHits = (tune.tags || []).filter(
+        (tag) => accentIncludes(tag, q) || accentIncludes(tag.replace(/-/g, ' '), q)
+      )
       const tuneIdMatch = tuneId && tune.tune_id === tuneId
       const abcMatch = !!abcIds?.has(tune.tune_id)
-      if (!tuneIdMatch && !nameMatch && !notesMatch && !abcMatch) continue
-      abcOnly = abcMatch && !tuneIdMatch && !nameMatch && !notesMatch
+      if (!tuneIdMatch && !nameMatch && !notesMatch && !tagHits.length && !abcMatch) continue
+      const plain = !tuneIdMatch && !nameMatch && !notesMatch
+      if (plain && tagHits.length) tagOnly = tagHits
+      abcOnly = abcMatch && plain && !tagHits.length
     }
     if (filters.type && tune.tune_type !== filters.type) continue
 
@@ -120,10 +131,14 @@ export function filterAndSort(allTunes, filters, sort, instruments, abcIds = nul
       const dimmed = instStatus === null
       const effectiveStatus = dimmed ? tune.learn_status : instStatus
       if (filters.status && effectiveStatus !== filters.status) continue
-      out.push({ ...tune, _instDimmed: dimmed, _abcOnly: abcOnly })
+      out.push({ ...tune, _instDimmed: dimmed, _abcOnly: abcOnly, ...(tagOnly && { _tagOnly: tagOnly }) })
     } else {
       if (filters.status && tune.learn_status !== filters.status) continue
-      out.push(abcOnly ? { ...tune, _abcOnly: true } : tune)
+      out.push(
+        abcOnly || tagOnly
+          ? { ...tune, ...(abcOnly && { _abcOnly: true }), ...(tagOnly && { _tagOnly: tagOnly }) }
+          : tune
+      )
     }
   }
 

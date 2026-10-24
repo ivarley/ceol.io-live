@@ -153,6 +153,8 @@
     <!-- This tune is here because its NOTATION matched, not its name — without the mark
          a notes search reads as a list of unrelated tunes. -->
     {#if tune._abcOnly}<span class="abc-only-badge" title={t('Matched the notation, not the name')}>♪</span>{/if}
+    <!-- Likewise a tune here because one of your TAGS matched: show the tag. -->
+    {#if tune._tagOnly}<span class="tag-only-badge" title={t('Matched a tag, not the name')}>{tune._tagOnly.join(' ')}</span>{/if}
     {#if tune.pending_sync}
       <Chip
         label={t('pending')}

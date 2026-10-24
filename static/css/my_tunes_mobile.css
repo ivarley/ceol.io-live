@@ -494,6 +494,15 @@
     margin-left: -6px; /* sits with the name, not spaced like the chips beside it */
 }
 
+/* Likewise here because one of your TAGS matched the search: the tag, beside the name. */
+.tag-only-badge {
+    font-size: 12px;
+    line-height: 1;
+    color: #e8d28a;
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .tune-type {
     font-size: 13px;
     padding: 3px 6px;

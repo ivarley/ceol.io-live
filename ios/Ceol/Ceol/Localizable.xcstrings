@@ -11117,6 +11117,16 @@
         }
       }
     },
+    "tagged %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "clibeáilte %@"
+          }
+        }
+      }
+    },
     "that tune": {
       "localizations": {
         "ga": {

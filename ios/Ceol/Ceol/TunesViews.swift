@@ -218,7 +218,10 @@ struct TunesView: View {
                 } label: {
                     TuneRow(
                         name: e.name, type: MyTunesList.typeBadgeLabel(e, sortType: sort.type), status: e.status,
-                        note: row.abcOnly ? tr("♪ notes match") : nil, typeIsCount: sort.type != "alpha")
+                        note: row.abcOnly
+                            ? tr("♪ notes match")
+                            : row.matchedTags.isEmpty ? nil : tr("tagged \(row.matchedTags.joined(separator: " "))"),
+                        typeIsCount: sort.type != "alpha")
                 }
                 .accessibilityIdentifier("tunes.row")
                 .buttonStyle(.plain)

@@ -95,14 +95,19 @@ describe('filterAndSort', () => {
   ]
   const sort = { type: 'alpha', dir: 'asc', type2: null, dir2: null }
 
-  it('searches name AND notes accent-insensitively, and matches tune ids/urls', () => {
+  it('searches name, notes AND tags accent-insensitively, and matches tune ids/urls', () => {
     const tunes = [
       tune({ tune_id: 1, tune_name: 'Sí Beag Sí Mór' }),
       tune({ tune_id: 2, tune_name: 'Other', notes: 'learned from Máire' }),
       tune({ tune_id: 3, tune_name: 'Third' }),
+      tune({ tune_id: 4, tune_name: 'Fourth', tags: ['pub-set', 'fast'] }),
     ]
     expect(filterAndSort(tunes, { search: 'si beag', type: '', status: '', instrument: '' }, sort, [])).toHaveLength(1)
     expect(filterAndSort(tunes, { search: 'maire', type: '', status: '', instrument: '' }, sort, [])).toHaveLength(1)
+    // a tag, as stored or typed with a space; the card is told which tag it was
+    const byTag = filterAndSort(tunes, { search: 'pub set', type: '', status: '', instrument: '' }, sort, [])
+    expect(byTag.map((t) => t.tune_id)).toEqual([4])
+    expect(byTag[0]._tagOnly).toEqual(['pub-set'])
     const byId = filterAndSort(tunes, { search: 'https://thesession.org/tunes/3', type: '', status: '', instrument: '' }, sort, [])
     expect(byId.map((t) => t.tune_id)).toEqual([3])
   })

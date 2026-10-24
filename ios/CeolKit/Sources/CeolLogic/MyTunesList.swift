@@ -1,7 +1,8 @@
 // The Tunes tab's list: a port of frontend/src/mytunespage/logic.js (filterAndSort and
 // the lines around the list), held to frontend/src/mytunespage/logic.fixtures.json. What
-// a search, the filters (status, type, instrument, when added, where played) and the
-// sort leave on the list, so the app and the web's /my-tunes show the same tunes.
+// a search (the name, your notes, your tags, or a pasted id), the filters (status, type,
+// instrument, when added, where played, a tag) and the sort leave on the list, so the
+// app and the web's /my-tunes show the same tunes.
 
 import Foundation
 
@@ -101,6 +102,8 @@ public enum MyTunesList {
         public var dimmed: Bool
         /// Here because its notation matched, not its name.
         public var abcOnly: Bool
+        /// Here on your tags alone: the tags that matched, for the row to show.
+        public var matchedTags: [String]
     }
 
     /// The sort modes, as the web's droplist lists them.
@@ -167,13 +170,20 @@ public enum MyTunesList {
         let searchedID = f.search.isEmpty ? nil : MyTunesRules.extractTuneID(f.search)
         for item in all {
             var abcOnly = false
+            var matchedTags: [String] = []
             if !f.search.isEmpty {
                 let idMatch = searchedID != nil && item.tuneID == searchedID
                 let nameMatch = fold(item.name).contains(needle)
                 let notesMatch = fold(item.notes ?? "").contains(needle)
+                // Tags are kept hyphenated ("pub-set"), so one matches typed with spaces too.
+                let tagHits = item.tags.filter {
+                    fold($0).contains(needle) || fold($0.replacingOccurrences(of: "-", with: " ")).contains(needle)
+                }
                 let abcMatch = abcIDs?.contains(item.tuneID) ?? false
-                if !idMatch && !nameMatch && !notesMatch && !abcMatch { continue }
-                abcOnly = abcMatch && !idMatch && !nameMatch && !notesMatch
+                if !idMatch && !nameMatch && !notesMatch && tagHits.isEmpty && !abcMatch { continue }
+                let plain = !idMatch && !nameMatch && !notesMatch
+                if plain { matchedTags = tagHits }
+                abcOnly = abcMatch && plain && tagHits.isEmpty
             }
             if !f.type.isEmpty && item.type != f.type { continue }
             if !f.addedDate.isEmpty {
@@ -187,10 +197,10 @@ public enum MyTunesList {
                 let inst = instrumentStatus(item, instruments: instruments, name: f.instrument)
                 let dimmed = inst == nil
                 if !f.status.isEmpty && (inst ?? item.status) != f.status { continue }
-                out.append(Row(item: item, dimmed: dimmed, abcOnly: abcOnly))
+                out.append(Row(item: item, dimmed: dimmed, abcOnly: abcOnly, matchedTags: matchedTags))
             } else {
                 if !f.status.isEmpty && item.status != f.status { continue }
-                out.append(Row(item: item, dimmed: false, abcOnly: abcOnly))
+                out.append(Row(item: item, dimmed: false, abcOnly: abcOnly, matchedTags: matchedTags))
             }
         }
         let cmp = sortFunction(sort)
