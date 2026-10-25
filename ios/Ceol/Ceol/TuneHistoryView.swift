@@ -113,15 +113,17 @@ struct TuneHistoryView: View {
         .refreshable { await load() }
     }
 
-    /// One play: the date (and, across sessions, the session), where in the night it came
-    /// round, and a mark on the nights you were at.
+    /// One play: the date, where in the night it came round, and a mark on the nights you
+    /// were at. Across sessions the session's name takes the first line (festival years
+    /// run long), with the date and the place in the night under it.
     @ViewBuilder private func row(_ play: TunePlay) -> some View {
         let date = play.date.map(SessionsL10n.fullDate) ?? ""
+        let position = tr("Set \(play.setNumber), Tune \(play.positionInSet)")
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 if case .all = scope {
-                    Text(play.sessionName).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(1)
-                    Text(date).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                    Text(play.sessionName).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(2)
+                    Text("\(date) · \(position)").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                 } else {
                     Text(date).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor)
                 }
@@ -131,7 +133,9 @@ struct TuneHistoryView: View {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 15)).foregroundStyle(CeolTokens.primary)
                     .accessibilityLabel(Text("You were there"))
             }
-            Text("Set \(play.setNumber), Tune \(play.positionInSet)").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+            if case .session = scope {
+                Text(position).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+            }
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)

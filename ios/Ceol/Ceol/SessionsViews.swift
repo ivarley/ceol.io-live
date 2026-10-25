@@ -298,6 +298,9 @@ struct SessionDetailView: View {
                 }
             }
             .sheet(item: $openTune) { TuneSheet(tune: $0) }
+            // A tune tapped mid-search: the keyboard would otherwise stay up under its
+            // sheet (as the Tunes tab's list already does).
+            .onChange(of: openTune) { _, tune in if tune != nil { searchingTunes = false } }
             .sheet(isPresented: $filteringTunes) {
                 SessionTunesFilterSheet(
                     filters: $tuneFilters, sort: $tuneSort,
