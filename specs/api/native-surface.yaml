@@ -908,6 +908,42 @@ components:
       properties:
         success: { type: boolean, const: true }
         image: { type: [string, "null"], description: base64 PNG }
+    TuneHistory:
+      description: >-
+        The nights a tune was played, newest first: the 100 most recent nights
+        (`truncated` when there were more), one row per play, so a tune played twice in
+        a night has two. `attended` marks the nights a signed-in viewer was at (always
+        false signed out). `link` is the night's page, with the play highlighted. The
+        labels put the date (and, at a festival, the room) after the session's name
+        (full_name) or on their own (instance_label).
+      type: object
+      required: [success, play_instances, truncated]
+      properties:
+        success: { type: boolean, const: true }
+        # The id asked for, when it was merged into the tune these plays belong to.
+        redirected_from: { type: [integer, "null"] }
+        truncated: { type: boolean }
+        play_instances:
+          type: array
+          items:
+            type: object
+            required: [full_name, instance_label, session_name, session_path, date, set_number, position_in_set,
+                       session_instance_id, session_instance_tune_id, attended, link]
+            properties:
+              full_name: { type: string }
+              instance_label: { type: string }
+              session_name: { type: string }
+              session_path: { type: string }
+              date: { type: [string, "null"] }
+              set_number: { type: integer }
+              position_in_set: { type: integer }
+              name_override: { type: [string, "null"] }
+              key_override: { type: [string, "null"] }
+              setting_id_override: { type: [integer, "null"] }
+              session_instance_id: { type: integer }
+              session_instance_tune_id: { type: integer }
+              attended: { type: boolean }
+              link: { type: string }
     TuneDetail:
       type: object
       required: [success, viewer, session_tune]
@@ -1689,6 +1725,18 @@ paths:
         - { name: session, in: query, required: false, schema: { type: string }, description: "A session path: adds that session's aliases, plays and settings" }
         - { name: instance, in: query, required: false, schema: { type: string }, description: "A night's date or id within that session" }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneDetail" } } } } }
+  /api/tunes/{tune_id}/history:
+    get:
+      operationId: getTuneHistory
+      summary: >-
+        The nights a tune was played (the tune drawer's History tab), newest first.
+        Public; ?scope=member and ?attended=1 need a sign-in (401 otherwise)
+      parameters:
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+        - { name: session_path, in: query, required: false, schema: { type: string }, description: "Only the nights at that session" }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [member] }, description: "member: only the viewer's sessions (spec 033 R3)" }
+        - { name: attended, in: query, required: false, schema: { type: boolean }, description: "Only the nights the viewer was at (spec 033 R4); ANDs with the rest" }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneHistory" } } } } }
   /api/tunes/{tune_id}/preview:
     get:
       operationId: getTunePreview

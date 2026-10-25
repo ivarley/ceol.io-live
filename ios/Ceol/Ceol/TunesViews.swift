@@ -342,6 +342,8 @@ struct TuneSheet: View {
     @State private var notationNoticeDone = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
+    /// The nights the tune was played, pushed from a play count.
+    @State private var history: TuneHistoryScope?
 
     var body: some View {
         NavigationStack {
@@ -388,6 +390,18 @@ struct TuneSheet: View {
                 }
                 .fullScreenCover(isPresented: $fullScreen) {
                     if let image = showFull ? (full ?? incipit) : incipit { NotationFullScreen(image: image, name: tune.name) }
+                }
+                .navigationDestination(item: $history) { scope in
+                    TuneHistoryView(tune: tune, scope: scope) { play in
+                        // The night's log, in the Sessions tab, with this play highlighted:
+                        // the sheet goes first, so the log is what you land on.
+                        dismiss()
+                        model.openNight(
+                            id: play.sessionInstanceId,
+                            title: "\(play.sessionName) · \(SessionsL10n.shortDate(play.date ?? ""))",
+                            sessionPath: play.sessionPath, sessionName: play.sessionName,
+                            highlight: .server(play.sessionInstanceTuneId))
+                    }
                 }
                 .sheet(item: $chooser) { layer in
                     if let t = detail.value?.sessionTune {
@@ -551,11 +565,15 @@ struct TuneSheet: View {
                 }
                 yourList
                 VStack(spacing: 0) {
-                    if tune.sessionPath != nil {
-                        stat(tr("Played at this session"), t.timesPlayed)
+                    // The two play counts open the nights behind them (the web's History
+                    // tab), pushed so they slide in from the right.
+                    if let path = tune.sessionPath {
+                        statLink(tr("Played at this session"), t.timesPlayed, id: "sheet.historyHere") {
+                            history = .session(path: path, name: sessionName(t))
+                        }
                         Hairline()
                     }
-                    stat(tr("At sessions on Ceol"), t.globalPlayCount)
+                    statLink(tr("At sessions on Ceol"), t.globalPlayCount, id: "sheet.historyAll") { history = .all }
                     Hairline()
                     stat(tr("Sessions that play it"), t.sessionCount)
                     if let books = t.tunebookCount {
@@ -694,6 +712,23 @@ struct TuneSheet: View {
     private func stat(_ label: String, _ value: Int) -> some View {
         HStack { Text(label); Spacer(); Text("\(value)").foregroundStyle(CeolTokens.textMuted) }
             .font(.ceol(size: 16)).padding(.vertical, 12)
+    }
+
+    /// A count that opens the list behind it: the row, a chevron at its right edge.
+    private func statLink(_ label: String, _ value: Int, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(label)
+                Spacer()
+                Text("\(value)").foregroundStyle(CeolTokens.textMuted)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
+            }
+            .font(.ceol(size: 16)).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(CeolTokens.textColor)
+        .accessibilityIdentifier(id)
     }
 }
 

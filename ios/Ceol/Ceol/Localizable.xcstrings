@@ -2728,6 +2728,26 @@
         }
       }
     },
+    "At %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag %@"
+          }
+        }
+      }
+    },
+    "At every session on Ceol": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag gach seisiún ar Ceol"
+          }
+        }
+      }
+    },
     "At least one of these is required, so sessions near you make sense.": {
       "localizations": {
         "ga": {
@@ -3556,6 +3576,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níorbh fhéidir an seisiún seo a fhágáil. Bain triail eile as."
+          }
+        }
+      }
+    },
+    "Couldn't load the play history.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níorbh fhéidir an stair seinnte a lódáil."
           }
         }
       }
@@ -4647,6 +4677,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Folaigh an méadar"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Stair"
           }
         }
       }
@@ -6066,6 +6106,16 @@
         }
       }
     },
+    "No nights you were at.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl aon oíche a raibh tú ann."
+          }
+        }
+      }
+    },
     "No notation for this tune yet.": {
       "localizations": {
         "ga": {
@@ -6132,6 +6182,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Aon duine faoi láthair"
+          }
+        }
+      }
+    },
+    "No plays logged yet.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níl aon seinm logáilte fós."
           }
         }
       }
@@ -6554,6 +6614,16 @@
         }
       }
     },
+    "Not played here yet.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor seinneadh anseo fós é."
+          }
+        }
+      }
+    },
     "Not provided": {
       "localizations": {
         "ga": {
@@ -6852,6 +6922,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Ar do liosta"
+          }
+        }
+      }
+    },
+    "Only when I was there": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nuair a bhí mé ann amháin"
           }
         }
       }
@@ -8257,6 +8337,22 @@
         }
       }
     },
+    "Set %lld, Tune %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Set %1$lld, Tune %2$lld"
+          }
+        },
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seit %lld, Fonn %lld"
+          }
+        }
+      }
+    },
     "Set %lld, tune %lld": {
       "localizations": {
         "en": {
@@ -8449,6 +8545,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "%1$lld as an gcéad %2$lld de %3$lld fonn á dtaispeáint"
+          }
+        }
+      }
+    },
+    "Showing the 100 most recent nights.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Na 100 oíche is déanaí á dtaispeáint."
           }
         }
       }
@@ -10443,6 +10549,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Is féidir leat tús an fhoinn a thapáil chun leagan iomlán an fhoinn a fheiceáil.\n\nACH! Cuimhnigh gur fearr ceol traidisiúnta na hÉireann a fhoghlaim trí éisteacht, ní trí léamh. Tá sé ceart go leor an nodaireacht a úsáid mar thagairt, nuair a bhíonn gá, ach is fearr i gcónaí foghlaim le do chluasa."
+          }
+        }
+      }
+    },
+    "You were there": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bhí tú ann"
           }
         }
       }

@@ -1609,6 +1609,13 @@ purpose (type pill · title · ×, "Log to …" when a session is live, notation
 My List / Details / History / Played With). It rises to ~94% height on a phone; that is
 the only change, and it is a Sheet prop.
 
+The app's tune sheet (`TunesViews.swift`) is one scroll: notation, your list, the play
+counts and the facts. History came to it on 2026-10-25 as a pushed screen
+(`TuneHistoryView.swift`, `GET /api/tunes/{id}/history` on the native surface): the
+"Played at this session" and "At sessions on Ceol" counts carry a chevron and open the
+nights behind them, with "Only when I was there"; a night opens its log at the play.
+Played With, per-instrument status and the session-layer edits are still the web's only.
+
 #### What the prototype does not cover
 
 Decide these per page as the stages reach them; do not assume the prototype settled them:

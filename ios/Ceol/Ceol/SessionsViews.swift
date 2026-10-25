@@ -1869,6 +1869,12 @@ enum SessionsL10n {
         return ymd(date).map { format($0, "MMMd") } ?? ""
     }
 
+    /// "Tue, Sep 3, 2024": the whole date, for a list that spans years (a tune's
+    /// history). Both languages come from the locale here; the web has no twin label.
+    static func fullDate(_ date: String) -> String {
+        ymd(date).map { format($0, "EEEMMMdy") } ?? date
+    }
+
     /// "Tue", for a row's date block.
     static func weekdayShort(_ date: String) -> String {
         guard irish else { return HomeRules.dayOfWeek(date) }
