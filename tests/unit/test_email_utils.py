@@ -13,6 +13,7 @@ from email_utils import (
     generate_unsubscribe_token,
     verify_unsubscribe_token,
     send_update_email,
+    send_new_account_email,
 )
 
 
@@ -136,3 +137,63 @@ class TestSendUpdateEmail:
         header = payload["headers"]["List-Unsubscribe"]
         assert header.startswith("<") and header.endswith(">")
         assert "/unsubscribe/" in header
+
+
+@pytest.mark.unit
+class TestSendNewAccountEmail:
+    """One email to Ceol's own support each time an account is made."""
+
+    def _send(self, monkeypatch, **overrides):
+        from app import app
+
+        args = dict(
+            user_id=42,
+            person_id=7,
+            email="nora@example.com",
+            username="nora",
+            how="the email link on the login page",
+            language="ga",
+            referrer_name="Ian Varley (person 1)",
+        )
+        args.update(overrides)
+        with app.test_request_context(
+            "/", headers={"X-Ceol-Client": "ios/1.4.0 (build 12)"}
+        ):
+            return send_new_account_email(**args)
+
+    def test_goes_to_support_by_default(self, mock_sendgrid, app_context, monkeypatch):
+        monkeypatch.delenv("SIGNUP_NOTIFY_EMAIL", raising=False)
+        assert self._send(monkeypatch) is True
+        payload = sent_payload(mock_sendgrid)
+        assert payload["personalizations"][0]["to"][0]["email"] == "support@ceol.app"
+        assert payload["subject"] == "[Ceol] New account: nora@example.com"
+        text = payload["content"][0]["value"]
+        assert "the email link on the login page" in text
+        assert "Email: nora@example.com" in text
+        assert "Username: nora" in text
+        assert "Language: ga" in text
+        assert "Referred by: Ian Varley (person 1)" in text
+        assert "Client: ios/1.4.0 (build 12)" in text
+        assert "/admin/people/7" in text
+
+    def test_recipient_env_override(self, mock_sendgrid, app_context, monkeypatch):
+        monkeypatch.setenv("SIGNUP_NOTIFY_EMAIL", "ian@example.com")
+        self._send(monkeypatch)
+        payload = sent_payload(mock_sendgrid)
+        assert payload["personalizations"][0]["to"][0]["email"] == "ian@example.com"
+
+    def test_empty_recipient_turns_the_notice_off(
+        self, mock_sendgrid, app_context, monkeypatch
+    ):
+        monkeypatch.setenv("SIGNUP_NOTIFY_EMAIL", "")
+        assert self._send(monkeypatch) is False
+        assert mock_sendgrid.return_value.send.call_count == 0
+
+    def test_an_unverified_form_signup_says_so(
+        self, mock_sendgrid, app_context, monkeypatch
+    ):
+        monkeypatch.delenv("SIGNUP_NOTIFY_EMAIL", raising=False)
+        self._send(monkeypatch, how="the registration form", verified=False)
+        text = sent_payload(mock_sendgrid)["content"][0]["value"]
+        assert "by the registration form" in text
+        assert "Email verified: not yet" in text

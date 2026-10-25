@@ -2,7 +2,7 @@
 import os
 import logging
 import markdown
-from flask import url_for, current_app
+from flask import url_for, current_app, request, has_request_context
 from flask_babel import force_locale, gettext as _
 from itsdangerous import URLSafeSerializer, BadSignature
 from sendgrid import SendGridAPIClient
@@ -489,9 +489,7 @@ def send_update_email(user_id, to_email, subject, body_markdown):
     )
 
     with force_locale(_language_of_user_id(user_id)):
-        opted_in = _(
-            "You're receiving this because you opted in to updates on Ceol."
-        )
+        opted_in = _("You're receiving this because you opted in to updates on Ceol.")
         unsubscribe = _("Unsubscribe")
         settings_text, settings_html = _settings_footer()
         footer_text = (
@@ -521,4 +519,58 @@ def send_update_email(user_id, to_email, subject, body_markdown):
         body_html,
         from_email=from_email,
         unsubscribe_url=unsubscribe_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# New-account notice: one email to Ceol's own support whenever someone signs up
+# ---------------------------------------------------------------------------
+
+SIGNUP_NOTIFY_DEFAULT = "support@ceol.app"
+
+
+def signup_notify_address():
+    """Where the new-account notice goes: SIGNUP_NOTIFY_EMAIL, or support@ceol.app.
+    Set the variable to an empty string to turn the notice off."""
+    return os.environ.get("SIGNUP_NOTIFY_EMAIL", SIGNUP_NOTIFY_DEFAULT).strip()
+
+
+def send_new_account_email(
+    user_id,
+    person_id,
+    email,
+    username,
+    how,
+    language=None,
+    referrer_name=None,
+    verified=True,
+):
+    """Tell Ceol's support that an account was just made. `how` says which door
+    they came in by ("the email link on the login page", "the registration form").
+    The email is for Ceol's own support, so it stays in English. Returns False
+    without sending when the notice is turned off."""
+    to = signup_notify_address()
+    if not to:
+        return False
+    admin_url = url_for("person_details", person_id=person_id, _external=True)
+    client = ""
+    if has_request_context():
+        client = request.headers.get("X-Ceol-Client") or request.headers.get(
+            "User-Agent", ""
+        )
+    lines = [
+        f"Someone signed up for Ceol by {how}.",
+        "",
+        f"Email: {email}",
+        f"Username: {username}",
+        f"User id: {user_id}",
+        f"Language: {language or 'en'}",
+        f"Referred by: {referrer_name or 'nobody'}",
+        f"Email verified: {'yes' if verified else 'not yet'}",
+        f"Client: {client or 'unknown'}",
+        "",
+        f"Their person page: {admin_url}",
+    ]
+    return send_email_via_sendgrid(
+        to, f"[Ceol] New account: {email}"[:200], "\n".join(lines)
     )

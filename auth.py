@@ -1,10 +1,12 @@
 import secrets
 import bcrypt
 import json
+import logging
 from datetime import timedelta
 from flask_login import UserMixin
 import psycopg2
 from database import get_db_connection, save_to_history
+from email_utils import send_new_account_email
 from i18n import request_language
 from timezone_utils import now_utc
 
@@ -389,7 +391,8 @@ def generate_password_reset_token():
 def start_password_reset(email):
     """Give the active account at `email` a one-hour password reset token. Returns
     (user, token) for the caller to email, or None when there is no such account.
-    Shared by the web form (/forgot-password) and the app (POST /api/auth/forgot-password)."""
+    Shared by the web form (/forgot-password) and the app (POST /api/auth/forgot-password).
+    """
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -699,6 +702,33 @@ def _unique_username(cur, email):
         username = f"{base_username}{suffix}"
 
 
+def referrer_display_name(cur, referred_by_person_id):
+    """The name of the person whose link brought this sign-up, or None."""
+    if not referred_by_person_id:
+        return None
+    cur.execute(
+        "SELECT first_name, last_name FROM person WHERE person_id = %s",
+        (referred_by_person_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    name = f"{row[0] or ''} {row[1] or ''}".strip()
+    return f"{name or 'unnamed'} (person {referred_by_person_id})"
+
+
+def notify_new_account(user_id, person_id, email, username, how, **details):
+    """Email Ceol's support that an account was made. A failure here is logged
+    and swallowed: the sign-up has already been committed and must not fail
+    because the notice could not go out."""
+    try:
+        send_new_account_email(user_id, person_id, email, username, how, **details)
+    except Exception as e:  # noqa: BLE001 - never let the notice break a sign-up
+        logging.getLogger(__name__).warning(
+            f"New-account notice not sent for user {user_id}: {e}"
+        )
+
+
 def complete_pending_registration(token):
     """Turn a clicked registration link into a person + verified, passwordless
     user_account, and delete the pending row.
@@ -798,7 +828,22 @@ def complete_pending_registration(token):
             "DELETE FROM pending_registration WHERE pending_registration_id = %s",
             (pending_id,),
         )
+        cur.execute(
+            "SELECT username, language FROM user_account WHERE user_id = %s",
+            (user_id,),
+        )
+        username, language = cur.fetchone()
+        referrer_name = referrer_display_name(cur, referred_by_person_id)
         conn.commit()
+        notify_new_account(
+            user_id,
+            person_id,
+            email,
+            username,
+            "the email link on the login page",
+            language=language,
+            referrer_name=referrer_name,
+        )
         return "created", user_id
     except psycopg2.IntegrityError:
         # Lost a race: the address got an account between our check and insert.

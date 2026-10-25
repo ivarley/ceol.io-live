@@ -159,6 +159,35 @@ class TestClickingTheLink:
         assert "/auth/setup-profile" in r.headers["Location"]
         assert client.get("/auth/setup-profile").status_code == 200
 
+    def test_support_is_told_about_the_new_account(
+        self, mock_send, client, new_email, new_account_notice
+    ):
+        _enter_email(client, new_email)
+        new_account_notice.assert_not_called()  # nothing exists until the click
+
+        client.get(f"/verify-email/{_pending(new_email)[0][0]}")
+
+        new_account_notice.assert_called_once()
+        kwargs = new_account_notice.call_args
+        user_id, person_id = _accounts(new_email)[0][:2]
+        assert kwargs.args[0] == user_id
+        assert kwargs.args[1] == person_id
+        assert kwargs.args[2] == new_email
+        assert kwargs.args[4] == "the email link on the login page"
+        assert kwargs.kwargs["referrer_name"] is None
+
+    def test_a_signup_with_a_broken_notice_still_succeeds(
+        self, mock_send, client, new_email, new_account_notice
+    ):
+        new_account_notice.side_effect = RuntimeError("SendGrid is down")
+        _enter_email(client, new_email)
+
+        r = client.get(f"/verify-email/{_pending(new_email)[0][0]}")
+
+        assert r.status_code == 302
+        assert "/auth/set-password" in r.headers["Location"]
+        assert len(_accounts(new_email)) == 1
+
     def test_the_account_takes_the_language_it_was_made_in(
         self, mock_send, client, new_email
     ):
@@ -230,6 +259,19 @@ class TestClickingTheLink:
         assert len(_accounts(new_email)) == 1
         assert _max_person_id() == before
         assert _pending(new_email) == []
+
+    def test_no_notice_when_no_account_is_made(
+        self, mock_send, client, new_email, new_account_notice
+    ):
+        _enter_email(client, new_email)
+        token = _pending(new_email)[0][0]
+        client.get(f"/verify-email/{token}")
+        client.get("/logout")
+        new_account_notice.reset_mock()
+
+        client.get(f"/verify-email/{token}")  # a second click creates nothing
+
+        new_account_notice.assert_not_called()
         with client.session_transaction() as sess:
             assert "_user_id" not in sess
 
@@ -274,12 +316,13 @@ class TestResendVerification:
 @patch("web_routes.send_registration_email", return_value=True)
 class TestNativeExchange:
     def test_pending_token_creates_the_account_and_returns_a_bearer_token(
-        self, mock_send, client, new_email
+        self, mock_send, client, new_email, new_account_notice
     ):
         _enter_email(client, new_email)
         token = _pending(new_email)[0][0]
 
         r = client.post("/api/auth/exchange", json={"token": token}, headers=IOS)
+        new_account_notice.assert_called_once()
 
         assert r.status_code == 200, r.get_json()
         body = r.get_json()

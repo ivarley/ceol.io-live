@@ -46,6 +46,8 @@ from auth import (
     start_pending_registration,
     has_pending_registration,
     complete_pending_registration,
+    referrer_display_name,
+    notify_new_account,
 )
 from email_utils import (
     send_password_reset_email,
@@ -1193,7 +1195,18 @@ def register():
                 "UPDATE person SET email = NULL WHERE person_id = %s", (person_id,)
             )
 
+            referrer_name = referrer_display_name(cur, referred_by_person_id)
             conn.commit()
+            notify_new_account(
+                user_id,
+                person_id,
+                email,
+                username,
+                "the registration form",
+                language=request_language(),
+                referrer_name=referrer_name,
+                verified=False,
+            )
 
             # Send verification email
             user = User(

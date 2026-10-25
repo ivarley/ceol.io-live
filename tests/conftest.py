@@ -308,13 +308,13 @@ def authenticated_non_admin_user(authenticated_user):
     return authenticated_user
 
 
-@pytest.fixture  
+@pytest.fixture
 def sample_person_not_attending():
     """Sample person data who is not attending for testing."""
     return {
         "person_id": 7,
         "first_name": "Not",
-        "last_name": "Attending", 
+        "last_name": "Attending",
         "email": "notattending@example.com",
     }
 
@@ -324,6 +324,7 @@ def authenticated_user(client, sample_user_data):
     """Create an authenticated NON-ADMIN user session (seeded sarah_fiddle,
     user_id=2 / person_id=2). Tests that need admin powers must use
     admin_user / authenticated_admin_user instead."""
+
     class AuthenticatedUserContext:
         def __init__(self, client, user_data):
             self.client = client
@@ -340,7 +341,7 @@ def authenticated_user(client, sample_user_data):
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
-            
+
             # Add attributes that tests expect
             self.person_id = self.user_data["person_id"]
             self.user_id = self.user_data["user_id"]
@@ -350,13 +351,13 @@ def authenticated_user(client, sample_user_data):
                 sess["_fresh"] = True
                 sess["is_system_admin"] = self.user_data["is_system_admin"]
                 sess["admin_session_ids"] = []
-                
+
             return self.user
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             if self.mock_get_user:
                 self.mock_get_user.stop()
-    
+
     return AuthenticatedUserContext(client, sample_user_data)
 
 
@@ -389,7 +390,7 @@ def admin_user(client, sample_user_data):
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
-            
+
             # Add attributes that tests expect
             self.person_id = self.user_data["person_id"]
             self.user_id = self.user_data["user_id"]
@@ -399,13 +400,13 @@ def admin_user(client, sample_user_data):
                 sess["_fresh"] = True
                 sess["is_system_admin"] = True
                 sess["admin_session_ids"] = [1, 2, 3]
-                
+
             return self.user
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             if self.mock_get_user:
                 self.mock_get_user.stop()
-    
+
     return AuthenticatedAdminContext(client, admin_data)
 
 
@@ -439,7 +440,7 @@ def authenticated_admin_user(client, sample_user_data):
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
-            
+
             # Add attributes that tests expect
             self.person_id = self.user_data["person_id"]
             self.user_id = self.user_data["user_id"]
@@ -449,13 +450,13 @@ def authenticated_admin_user(client, sample_user_data):
                 sess["_fresh"] = True
                 sess["is_system_admin"] = True
                 sess["admin_session_ids"] = [1, 2, 3]
-                
+
             return self.user
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             if self.mock_get_user:
                 self.mock_get_user.stop()
-    
+
     return AuthenticatedAdminContext(client, admin_data)
 
 
@@ -473,7 +474,9 @@ def authenticated_regular_user(client, sample_user_data, sample_regular_attendee
     # will see person 6 instead. user_id=3 is at least non-admin in the DB,
     # which is what the fresh `SELECT is_system_admin` re-checks care about.
     regular_data["user_id"] = 3
-    regular_data["person_id"] = sample_regular_attendee["person_id"]  # Use regular attendee person_id
+    regular_data["person_id"] = sample_regular_attendee[
+        "person_id"
+    ]  # Use regular attendee person_id
     regular_data["first_name"] = sample_regular_attendee["first_name"]
     regular_data["last_name"] = sample_regular_attendee["last_name"]
 
@@ -493,7 +496,7 @@ def authenticated_regular_user(client, sample_user_data, sample_regular_attendee
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
-            
+
             # Add attributes that tests expect
             self.person_id = self.user_data["person_id"]
             self.user_id = self.user_data["user_id"]
@@ -503,13 +506,13 @@ def authenticated_regular_user(client, sample_user_data, sample_regular_attendee
                 sess["_fresh"] = True
                 sess["is_system_admin"] = self.user_data["is_system_admin"]
                 sess["admin_session_ids"] = []
-                
+
             return self.user
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             if self.mock_get_user:
                 self.mock_get_user.stop()
-    
+
     return AuthenticatedUserContext(client, regular_data)
 
 
@@ -523,21 +526,21 @@ def session_with_multiple_instances(sample_session_data):
                 "session_instance_id": 1,
                 "date": "2023-08-15",
                 "start_time": "19:00",
-                "end_time": "22:00"
+                "end_time": "22:00",
             },
             {
-                "session_instance_id": 2, 
+                "session_instance_id": 2,
                 "date": "2023-08-22",
                 "start_time": "19:00",
-                "end_time": "22:00"
+                "end_time": "22:00",
             },
             {
                 "session_instance_id": 3,
-                "date": "2023-08-29", 
+                "date": "2023-08-29",
                 "start_time": "19:00",
-                "end_time": "22:00"
-            }
-        ]
+                "end_time": "22:00",
+            },
+        ],
     }
 
 
@@ -553,8 +556,8 @@ def multiple_sessions_data(sample_session_data):
                 "path": "another-test-session",
                 "city": "Boston",
                 "state": "MA",
-                "country": "USA"
-            }
+                "country": "USA",
+            },
         ]
     }
 
@@ -611,12 +614,14 @@ def session_instance_user_not_associated(sample_session_data):
         "session_instance_id": 999,  # Different from main test session instance
         "session_id": 999,  # Different from main test session
         "date": "2023-09-01",
-        "comments": "Test session user is not associated with"
+        "comments": "Test session user is not associated with",
     }
 
 
-@pytest.fixture  
-def session_instance_with_user_attending(sample_session_instance_data, authenticated_user):
+@pytest.fixture
+def session_instance_with_user_attending(
+    sample_session_instance_data, authenticated_user
+):
     """Session instance where the authenticated user is already attending."""
     # Return the same session instance, but the test should check in the user first
     return sample_session_instance_data
@@ -625,21 +630,23 @@ def session_instance_with_user_attending(sample_session_instance_data, authentic
 @pytest.fixture
 def multiple_session_instances(sample_session_data):
     """Multiple session instances for testing permission inheritance."""
-    session_id = sample_session_data['session_id']
+    session_id = sample_session_data["session_id"]
     return {
         "instances": [
             {
-                "session_instance_id": sample_session_data.get('session_instance_id', 1),
+                "session_instance_id": sample_session_data.get(
+                    "session_instance_id", 1
+                ),
                 "session_id": session_id,
                 "date": "2023-08-15",
-                "comments": "First instance"
+                "comments": "First instance",
             },
             {
                 "session_instance_id": 998,
-                "session_id": session_id, 
+                "session_id": session_id,
                 "date": "2023-08-22",
-                "comments": "Second instance"
-            }
+                "comments": "Second instance",
+            },
         ]
     }
 
@@ -651,8 +658,17 @@ def different_session_instance():
         "session_instance_id": 997,
         "session_id": 997,  # Different session entirely
         "date": "2023-09-01",
-        "comments": "Different session for isolation testing"
+        "comments": "Different session for isolation testing",
     }
+
+
+@pytest.fixture(autouse=True)
+def new_account_notice():
+    """Stub the new-account notice to support, so no test reaches SendGrid when
+    it makes an account. Tests that care about the notice take this fixture
+    and assert on the mock."""
+    with patch("auth.send_new_account_email", return_value=True) as mock:
+        yield mock
 
 
 @pytest.fixture(autouse=True)
