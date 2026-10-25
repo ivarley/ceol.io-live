@@ -25,15 +25,21 @@ func localToday() -> String {
     return f.string(from: Date())
 }
 
-/// The screens a tab's navigation stack can push.
+/// The screens a tab's navigation stack can push. Each takes its route as its identity:
+/// a stack replaced whole (a night of another session opened from a tune's history,
+/// with a session and a night in the same two places) is then a fresh screen, not the
+/// old one keeping the log it had already loaded.
 struct SessionDestinations: ViewModifier {
     func body(content: Content) -> some View {
         content.navigationDestination(for: Route.self) { route in
-            switch route {
-            case .session(let path, let name): SessionDetailView(path: path, name: name)
-            case .night(let id, let title, let highlight): NightView(sessionInstanceID: id, title: title, highlight: highlight)
-            case .festival(let slug, let name): FestivalView(slug: slug, name: name)
+            Group {
+                switch route {
+                case .session(let path, let name): SessionDetailView(path: path, name: name)
+                case .night(let id, let title, let highlight): NightView(sessionInstanceID: id, title: title, highlight: highlight)
+                case .festival(let slug, let name): FestivalView(slug: slug, name: name)
+                }
             }
+            .id(route)
         }
     }
 }

@@ -158,6 +158,31 @@ final class TuneHistoryUITests: XCTestCase {
         sleep(2)
         snapshot("10 the night at the play")
 
+        // From one session's night, a play at ANOTHER session opens that night: a fresh
+        // screen with its own log (the stack is replaced whole, a session and a night in
+        // the same two places), whose tunes open without an error.
+        let logTune = app.buttons["night.tune"].firstMatch
+        logTune.tap()
+        XCTAssertTrue(historyTab.waitForExistence(timeout: 15))
+        historyTab.tap()
+        XCTAssertTrue(app.buttons["history.change"].waitForExistence(timeout: 10))
+        app.buttons["history.change"].tap()
+        XCTAssertTrue(option.firstMatch.waitForExistence(timeout: 10))
+        option.matching(NSPredicate(format: "label == 'All sessions'")).firstMatch.tap()
+        let elsewhere = app.buttons.matching(identifier: "history.night").matching(NSPredicate(format: "label CONTAINS 'Mueller'")).firstMatch
+        XCTAssertTrue(elsewhere.waitForExistence(timeout: 15))
+        reveal(app, elsewhere)
+        elsewhere.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Mueller Session'")).firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(logTune.waitForExistence(timeout: 15))
+        sleep(2)
+        snapshot("12 another session's night")
+        logTune.tap()
+        XCTAssertTrue(app.buttons["Details"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Couldn't load this"].exists)
+        snapshot("13 its tune opens")
+        app.buttons["Done"].firstMatch.tap()
+
         // From your own list there is no session: History lands on every session, with
         // the session named on each row.
         app.buttons["tab.tunes"].firstMatch.tap()
