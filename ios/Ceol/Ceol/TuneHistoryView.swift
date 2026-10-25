@@ -1,13 +1,11 @@
-// The nights a tune was played: the web's tune drawer's History tab, as a screen of its
-// own. The tune sheet pushes it from its play counts, so it slides in from the right and
-// Back is the sheet. Its scope is a chip row, as the web's is a droplist: at the session
-// the sheet was opened from (when it was), at every session you belong to (signed in),
-// or at every session on Ceol. "Played at this session" lands on the first, "At sessions
-// on Ceol" on the last, and from your own list (no session) only the last two are
-// there. Across sessions each row names its session. "Only when I was there" starts off
-// and keeps to the nights you were at. Each night opens its log at the play, as the
-// web's rows link. The list is the server's 100 most recent nights, and says so when
-// there were more.
+// History and Played With: the web tune drawer's two right-hand tabs, as panes of the
+// app's tune sheet (TunesViews.swift). Each pane says which plays it is showing and
+// offers "Change…", which opens the choices the web's droplist holds: at the session
+// the sheet came from, one of its nights, every session you belong to, or every session
+// on Ceol (History); at this session, my sessions, while I was there, or globally (Played
+// With). A night in History opens its log at the play, as the web's rows link; a tune in
+// Played With pushes its own sheet. History is the server's 100 most recent nights, and
+// says so when there were more.
 //
 // i18n-converted (spec 057).
 
@@ -17,61 +15,244 @@ import CeolLogic
 import CeolSession
 import SwiftUI
 
-/// Which plays: at the sheet's session, at every session you belong to, or at every
-/// session on Ceol (the web's 'general' / 'member' / 'all').
-enum TuneHistoryScope: String, Hashable {
-    case session, mine, all
-}
+typealias TunePlay = Components.Schemas.TuneHistory.PlayInstancesPayloadPayload
+typealias TuneCompanion = Components.Schemas.TunePlayedWith.TunesPayloadPayload
 
-/// The session a sheet was opened from, for the history's "At {name}" scope.
+/// The session a sheet was opened from.
 struct TuneHistorySession: Hashable {
     let path: String
     let name: String
+    let trackAttendance: Bool
 }
 
-/// What a play count pushes: the scope to land on, and the sheet's session if any.
-struct TuneHistoryPush: Hashable {
-    let scope: TuneHistoryScope
-    let session: TuneHistorySession?
+/// Where in a night a tune came round.
+struct PlayedPosition: Hashable {
+    let sessionInstanceTuneID: Int
+    let set: Int
+    let position: Int
 }
 
-typealias TunePlay = Components.Schemas.TuneHistory.PlayInstancesPayloadPayload
+/// A night the tune was played at the sheet's session (the detail's played_instances).
+struct PlayedNight: Hashable {
+    let id: Int
+    let date: String
+    let startTime: String?
+    let location: String?
+    let positions: [PlayedPosition]
 
-struct TuneHistoryView: View {
-    @Environment(AppModel.self) private var model
-    let tune: TuneRef
-    /// The sheet's session, when it has one: the "At {name}" scope.
-    let session: TuneHistorySession?
-    /// The scope to land on (a session's own count, or the Ceol-wide one).
-    let initial: TuneHistoryScope
-    /// A night tapped: opens its log at this play (the sheet closes itself first).
-    let openNight: (TunePlay) -> Void
+    /// "Tue, Sep 3, 2024 · The Snug · 19:30": the date, the room at a festival, and the
+    /// time only where two nights would otherwise read alike (the web's label).
+    func label(timeNeeded: Bool) -> String {
+        var parts = [SessionsL10n.fullDate(date)]
+        if let location, !location.isEmpty { parts.append(location) }
+        if timeNeeded, let startTime, !startTime.isEmpty { parts.append(String(startTime.prefix(5))) }
+        return parts.joined(separator: " · ")
+    }
+}
 
-    @State private var scope: TuneHistoryScope = .all
-    @State private var history: LoadState<Components.Schemas.TuneHistory> = .loading
-    @State private var attendedOnly = false
+/// Which plays History shows: the web droplist's rows.
+enum TuneHistoryScope: Hashable {
+    case session
+    case night(PlayedNight)
+    case mine
+    case all
+}
+
+/// Whose sets Played With counts: the web's scope buttons.
+enum TunePlayedWithScope: Hashable {
+    case session, mine, attended, all
+}
+
+/// The detail's counts, for the line over History's list.
+struct TuneHistoryCounts {
+    let here: Int
+    let mine: Int?
+    let all: Int
+}
+
+/// A play to open: its night's log, with the play highlighted.
+struct TunePlayTarget {
+    let instanceID: Int
+    let sessionPath: String
+    let sessionName: String
+    let date: String
+    let sessionInstanceTuneID: Int
+}
+
+/// "At Mueller Session   Change…": what a pane shows, and the way to another choice.
+struct ScopeLine: View {
+    let label: String
+    let canChange: Bool
+    let id: String
+    let onChange: () -> Void
 
     var body: some View {
-        Loaded(state: history, retry: load) { h in content(h) }
-            .background(TuneSheet.surface)
-            .navigationTitle("History")
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label).font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                .accessibilityIdentifier("\(id).label")
+            Spacer(minLength: 8)
+            if canChange {
+                Button("Change…") { onChange() }
+                    .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                    .accessibilityIdentifier(id)
+            }
+        }
+    }
+}
+
+/// The choices behind "Change…", one to a row, the current one ticked. Picking one
+/// closes the sheet.
+struct ScopeChoiceSheet<ID: Hashable>: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let options: [(id: ID, label: String)]
+    @Binding var selection: ID
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(options, id: \.id) { opt in
+                        let on = opt.id == selection
+                        Button {
+                            selection = opt.id
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Text(opt.label).font(.ceol(size: 17, weight: on ? .semibold : .regular))
+                                    .foregroundStyle(on ? CeolTokens.primary : CeolTokens.textColor)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 8)
+                                if on {
+                                    Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(CeolTokens.primary)
+                                }
+                            }
+                            .padding(.horizontal, 20).padding(.vertical, 14)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("scope.option")
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                        Hairline().padding(.leading, 20)
+                    }
+                }
+            }
+            .background(CeolTokens.drawerBg)
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { scope = session == nil && initial == .session ? .all : initial }
-            // Both are the server's, as on the web: the list is capped at 100 nights, so
-            // narrowing here could lose older nights.
-            .task(id: "\(scope.rawValue)|\(attendedOnly)") { await load() }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("scope.done") } }
+        }
+        .ceolDrawer([.medium, .large])
+    }
+}
+
+// MARK: - History
+
+struct TuneHistoryPane: View {
+    @Environment(AppModel.self) private var model
+    let tune: TuneRef
+    let session: TuneHistorySession?
+    /// The nights at the sheet's session, each a scope of its own.
+    let nights: [PlayedNight]
+    let counts: TuneHistoryCounts
+    @Binding var scope: TuneHistoryScope
+    /// The night the sheet was opened from, with its own setting (nil: the session's),
+    /// when the viewer may change it (a member): that night's scope shows the row.
+    var ownNight: (id: Int, setting: Int?, change: () -> Void)? = nil
+    let openNight: (TunePlayTarget) -> Void
+
+    @State private var history: LoadState<Components.Schemas.TuneHistory> = .loading
+    @State private var attendedOnly = false
+    @State private var choosing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ScopeLine(label: label(scope), canChange: options.count > 1, id: "history.change") { choosing = true }
+            if showAttendedFilter {
+                Toggle(isOn: $attendedOnly) {
+                    Text("Only when I was there").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
+                }
+                .tint(CeolTokens.primary)
+                .accessibilityIdentifier("history.attended")
+            }
+            if let line = summaryLine {
+                Text(line).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
+                    .accessibilityIdentifier("history.summary")
+            }
+            if case .night(let night) = scope {
+                nightContent(night)
+            } else {
+                Loaded(state: history, retry: load) { h in list(h) }
+            }
+        }
+        // Both are the server's, as on the web: the list is capped at 100 nights, so
+        // narrowing here could lose older nights.
+        .task(id: requestKey) { await load() }
+        .sheet(isPresented: $choosing) { ScopeChoiceSheet(title: tr("Show"), options: options, selection: $scope) }
     }
 
-    /// The scopes on offer: the session's own only with a session, yours only signed in.
-    private var scopes: [(id: TuneHistoryScope, label: String)] {
+    /// The scopes on offer, in the web's order: the session's own, each of its nights,
+    /// then (signed in) yours, then every session.
+    private var options: [(id: TuneHistoryScope, label: String)] {
         var all: [(id: TuneHistoryScope, label: String)] = []
-        if let session { all.append((.session, tr("At \(session.name)"))) }
-        if !model.isGuest { all.append((.mine, tr("My sessions"))) }
+        if let session {
+            all.append((.session, tr("At \(session.name)")))
+            // Which nights would still read alike with the date and the room shown?
+            // Those get their time too.
+            var alike: [String: Int] = [:]
+            for n in nights { alike["\(n.date)|\(n.location ?? "")", default: 0] += 1 }
+            for n in nights {
+                all.append((.night(n), tr("… on \(n.label(timeNeeded: alike["\(n.date)|\(n.location ?? "")", default: 0] > 1))")))
+            }
+        }
+        if !model.isGuest { all.append((.mine, tr("All my sessions"))) }
         all.append((.all, tr("All sessions")))
         return all
     }
 
+    private func label(_ s: TuneHistoryScope) -> String {
+        switch s {
+        case .session: tr("At \(session?.name ?? tr("this session"))")
+        case .night(let n): tr("On \(n.label(timeNeeded: false))")
+        case .mine: tr("All my sessions")
+        case .all: tr("All sessions")
+        }
+    }
+
+    /// "While I was there" filters any scope but one night (one night is where you were
+    /// or weren't), and a session that doesn't track attendance has nothing to filter.
+    private var showAttendedFilter: Bool {
+        guard !model.isGuest else { return false }
+        switch scope {
+        case .night: return false
+        case .session: return session?.trackAttendance != false
+        case .mine, .all: return true
+        }
+    }
+
+    /// The count over the list; it steps aside when the filter is on (the counts don't
+    /// know about it) and on one night (the list IS the answer).
+    private var summaryLine: String? {
+        guard !attendedOnly else { return nil }
+        switch scope {
+        case .session: return tr("Played \(counts.here) times at this session")
+        case .mine: return counts.mine.map { tr("Played \($0) times at my sessions") }
+        case .all: return tr("Played \(counts.all) times at all sessions")
+        case .night: return nil
+        }
+    }
+
+    private var requestKey: String {
+        switch scope {
+        case .session: "session|\(attendedOnly)"
+        case .night(let n): "night|\(n.id)"
+        case .mine: "mine|\(attendedOnly)"
+        case .all: "all|\(attendedOnly)"
+        }
+    }
+
     private func load() async {
+        if case .night = scope { return }
         if history.value == nil { history = .loading }
         do {
             let h = try await model.auth.client.getTuneHistory(
@@ -87,61 +268,32 @@ struct TuneHistoryView: View {
         }
     }
 
-    @ViewBuilder private func content(_ h: Components.Schemas.TuneHistory) -> some View {
+    @ViewBuilder private func list(_ h: Components.Schemas.TuneHistory) -> some View {
         let plays = h.playInstances
-        List {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    if let type = tune.type { TypeChip(label: TunesWords.type(type), size: 14) }
-                    Text(tune.name).font(.ceol(size: 20, weight: .semibold)).foregroundStyle(CeolTokens.textColor).lineLimit(2)
-                }
-                if scopes.count > 1 {
-                    ChoiceChips(label: tr("Show"), options: scopes, selection: $scope)
-                        .accessibilityIdentifier("history.scope")
-                }
-                if !model.isGuest {
-                    Toggle(isOn: $attendedOnly) {
-                        Text("Only when I was there").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
-                    }
-                    .tint(CeolTokens.primary)
-                    .accessibilityIdentifier("history.attended")
-                }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
+        VStack(spacing: 0) {
             if plays.isEmpty {
                 Text(emptyText)
                     .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                     .frame(maxWidth: .infinity)
-                    .padding(24)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                    .padding(.vertical, 20)
             }
-
             ForEach(plays, id: \.sessionInstanceTuneId) { play in
-                Button { openNight(play) } label: { row(play) }
+                Button {
+                    openNight(TunePlayTarget(
+                        instanceID: play.sessionInstanceId, sessionPath: play.sessionPath, sessionName: play.sessionName,
+                        date: play.date ?? "", sessionInstanceTuneID: play.sessionInstanceTuneId))
+                } label: { row(play) }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("history.night")
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparatorTint(CeolTokens.borderColor)
+                Hairline()
             }
-
             if h.truncated {
                 Text("Showing the 100 most recent nights.")
                     .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .refreshable { await load() }
     }
 
     /// One play: the date, where in the night it came round, and a mark on the nights you
@@ -169,8 +321,51 @@ struct TuneHistoryView: View {
             }
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
+    }
+
+    /// One night: where the tune came round ("Set 2, Tune 1", each opening the log
+    /// there), and the night's own setting when you may change it.
+    @ViewBuilder private func nightContent(_ night: PlayedNight) -> some View {
+        VStack(spacing: 0) {
+            if night.positions.isEmpty {
+                Text("Not played that night.")
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            }
+            ForEach(night.positions, id: \.sessionInstanceTuneID) { p in
+                Button {
+                    guard let session else { return }
+                    openNight(TunePlayTarget(
+                        instanceID: night.id, sessionPath: session.path, sessionName: session.name,
+                        date: night.date, sessionInstanceTuneID: p.sessionInstanceTuneID))
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("Set \(p.set), Tune \(p.position)").font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
+                    }
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("history.position")
+                Hairline()
+            }
+            if let ownNight, ownNight.id == night.id {
+                HStack(spacing: 10) {
+                    Text("We played setting:").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    Text(ownNight.setting.map { "#\($0)" } ?? tr("(the session's)")).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
+                    Spacer(minLength: 8)
+                    Button("Change Setting") { ownNight.change() }
+                        .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                        .accessibilityIdentifier("history.nightSetting")
+                }
+                .padding(.top, 12)
+            }
+        }
     }
 
     private var emptyText: String {
@@ -178,7 +373,101 @@ struct TuneHistoryView: View {
         switch scope {
         case .session: return tr("Not played here yet.")
         case .mine: return tr("Not played at your sessions yet.")
-        case .all: return tr("No plays logged yet.")
+        case .all, .night: return tr("No plays logged yet.")
+        }
+    }
+}
+
+// MARK: - Played With
+
+struct TunePlayedWithPane: View {
+    @Environment(AppModel.self) private var model
+    let tune: TuneRef
+    let session: TuneHistorySession?
+
+    @State private var scope: TunePlayedWithScope
+    @State private var tunes: LoadState<[TuneCompanion]> = .loading
+    @State private var choosing = false
+
+    init(tune: TuneRef, session: TuneHistorySession?) {
+        self.tune = tune
+        self.session = session
+        // At the sheet's session; from your own list, everywhere.
+        _scope = State(initialValue: session != nil ? .session : .all)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ScopeLine(label: label(scope), canChange: options.count > 1, id: "playedwith.change") { choosing = true }
+            Loaded(state: tunes, retry: load) { all in list(all) }
+        }
+        .task(id: scope) { await load() }
+        .sheet(isPresented: $choosing) { ScopeChoiceSheet(title: tr("Show"), options: options, selection: $scope) }
+    }
+
+    private var options: [(id: TunePlayedWithScope, label: String)] {
+        var all: [(id: TunePlayedWithScope, label: String)] = []
+        if session != nil { all.append((.session, tr("At this session"))) }
+        if !model.isGuest {
+            all.append((.mine, tr("At my sessions")))
+            all.append((.attended, tr("While I was there")))
+        }
+        all.append((.all, tr("Globally")))
+        return all
+    }
+
+    private func label(_ s: TunePlayedWithScope) -> String {
+        switch s {
+        case .session: tr("At \(session?.name ?? tr("this session"))")
+        case .mine: tr("At my sessions")
+        case .attended: tr("While I was there")
+        case .all: tr("Globally")
+        }
+    }
+
+    private func load() async {
+        if tunes.value == nil { tunes = .loading }
+        do {
+            let r = try await model.auth.client.getTunePlayedWith(
+                path: .init(tuneId: tune.id),
+                query: .init(
+                    sessionPath: scope == .session ? session?.path : nil,
+                    scope: scope == .mine ? .member : scope == .attended ? .attended : nil)
+            ).ok.body.json
+            tunes = .loaded(r.tunes)
+        } catch {
+            tunes = .failed(loadFailureMessage(error))
+        }
+    }
+
+    @ViewBuilder private func list(_ all: [TuneCompanion]) -> some View {
+        VStack(spacing: 0) {
+            if all.isEmpty {
+                Text(scope == .session
+                    ? tr("This tune has not been played in a set with any other tune at this session yet.")
+                    : tr("This tune has not been played in a set with any other tune yet."))
+                    .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            }
+            ForEach(all, id: \.tuneId) { t in
+                // The companion's own sheet, over this one (the web swaps the drawer's tune).
+                NavigationLink(value: TuneRef(id: t.tuneId, name: t.name, type: t.tuneType, sessionPath: session?.path, statusKnown: false)) {
+                    HStack(spacing: 10) {
+                        Text(t.name).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(2)
+                        Spacer(minLength: 8)
+                        if let type = t.tuneType { TypeChip(label: TunesWords.type(type), size: 13) }
+                        Text("\(t.count)").font(.ceol(size: 15)).monospacedDigit().foregroundStyle(CeolTokens.textMuted)
+                            .accessibilityLabel(Text("\(t.count) times together"))
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
+                    }
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("playedwith.row")
+                Hairline()
+            }
         }
     }
 }

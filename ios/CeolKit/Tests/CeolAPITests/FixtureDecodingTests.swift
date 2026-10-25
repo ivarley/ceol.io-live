@@ -58,6 +58,7 @@ private let decoders: [String: @Sendable (String) throws -> Void] = [
     "TopTunes": { _ = try decode(Components.Schemas.TopTunes.self, $0) },
     "TuneDetail": { _ = try decode(Components.Schemas.TuneDetail.self, $0) },
     "TuneHistory": { _ = try decode(Components.Schemas.TuneHistory.self, $0) },
+    "TunePlayedWith": { _ = try decode(Components.Schemas.TunePlayedWith.self, $0) },
     "TunePreview": { _ = try decode(Components.Schemas.TunePreview.self, $0) },
     "TuneSearch": { _ = try decode(Components.Schemas.TuneSearch.self, $0) },
 ]

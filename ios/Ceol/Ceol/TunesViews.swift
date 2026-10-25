@@ -310,14 +310,34 @@ private struct TuneRow: View {
 
 // MARK: - The tune sheet
 
-/// A tune's sheet: name and type, your status (and heard count and notes) or Add, the
-/// notation (opening bars, or the whole tune), and how much it gets played. Notation is
-/// rendered by the server, as on the web. `onChanged` runs after each saved edit.
+/// A tune's sheet: the name and type, the notation (opening bars, or the whole tune),
+/// then the web drawer's four tabs — My List (your status, heard count, notes, tags and
+/// your own name, setting and key), Details (what the session calls and plays, and the
+/// counts), History and Played With. Notation is rendered by the server, as on the web.
+/// `onChanged` runs after each saved edit. A tune in Played With pushes its own sheet.
 struct TuneSheet: View {
-    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let tune: TuneRef
     var onChanged: () -> Void = {}
+
+    var body: some View {
+        NavigationStack {
+            TuneSheetBody(tune: tune, onChanged: onChanged, close: { dismiss() })
+                .navigationDestination(for: TuneRef.self) { TuneSheetBody(tune: $0, onChanged: onChanged, close: { dismiss() }) }
+        }
+        .ceolDrawer()
+    }
+
+    static let surface = CeolTokens.drawerBg
+}
+
+/// One tune's sheet, in the sheet's stack: the first, or a companion pushed from Played
+/// With. `close` closes the whole sheet (Done, a removal, a night opened from History).
+struct TuneSheetBody: View {
+    @Environment(AppModel.self) private var model
+    let tune: TuneRef
+    var onChanged: () -> Void = {}
+    let close: () -> Void
 
     @State private var status: String?
     @State private var heard = 0
@@ -342,82 +362,77 @@ struct TuneSheet: View {
     @State private var notationNoticeDone = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
-    /// The nights the tune was played, pushed from a play count: the scope to land on
-    /// and the sheet's session (one value, so the push sees both at once).
-    @State private var history: TuneHistoryPush?
+    /// The tabs under the notation, as the web's; My List is the landing tab signed in,
+    /// History otherwise, picked once the detail is here.
+    enum Tab: Hashable { case myList, details, history, playedWith }
+    @State private var tab: Tab = .history
+    @State private var tabChosen = false
+    @State private var historyScope: TuneHistoryScope = .all
+    /// My List's Configure fold: your own name, setting and key for the tune.
+    @State private var configOpen = false
+    @State private var myAlias = ""
+    @State private var myKey = ""
+    /// Details' session block (admins): what the session calls the tune and plays it in.
+    @State private var sessAlias = ""
+    @State private var sessKey = ""
+    @State private var formSaving = false
+    @State private var formFailure: String?
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if case .failed(let message) = detail, tune.statusKnown {
-                    // No signal, but your status came with the list: that much still
-                    // works (a change waits to be sent); the notation needs a connection.
-                    keptContent(message)
-                } else {
-                    Loaded(state: detail, retry: load) { d in content(d.sessionTune) }
+        Group {
+            if case .failed(let message) = detail, tune.statusKnown {
+                // No signal, but your status came with the list: that much still
+                // works (a change waits to be sent); the notation needs a connection.
+                keptContent(message)
+            } else {
+                Loaded(state: detail, retry: load) { d in content(d.sessionTune) }
+            }
+        }
+            .background(TuneSheet.surface)
+            .navigationTitle(tune.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { close() } }
+            }
+            // Share, with this drawer up, is this tune: its page at the session it was
+            // opened from, else its thesession.org page (Ceol has no public page for a
+            // tune on its own).
+            .onAppear {
+                model.shareOverride = ShareTarget(
+                    url: tune.sessionPath.map { model.webURL("/sessions/\($0)/tunes/\(tune.id)") }
+                        ?? URL(string: "https://thesession.org/tunes/\(tune.id)")!,
+                    title: tune.name)
+            }
+            .onDisappear { model.shareOverride = nil }
+            .task {
+                status = tune.status
+                heard = tune.heardCount ?? 0
+                notes = tune.notes ?? ""
+                savedNotes = notes
+                tags = tune.tags
+                await load()
+            }
+            .confirmationDialog("Remove \(tune.name) from your tunes?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                Button("Remove", role: .destructive) {
+                    Task { if await save(.remove) { close() } }
+                }
+            } message: {
+                Text("Its status, notes and heard count go with it.")
+            }
+            .fullScreenCover(isPresented: $fullScreen) {
+                if let image = showFull ? (full ?? incipit) : incipit { NotationFullScreen(image: image, name: tune.name) }
+            }
+            .sheet(item: $chooser) { layer in
+                if let t = detail.value?.sessionTune {
+                    SettingChooser(
+                        tuneID: tune.id, tuneName: t.tuneName, tuneType: t.tuneType,
+                        heading: layer.heading(sessionName: sessionName(t)),
+                        current: settingInUse(layer, t)
+                    ) { await saveSetting($0, for: layer) }
                 }
             }
-                .background(Self.surface)
-                .navigationTitle(tune.name)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
-                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-                }
-                // Share, with this drawer up, is this tune: its page at the session it was
-                // opened from, else its thesession.org page (Ceol has no public page for a
-                // tune on its own).
-                .onAppear {
-                    model.shareOverride = ShareTarget(
-                        url: tune.sessionPath.map { model.webURL("/sessions/\($0)/tunes/\(tune.id)") }
-                            ?? URL(string: "https://thesession.org/tunes/\(tune.id)")!,
-                        title: tune.name)
-                }
-                .onDisappear { model.shareOverride = nil }
-                .task {
-                    status = tune.status
-                    heard = tune.heardCount ?? 0
-                    notes = tune.notes ?? ""
-                    savedNotes = notes
-                    tags = tune.tags
-                    await load()
-                }
-                .confirmationDialog("Remove \(tune.name) from your tunes?", isPresented: $confirmRemove, titleVisibility: .visible) {
-                    Button("Remove", role: .destructive) {
-                        Task { if await save(.remove) { dismiss() } }
-                    }
-                } message: {
-                    Text("Its status, notes and heard count go with it.")
-                }
-                .fullScreenCover(isPresented: $fullScreen) {
-                    if let image = showFull ? (full ?? incipit) : incipit { NotationFullScreen(image: image, name: tune.name) }
-                }
-                .navigationDestination(item: $history) { push in
-                    TuneHistoryView(tune: tune, session: push.session, initial: push.scope) { play in
-                        // The night's log, in the Sessions tab, with this play highlighted:
-                        // the sheet goes first, so the log is what you land on.
-                        dismiss()
-                        model.openNight(
-                            id: play.sessionInstanceId,
-                            title: "\(play.sessionName) · \(SessionsL10n.shortDate(play.date ?? ""))",
-                            sessionPath: play.sessionPath, sessionName: play.sessionName,
-                            highlight: .server(play.sessionInstanceTuneId))
-                    }
-                }
-                .sheet(item: $chooser) { layer in
-                    if let t = detail.value?.sessionTune {
-                        SettingChooser(
-                            tuneID: tune.id, tuneName: t.tuneName, tuneType: t.tuneType,
-                            heading: layer.heading(sessionName: sessionName(t)),
-                            current: settingInUse(layer, t)
-                        ) { await saveSetting($0, for: layer) }
-                    }
-                }
-        }
-        .ceolDrawer()
     }
-
-    static let surface = CeolTokens.drawerBg
 
     /// Saves one op; true when the server took it.
     @discardableResult
@@ -500,6 +515,12 @@ struct TuneSheet: View {
                 savedNotes = notes
                 tags = (mine["tags"]?.arrayValue ?? []).compactMap(\.stringValue)
             }
+            if let mine = JSONValue(encoding: d.sessionTune.personTuneStatus) {
+                myAlias = mine["name_alias"]?.stringValue ?? ""
+                myKey = mine["key"]?.stringValue ?? ""
+            }
+            sessAlias = d.sessionTune.alias ?? ""
+            sessKey = d.sessionTune.key ?? ""
             detail = .loaded(d)
             await loadNotation(d.sessionTune)
         } catch {
@@ -542,72 +563,325 @@ struct TuneSheet: View {
     }
 
     @ViewBuilder private func content(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        let loggedIn = !model.isGuest
+        let tabs: [(id: Tab, label: String, count: Int?)] =
+            (loggedIn ? [(.myList, tr("My List"), nil)] : [])
+            + [(.details, tr("Details"), nil), (.history, tr("History"), nil), (.playedWith, tr("Played With"), nil)]
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                // The web's header: the type chip beside the name, the key under it.
+                // The web's header: the type chip beside the name, the notation under it.
                 HStack(spacing: 12) {
                     if let type = t.tuneType { TypeChip(label: TunesWords.type(type), size: 16) }
                     Text(t.tuneName).font(.ceol(size: 26, weight: .semibold, relativeTo: .title)).foregroundStyle(CeolTokens.textColor)
                 }
                 notation(t)
-                if let layer = settingLayer(t) {
-                    HStack(spacing: 10) {
-                        Text(layer.prompt).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                        Spacer(minLength: 0)
-                        Button { chooser = layer } label: {
-                            Text("Change Setting").font(.ceol(size: 15, weight: .medium))
-                                .padding(.horizontal, 12).padding(.vertical, 6)
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.primary, lineWidth: 1))
+                UnderlineTabs(items: tabs, selection: $tab, size: 15)
+                switch tab {
+                case .myList: myListTab(t)
+                case .details: detailsTab(t)
+                case .history:
+                    TuneHistoryPane(
+                        tune: tune, session: historySession(t), nights: nights(t),
+                        counts: TuneHistoryCounts(here: t.timesPlayed, mine: t.memberPlayCount, all: t.globalPlayCount),
+                        scope: $historyScope,
+                        ownNight: tune.instanceID.flatMap { night in
+                            guard canEditInstance(t), let path = tune.sessionPath else { return nil }
+                            return (id: night, setting: t.settingOverride, change: { chooser = .night(path: path, instanceID: night) })
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(CeolTokens.primary)
-                        .accessibilityIdentifier("sheet.changeSetting")
+                    ) { play in
+                        // The night's log, in the Sessions tab, with this play highlighted:
+                        // the sheet goes first, so the log is what you land on.
+                        close()
+                        model.openNight(
+                            id: play.instanceID,
+                            title: "\(play.sessionName) · \(SessionsL10n.shortDate(play.date))",
+                            sessionPath: play.sessionPath, sessionName: play.sessionName,
+                            highlight: .server(play.sessionInstanceTuneID))
                     }
-                }
-                yourList
-                VStack(spacing: 0) {
-                    // The two play counts open the nights behind them (the web's History
-                    // tab), pushed so they slide in from the right.
-                    let here = tune.sessionPath.map { TuneHistorySession(path: $0, name: sessionName(t)) }
-                    if here != nil {
-                        statLink(tr("Played at this session"), t.timesPlayed, id: "sheet.historyHere") {
-                            history = TuneHistoryPush(scope: .session, session: here)
-                        }
-                        Hairline()
-                    }
-                    statLink(tr("At sessions on Ceol"), t.globalPlayCount, id: "sheet.historyAll") {
-                        history = TuneHistoryPush(scope: .all, session: here)
-                    }
-                    Hairline()
-                    stat(tr("Sessions that play it"), t.sessionCount)
-                    if let books = t.tunebookCount {
-                        Hairline()
-                        stat(tr("TheSession.org tunebooks"), books)
-                    }
-                    if let key = t.settingKey {
-                        Hairline()
-                        HStack { Text("Key"); Spacer(); Text(key).foregroundStyle(CeolTokens.textMuted) }
-                            .font(.ceol(size: 16)).padding(.vertical, 12)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .background(CeolTokens.bgColor, in: RoundedRectangle(cornerRadius: 10))
-                if let aliases = t.aliases, !aliases.isEmpty {
-                    (Text("Also called: ").font(.ceol(size: 15, weight: .semibold)) + Text(aliases.joined(separator: ", ")).font(.ceol(size: 15)))
-                        .foregroundStyle(CeolTokens.textMuted)
-                }
-                HStack {
-                    Spacer()
-                    if status != nil {
-                        Button("Remove From My Tunes") { confirmRemove = true }
-                            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.danger)
-                            .disabled(busy)
-                            .accessibilityIdentifier("sheet.remove")
-                    }
+                case .playedWith:
+                    TunePlayedWithPane(tune: tune, session: historySession(t))
                 }
             }
             .padding(20)
         }
+        .onAppear {
+            guard !tabChosen else { return }
+            tabChosen = true
+            tab = loggedIn ? .myList : .history
+            historyScope = initialHistoryScope(t)
+        }
+    }
+
+    // MARK: My List
+
+    /// Your list (the panel, notes and tags), then Configure — your own name, setting and
+    /// key for the tune — and Remove, for a tune on your list.
+    @ViewBuilder private func myListTab(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        yourList
+        if status != nil {
+            configure(t)
+            HStack {
+                Spacer()
+                Button("Remove From My Tunes") { confirmRemove = true }
+                    .font(.ceol(size: 16)).foregroundStyle(CeolTokens.danger)
+                    .disabled(busy)
+                    .accessibilityIdentifier("sheet.remove")
+            }
+        }
+    }
+
+    private func mine(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> JSONValue? {
+        JSONValue(encoding: t.personTuneStatus)
+    }
+
+    @ViewBuilder private func configure(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        let saved = (alias: mine(t)?["name_alias"]?.stringValue ?? "", key: mine(t)?["key"]?.stringValue ?? "")
+        let dirty = myAlias != saved.alias || myKey != saved.key
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { configOpen.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: configOpen ? "chevron.down" : "chevron.right").font(.system(size: 12, weight: .semibold))
+                    Text("Configure").font(.ceol(size: 15, weight: .medium))
+                }
+                .foregroundStyle(CeolTokens.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sheet.configure")
+            if configOpen {
+                fieldLabel(tr("I call this:"))
+                textField($myAlias, prompt: t.tuneName, id: "sheet.myAlias")
+                fieldLabel(tr("I play setting:"))
+                settingRow(mine(t)?["setting_id"]?.intValue ?? t.settingId, layer: .mine, id: "sheet.mySetting")
+                fieldLabel(tr("I play this in:"))
+                keyMenu($myKey, fallback: t.settingKey, id: "sheet.myKey")
+                formButtons(dirty: dirty, cancel: { myAlias = saved.alias; myKey = saved.key }) {
+                    guard let ptid = mine(t)?["person_tune_id"]?.intValue else { return }
+                    await saveForm {
+                        _ = try await model.auth.client.updatePersonTune(
+                            path: .init(personTuneId: ptid),
+                            body: .json(.init(nameAlias: myAlias.trimmingCharacters(in: .whitespaces), key: myKey))
+                        ).ok
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Details
+
+    /// What this tune is at this session (its name, setting and key here, the session's
+    /// admins editing them), then the counts and the facts about the tune itself.
+    @ViewBuilder private func detailsTab(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        if let session = historySession(t) { sessionBlock(t, session) }
+        VStack(spacing: 0) {
+            // The play counts open the nights behind them: History, on that scope.
+            if historySession(t) != nil {
+                statLink(tr("Played at this session"), t.timesPlayed, id: "sheet.historyHere") { showHistory(.session) }
+                Hairline()
+            }
+            if let mine = t.memberPlayCount {
+                statLink(tr("At my sessions"), mine, id: "sheet.historyMine") { showHistory(.mine) }
+                Hairline()
+            }
+            if let there = t.attendedPlayCount {
+                stat(tr("While I was there"), there)
+                Hairline()
+            }
+            statLink(tr("At sessions on Ceol"), t.globalPlayCount, id: "sheet.historyAll") { showHistory(.all) }
+            Hairline()
+            stat(tr("Sessions that play it"), t.sessionCount)
+            Hairline()
+            stat(tr("Tune lists on Ceol"), t.personListCount)
+            if let books = t.tunebookCount {
+                Hairline()
+                stat(tr("TheSession.org tunebooks"), books)
+            }
+            if let key = t.settingKey {
+                Hairline()
+                HStack { Text("Key"); Spacer(); Text(key).foregroundStyle(CeolTokens.textMuted) }
+                    .font(.ceol(size: 16)).padding(.vertical, 12)
+            }
+        }
+        .padding(.horizontal, 16)
+        .background(CeolTokens.bgColor, in: RoundedRectangle(cornerRadius: 10))
+        if let aliases = t.aliases, !aliases.isEmpty {
+            (Text("Also called: ").font(.ceol(size: 15, weight: .semibold)) + Text(aliases.joined(separator: ", ")).font(.ceol(size: 15)))
+                .foregroundStyle(CeolTokens.textMuted)
+        }
+        Text("Canonical name: \(t.tuneName) (#\(t.tuneId))").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
+    }
+
+    private func showHistory(_ scope: TuneHistoryScope) {
+        historyScope = scope
+        tab = .history
+    }
+
+    /// "At Mueller Session": what the session calls the tune, its setting, and the key it
+    /// plays it in — fields for its admins, plain rows for anyone else (when there is
+    /// anything to show).
+    @ViewBuilder private func sessionBlock(_ t: Components.Schemas.TuneDetail.SessionTunePayload, _ session: TuneHistorySession) -> some View {
+        let saved = (alias: t.alias ?? "", key: t.key ?? "")
+        let editable = canEditSession(t)
+        if editable || t.alias != nil || t.key != nil || t.settingId != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("At \(session.name)").font(.ceol(size: 16, weight: .semibold)).foregroundStyle(CeolTokens.textColor)
+                if editable {
+                    fieldLabel(tr("We call this:"))
+                    textField($sessAlias, prompt: t.tuneName, id: "sheet.sessAlias")
+                    fieldLabel(tr("Our setting:"))
+                    settingRow(t.settingId, layer: .session(path: session.path), id: "sheet.sessSetting")
+                    fieldLabel(tr("We play this in:"))
+                    keyMenu($sessKey, fallback: t.settingKey, id: "sheet.sessKey")
+                    formButtons(dirty: sessAlias != saved.alias || sessKey != saved.key, cancel: { sessAlias = saved.alias; sessKey = saved.key }) {
+                        await saveForm {
+                            _ = try await model.auth.client.updateSessionTune(
+                                path: .init(sessionPath: session.path, tuneId: tune.id),
+                                body: .json(.init(alias: sessAlias.trimmingCharacters(in: .whitespaces), key: sessKey))
+                            ).ok
+                        }
+                    }
+                } else {
+                    if let alias = t.alias { factRow(tr("We call this:"), alias) }
+                    if let setting = t.settingId { factRow(tr("Our setting:"), "#\(setting)") }
+                    if let key = t.key { factRow(tr("We play this in:"), key) }
+                }
+            }
+            .padding(14)
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+        }
+    }
+
+    // MARK: Form pieces
+
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text).font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
+    }
+
+    private func factRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+            Text(value).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
+        }
+    }
+
+    private func textField(_ text: Binding<String>, prompt: String, id: String) -> some View {
+        TextField("", text: text, prompt: Text(prompt).foregroundStyle(CeolTokens.textMuted))
+            .font(.ceol(size: 16)).foregroundStyle(CeolTokens.textColor)
+            .autocorrectionDisabled()
+            .padding(.horizontal, 12).frame(height: 44)
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+            .accessibilityIdentifier(id)
+    }
+
+    /// The setting a layer uses, and Change, which opens the chooser on that layer.
+    private func settingRow(_ setting: Int?, layer: SettingLayer, id: String) -> some View {
+        HStack(spacing: 10) {
+            Text(setting.map { "#\($0)" } ?? tr("(not specified)")).font(.ceol(size: 16))
+                .foregroundStyle(setting == nil ? CeolTokens.textMuted : CeolTokens.textColor)
+            Spacer(minLength: 8)
+            Button("Change Setting") { chooser = layer }
+                .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary)
+                .accessibilityIdentifier(id)
+        }
+    }
+
+    /// The web's key select: the empty row names what it falls back to.
+    private func keyMenu(_ key: Binding<String>, fallback: String?, id: String) -> some View {
+        Menu {
+            Button(fallback.map { tr("(not specified — \($0))") } ?? tr("(not specified)")) { key.wrappedValue = "" }
+            ForEach(TunePreviewPane.keys, id: \.self) { k in Button(k) { key.wrappedValue = k } }
+        } label: {
+            HStack {
+                Text(key.wrappedValue.isEmpty ? (fallback.map { tr("(not specified — \($0))") } ?? tr("(not specified)")) : key.wrappedValue)
+                    .font(.ceol(size: 16))
+                    .foregroundStyle(key.wrappedValue.isEmpty ? CeolTokens.textMuted : CeolTokens.textColor)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 13)).foregroundStyle(CeolTokens.textMuted)
+            }
+            .padding(.horizontal, 12).frame(height: 44)
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+        }
+        .accessibilityIdentifier(id)
+    }
+
+    @ViewBuilder private func formButtons(dirty: Bool, cancel: @escaping () -> Void, save: @escaping () async -> Void) -> some View {
+        if let formFailure {
+            Text(formFailure).font(.ceol(size: 13)).foregroundStyle(CeolTokens.danger)
+        }
+        HStack(spacing: 10) {
+            Spacer()
+            Button("Cancel") { cancel() }
+                .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.textMuted)
+                .disabled(!dirty || formSaving)
+            Button(formSaving ? tr("Saving…") : tr("Save")) { Task { await save() } }
+                .font(.ceol(size: 15, weight: .semibold))
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .foregroundStyle(.white)
+                .background(dirty ? CeolTokens.primaryFill : CeolTokens.textMuted.opacity(0.4), in: Capsule())
+                .disabled(!dirty || formSaving)
+                .accessibilityIdentifier("sheet.formSave")
+        }
+    }
+
+    /// Runs a form's save, then re-reads the detail so every tab shows what was written.
+    private func saveForm(_ write: () async throws -> Void) async {
+        formSaving = true
+        formFailure = nil
+        defer { formSaving = false }
+        do {
+            try await write()
+            await load()
+            onChanged()
+        } catch {
+            formFailure = isConnectionFailure(error)
+                ? tr("Couldn't reach Ceol, so that wasn't saved. Check your connection and try again.")
+                : tr("That wasn't saved. Try again.")
+        }
+    }
+
+    // MARK: The session the sheet came from
+
+    private func scopeJSON(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> JSONValue? {
+        JSONValue(encoding: t.sessionScope)
+    }
+
+    private func historySession(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> TuneHistorySession? {
+        guard let path = tune.sessionPath, let scope = scopeJSON(t) else { return nil }
+        return TuneHistorySession(
+            path: path, name: scope["session_name"]?.stringValue ?? tr("this session"),
+            trackAttendance: scope["track_attendance"]?.boolValue ?? true)
+    }
+
+    private func canEditSession(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Bool {
+        scopeJSON(t)?["can_edit_session"]?.boolValue == true
+    }
+
+    private func canEditInstance(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Bool {
+        scopeJSON(t)?["can_edit_instance"]?.boolValue == true
+    }
+
+    /// The nights the tune was played at the sheet's session, newest first.
+    private func nights(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> [PlayedNight] {
+        (scopeJSON(t)?["played_instances"]?.arrayValue ?? []).compactMap { n in
+            guard let id = n["session_instance_id"]?.intValue, let date = n["date"]?.stringValue else { return nil }
+            let positions = (n["positions"]?.arrayValue ?? []).compactMap { p -> PlayedPosition? in
+                guard let sit = p["session_instance_tune_id"]?.intValue, let set = p["set_number"]?.intValue,
+                      let pos = p["position_in_set"]?.intValue else { return nil }
+                return PlayedPosition(sessionInstanceTuneID: sit, set: set, position: pos)
+            }
+            return PlayedNight(
+                id: id, date: date, startTime: n["start_time"]?.stringValue,
+                location: n["location_override"]?.stringValue, positions: positions)
+        }
+    }
+
+    /// Where History lands: the night the sheet was opened from, else the session, else
+    /// every session (your own list has no session).
+    private func initialHistoryScope(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> TuneHistoryScope {
+        if let night = tune.instanceID, let n = nights(t).first(where: { $0.id == night }) { return .night(n) }
+        return historySession(t) != nil ? .session : .all
     }
 
     /// The sheet with no connection, for a tune from your list: its name, your status
@@ -938,7 +1212,7 @@ struct TunebookBox: View {
     }
 }
 
-extension TuneSheet {
+extension TuneSheetBody {
     /// The notation card, as the web's tune drawer: the staff (or the ABC) on white,
     /// tapped to flip opening bars ⇄ the whole tune; under it the notes / abc tabs on the
     /// left and, on the right, "open in" (thesession.org, abc-tools) and full screen.

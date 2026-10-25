@@ -1,7 +1,9 @@
 import XCTest
 
-/// A tune's play counts open the nights it was played (TuneHistoryView), pushed from the
-/// sheet; a night opens its log at the play. Screenshots go to CEOL_SHOTS when set.
+/// The tune sheet's four tabs (My List, Details, History, Played With): History's
+/// "Change…" offers the session, each of its nights, your sessions and every session;
+/// a night opens its log at the play; Played With pushes a companion's sheet; from
+/// your own list History lands on every session. Screenshots go to CEOL_SHOTS when set.
 final class TuneHistoryUITests: XCTestCase {
     private var server: String!
 
@@ -42,14 +44,13 @@ final class TuneHistoryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["tab.me"].firstMatch.waitForExistence(timeout: 10))
     }
 
-    @MainActor
-    func testThePlayCountsOpenTheNights() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-CeolServerURL", server, "-CeolResetSession", "YES"]
-        app.launch()
-        signIn(app)
+    /// Scrolls the sheet until the element can be tapped.
+    private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
+        for _ in 0..<4 where !element.isHittable { app.swipeUp() }
+        XCTAssertTrue(element.isHittable, "\(element) never came into view")
+    }
 
-        // Mueller's Tunes tab, Drowsy Maggie's sheet.
+    private func openDrowsyMaggieAtMueller(_ app: XCUIApplication) {
         app.buttons["tab.sessions"].firstMatch.tap()
         let search = app.textFields["sessions.search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
@@ -69,49 +70,96 @@ final class TuneHistoryUITests: XCTestCase {
         let tune = app.buttons["session.tune"].firstMatch
         XCTAssertTrue(tune.waitForExistence(timeout: 10))
         tune.tap()
+    }
 
-        // The sheet: the counts carry a chevron.
-        let here = app.buttons["sheet.historyHere"]
-        let all = app.buttons["sheet.historyAll"]
-        XCTAssertTrue(here.waitForExistence(timeout: 15))
-        if !here.isHittable { app.swipeUp() }
+    @MainActor
+    func testTheSheetsTabsAndHistoryChoices() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-CeolServerURL", server, "-CeolResetSession", "YES"]
+        app.launch()
+        signIn(app)
+        openDrowsyMaggieAtMueller(app)
+
+        // Signed in, the sheet lands on My List; Configure folds out your own fields.
+        let historyTab = app.buttons["History"].firstMatch
+        XCTAssertTrue(historyTab.waitForExistence(timeout: 15))
+        let configure = app.buttons["sheet.configure"]
+        XCTAssertTrue(configure.waitForExistence(timeout: 10))
         sleep(1)
-        snapshot("1 sheet")
-        here.tap()
+        snapshot("1 my list")
+        reveal(app, configure)
+        configure.tap()
+        XCTAssertTrue(app.textFields["sheet.myAlias"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("2 my list configure")
 
-        // The nights at this session, then only the ones I was at.
+        // Details: the session's block (Ian administers Mueller) and the counts.
+        app.buttons["Details"].firstMatch.tap()
+        let here = app.buttons["sheet.historyHere"]
+        XCTAssertTrue(here.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["sheet.sessAlias"].exists)
+        sleep(1)
+        snapshot("3 details")
+
+        // The count opens History on this session.
+        reveal(app, here)
+        here.tap()
+        let scopeLabel = app.staticTexts["history.change.label"]
+        XCTAssertTrue(scopeLabel.waitForExistence(timeout: 10))
+        XCTAssertEqual(scopeLabel.label, "At Mueller Session")
         let night = app.buttons["history.night"].firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["At Mueller Session"].firstMatch.exists)
+        XCTAssertEqual(app.switches["history.attended"].firstMatch.value as? String, "0")
         sleep(1)
-        snapshot("2 history at this session")
-        // The Toggle's identifier spans its row; the switch sits at its right end.
-        let attended = app.switches["history.attended"].firstMatch
-        XCTAssertTrue(attended.exists)
-        attended.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        sleep(2)
-        XCTAssertEqual(attended.value as? String, "1")
-        snapshot("3 only when I was there")
-        attended.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        sleep(1)
+        snapshot("4 history at this session")
 
-        // The scope chips: my sessions, then every session on Ceol.
-        app.buttons["My sessions"].firstMatch.tap()
-        sleep(2)
-        snapshot("4 history at my sessions")
-        app.buttons["All sessions"].firstMatch.tap()
-        sleep(2)
+        // Change…: the session, each of its nights, my sessions, every session.
+        app.buttons["history.change"].tap()
+        let option = app.buttons.matching(identifier: "scope.option")
+        XCTAssertTrue(option.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(option.count, 4)
+        sleep(1)
+        snapshot("5 history choices")
+        option.matching(NSPredicate(format: "label BEGINSWITH '… on'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["history.position"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(scopeLabel.label.hasPrefix("On "))
+        sleep(1)
+        snapshot("6 one night")
+        app.buttons["history.change"].tap()
+        XCTAssertTrue(option.firstMatch.waitForExistence(timeout: 10))
+        option.matching(NSPredicate(format: "label == 'All my sessions'")).firstMatch.tap()
         XCTAssertTrue(night.waitForExistence(timeout: 15))
-        snapshot("5 history at every session")
+        XCTAssertEqual(scopeLabel.label, "All my sessions")
+        sleep(1)
+        snapshot("7 history at my sessions")
 
-        // A night opens its log, at the play.
+        // Played With: companions, each pushing its own sheet.
+        app.buttons["Played With"].firstMatch.tap()
+        let companion = app.buttons["playedwith.row"].firstMatch
+        XCTAssertTrue(companion.waitForExistence(timeout: 15))
+        XCTAssertEqual(app.staticTexts["playedwith.change.label"].label, "At Mueller Session")
+        sleep(1)
+        snapshot("8 played with")
+        reveal(app, companion)
+        companion.tap()
+        XCTAssertTrue(app.navigationBars.buttons.element(boundBy: 0).waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Details"].firstMatch.waitForExistence(timeout: 15))
+        sleep(2)
+        snapshot("9 a companion's sheet")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // A night opens its log at the play.
+        XCTAssertTrue(historyTab.waitForExistence(timeout: 10))
+        historyTab.tap()
+        XCTAssertTrue(night.waitForExistence(timeout: 15))
+        reveal(app, night)
         night.tap()
         XCTAssertTrue(app.buttons["night.tune"].firstMatch.waitForExistence(timeout: 15))
         sleep(2)
-        snapshot("6 the night at the play")
+        snapshot("10 the night at the play")
 
-        // From your own list there is no session: the history lands on every session,
-        // with "At ..." absent from the chips.
+        // From your own list there is no session: History lands on every session, with
+        // the session named on each row.
         app.buttons["tab.tunes"].firstMatch.tap()
         let mySearch = app.textFields["tunes.search"]
         XCTAssertTrue(mySearch.waitForExistence(timeout: 10))
@@ -120,13 +168,11 @@ final class TuneHistoryUITests: XCTestCase {
         let myRow = app.buttons["tunes.row"].firstMatch
         XCTAssertTrue(myRow.waitForExistence(timeout: 10))
         myRow.tap()
-        XCTAssertFalse(app.buttons["sheet.historyHere"].waitForExistence(timeout: 3))
-        XCTAssertTrue(all.waitForExistence(timeout: 15))
-        if !all.isHittable { app.swipeUp() }
-        all.tap()
+        XCTAssertTrue(historyTab.waitForExistence(timeout: 15))
+        historyTab.tap()
         XCTAssertTrue(night.waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'At '")).firstMatch.exists)
+        XCTAssertEqual(scopeLabel.label, "All sessions")
         sleep(1)
-        snapshot("7 from my tunes")
+        snapshot("11 from my tunes")
     }
 }

@@ -269,6 +269,8 @@ enum MyTunesStatusLabel {
 struct UnderlineTabs<ID: Hashable>: View {
     let items: [(id: ID, label: String, count: Int?)]
     @Binding var selection: ID
+    /// The label size: a page's three tabs at 19, a sheet's four at 15.
+    var size: CGFloat = 19
 
     var body: some View {
         VStack(spacing: 0) {
@@ -280,8 +282,9 @@ struct UnderlineTabs<ID: Hashable>: View {
                     } label: {
                         VStack(spacing: 8) {
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Text(item.label).font(.ceol(size: 19, weight: .medium, relativeTo: .title3))
+                                Text(item.label).font(.ceol(size: size, weight: .medium, relativeTo: .title3))
                                     .foregroundStyle(on ? CeolTokens.primary : CeolTokens.textMuted)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
                                 if let count = item.count {
                                     Text("\(count)").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
                                 }

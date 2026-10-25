@@ -1,0 +1,42 @@
+{
+  "redirected_from": null,
+  "success": true,
+  "tunes": [
+    {
+      "count": 9,
+      "name": "Cooley's",
+      "tune_id": 1,
+      "tune_type": "Reel"
+    },
+    {
+      "count": 5,
+      "name": "Mason's Apron, The",
+      "tune_id": 74,
+      "tune_type": "Reel"
+    },
+    {
+      "count": 4,
+      "name": "Banshee, The",
+      "tune_id": 8,
+      "tune_type": "Reel"
+    },
+    {
+      "count": 4,
+      "name": "Toss The Feathers",
+      "tune_id": 138,
+      "tune_type": "Reel"
+    },
+    {
+      "count": 3,
+      "name": "Boys On The Hilltop, The",
+      "tune_id": 1197,
+      "tune_type": "Reel"
+    },
+    {
+      "count": 1,
+      "name": "Kesh, The",
+      "tune_id": 55,
+      "tune_type": "Jig"
+    }
+  ]
+}

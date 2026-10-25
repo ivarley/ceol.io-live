@@ -1480,6 +1480,46 @@
         }
       }
     },
+    "%lld times together": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld huaire le chéile"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld n-uaire le chéile"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld uair le chéile"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld uair le chéile"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%lld uair le chéile"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld tunebooks": {
       "localizations": {
         "ga": {
@@ -1756,12 +1796,32 @@
         }
       }
     },
+    "(not specified — %@)": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(gan sonrú — %@)"
+          }
+        }
+      }
+    },
     "(not specified)": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "(gan sonrú)"
+          }
+        }
+      }
+    },
+    "(the session's)": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(leagan an tseisiúin)"
           }
         }
       }
@@ -2440,6 +2500,16 @@
         }
       }
     },
+    "All my sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mo sheisiúin go léir"
+          }
+        }
+      }
+    },
     "All sessions": {
       "localizations": {
         "ga": {
@@ -2800,6 +2870,16 @@
         }
       }
     },
+    "At this session": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ag an seisiún seo"
+          }
+        }
+      }
+    },
     "Attach to a night": {
       "localizations": {
         "ga": {
@@ -3123,6 +3203,22 @@
         }
       }
     },
+    "Canonical name: %@ (#%lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Canonical name: %1$@ (#%2$lld)"
+          }
+        },
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ainm caighdeánach: %@ (#%lld)"
+          }
+        }
+      }
+    },
     "Catching up, %lld s behind": {
       "localizations": {
         "ga": {
@@ -3209,6 +3305,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Athraigh an oíche"
+          }
+        }
+      }
+    },
+    "Change…": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Athraigh…"
           }
         }
       }
@@ -3361,6 +3467,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Consairtín"
+          }
+        }
+      }
+    },
+    "Configure": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Socraigh"
           }
         }
       }
@@ -4552,6 +4668,16 @@
         }
       }
     },
+    "Globally": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ar fud an domhain"
+          }
+        }
+      }
+    },
     "Got it": {
       "localizations": {
         "ga": {
@@ -4753,6 +4879,16 @@
         }
       }
     },
+    "I call this:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tugaim air:"
+          }
+        }
+      }
+    },
     "I play a different version": {
       "localizations": {
         "ga": {
@@ -4763,12 +4899,32 @@
         }
       }
     },
+    "I play setting:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnim leagan:"
+          }
+        }
+      }
+    },
     "I play this in a different key": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "needs_review",
             "value": "Seinnim é seo i ngléas eile"
+          }
+        }
+      }
+    },
+    "I play this in:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnim i:"
           }
         }
       }
@@ -5806,6 +5962,16 @@
         }
       }
     },
+    "My List": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mo liosta"
+          }
+        }
+      }
+    },
     "My Sessions": {
       "extractionState": "stale",
       "localizations": {
@@ -5838,6 +6004,7 @@
       }
     },
     "My sessions": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -6656,6 +6823,16 @@
         }
       }
     },
+    "Not played that night.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor seinneadh an oíche sin é."
+          }
+        }
+      }
+    },
     "Not provided": {
       "localizations": {
         "ga": {
@@ -6878,6 +7055,16 @@
         }
       }
     },
+    "On %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ar %@"
+          }
+        }
+      }
+    },
     "On Ceol": {
       "localizations": {
         "ga": {
@@ -7076,6 +7263,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Gach ré-sheachtain"
+          }
+        }
+      }
+    },
+    "Our setting:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ár leagan:"
           }
         }
       }
@@ -7312,6 +7509,136 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Seinnte"
+          }
+        }
+      }
+    },
+    "Played %lld times at all sessions": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld huaire ag gach seisiún"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld n-uaire ag gach seisiún"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag gach seisiún"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag gach seisiún"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag gach seisiún"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Played %lld times at my sessions": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld huaire ag mo sheisiúin"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld n-uaire ag mo sheisiúin"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag mo sheisiúin"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag mo sheisiúin"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag mo sheisiúin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Played %lld times at this session": {
+      "localizations": {
+        "ga": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld huaire ag an seisiún seo"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld n-uaire ag an seisiún seo"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag an seisiún seo"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag an seisiún seo"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "Seinneadh %lld uair ag an seisiún seo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Played With": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinntear in éineacht le"
           }
         }
       }
@@ -9557,6 +9884,26 @@
         }
       }
     },
+    "This tune has not been played in a set with any other tune at this session yet.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor seinneadh an fonn seo i seit le fonn ar bith eile ag an seisiún seo fós."
+          }
+        }
+      }
+    },
+    "This tune has not been played in a set with any other tune yet.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor seinneadh an fonn seo i seit le fonn ar bith eile fós."
+          }
+        }
+      }
+    },
     "This tune is on your list as": {
       "localizations": {
         "ga": {
@@ -9753,6 +10100,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Sonraí an fhoinn"
+          }
+        }
+      }
+    },
+    "Tune lists on Ceol": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Liostaí fonn ar Cheol"
           }
         }
       }
@@ -10272,6 +10629,16 @@
         }
       }
     },
+    "We call this:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tugaimid air:"
+          }
+        }
+      }
+    },
     "We play a different version": {
       "localizations": {
         "ga": {
@@ -10292,12 +10659,32 @@
         }
       }
     },
+    "We play this in:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnimid i:"
+          }
+        }
+      }
+    },
     "We played a different version on this night": {
       "localizations": {
         "ga": {
           "stringUnit": {
             "state": "translated",
             "value": "Sheinneamar leagan eile an oíche seo"
+          }
+        }
+      }
+    },
+    "We played setting:": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sheinneamar leagan:"
           }
         }
       }
@@ -10469,6 +10856,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cén leagan a seinneadh an oíche sin?"
+          }
+        }
+      }
+    },
+    "While I was there": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Agus mé i láthair"
           }
         }
       }
@@ -11467,6 +11864,16 @@
       }
     },
     "•": {},
+    "… on %@": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "… ar %@"
+          }
+        }
+      }
+    },
     "↻ %lld synced": {
       "localizations": {
         "ga": {

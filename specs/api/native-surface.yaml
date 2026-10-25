@@ -944,6 +944,33 @@ components:
               session_instance_tune_id: { type: integer }
               attended: { type: boolean }
               link: { type: string }
+    PersonTuneUpdated:
+      description: A person_tune row after an update, as the My Tunes list serializes it.
+      type: object
+      required: [success, person_tune]
+      properties:
+        success: { type: boolean, const: true }
+        message: { type: string }
+        person_tune: { type: object }
+    TunePlayedWith:
+      description: >-
+        The tunes that have shared a set with a tune, with how many times, most often
+        first. Unlinked log rows are left out: each row opens a catalogue tune.
+      type: object
+      required: [success, tunes]
+      properties:
+        success: { type: boolean, const: true }
+        redirected_from: { type: [integer, "null"] }
+        tunes:
+          type: array
+          items:
+            type: object
+            required: [tune_id, name, tune_type, count]
+            properties:
+              tune_id: { type: integer }
+              name: { type: string }
+              tune_type: { type: [string, "null"] }
+              count: { type: integer }
     TuneDetail:
       type: object
       required: [success, viewer, session_tune]
@@ -967,8 +994,19 @@ components:
             tune_id: { type: integer }
             tune_name: { type: string }
             tune_type: { type: [string, "null"] }
-            # The session's own names for the tune, when the detail is session-scoped.
+            # The session's own names for the tune, when the detail is session-scoped:
+            # `alias` is the one it calls it ("We call this"), `aliases` every name.
+            alias: { type: [string, "null"] }
             aliases: { type: array, items: { type: string } }
+            # The key the session plays it in ("We play this in"), when session-scoped.
+            key: { type: [string, "null"] }
+            # One night's own name and key for the tune, when scoped to a night.
+            name: { type: [string, "null"] }
+            key_override: { type: [string, "null"] }
+            # A signed-in viewer's own counts (spec 033): plays logged at sessions they
+            # belong to, and at nights they were at.
+            member_play_count: { type: integer }
+            attended_play_count: { type: integer }
             setting_id: { type: [integer, "null"] }
             # A night's own setting, when the detail is scoped to one; it is what's drawn.
             setting_override: { type: [integer, "null"] }
@@ -1551,6 +1589,28 @@ paths:
       summary: The viewer's tunebook
       security: [{ bearer: [] }]
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/MyTunes" } } } } }
+  /api/my-tunes/{person_tune_id}:
+    put:
+      operationId: updatePersonTune
+      summary: >-
+        Your own name for a tune, the key you play it in, your setting and notes (the
+        web's Configure). Each field is applied only when present; null or an empty
+        string clears it. 404 for a row that isn't yours.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: person_tune_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name_alias: { type: [string, "null"] }
+                key: { type: [string, "null"] }
+                setting_id: { type: [integer, "null"] }
+                notes: { type: [string, "null"] }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/PersonTuneUpdated" } } } } }
   /api/my-tunes/ops:
     post:
       operationId: applyMyTunesOp
@@ -1737,6 +1797,17 @@ paths:
         - { name: scope, in: query, required: false, schema: { type: string, enum: [member] }, description: "member: only the viewer's sessions (spec 033 R3)" }
         - { name: attended, in: query, required: false, schema: { type: boolean }, description: "Only the nights the viewer was at (spec 033 R4); ANDs with the rest" }
       responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TuneHistory" } } } } }
+  /api/tunes/{tune_id}/played-with:
+    get:
+      operationId: getTunePlayedWith
+      summary: >-
+        The tunes that have shared a set with this one (the tune drawer's Played With
+        tab), most often first. Public; ?scope= needs a sign-in (401 otherwise)
+      parameters:
+        - { name: tune_id, in: path, required: true, schema: { type: integer } }
+        - { name: session_path, in: query, required: false, schema: { type: string }, description: "Only sets at that session" }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [member, attended] }, description: "member: the viewer's sessions; attended: the nights they were at" }
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/TunePlayedWith" } } } } }
   /api/tunes/{tune_id}/preview:
     get:
       operationId: getTunePreview
@@ -1867,10 +1938,10 @@ paths:
     put:
       operationId: updateSessionTune
       summary: >-
-        What the session plays: its setting for the tune (session admins; others get 403).
-        A setting only thesession.org has is imported first; 404 when it has no such
-        setting for the tune. The web also writes alias/key here; the native client
-        documents only the setting.
+        What the session plays: its setting for the tune, what it calls the tune
+        (alias) and the key it plays it in (session admins; others get 403). A setting
+        only thesession.org has is imported first; 404 when it has no such setting for
+        the tune. Each field is applied only when present; null clears it.
       security: [{ bearer: [] }]
       parameters:
         - { name: session_path, in: path, required: true, schema: { type: string } }
@@ -1882,6 +1953,8 @@ paths:
               type: object
               properties:
                 setting_id: { type: [integer, "null"] }
+                alias: { type: [string, "null"] }
+                key: { type: [string, "null"] }
       responses:
         "200": { description: saved, content: { application/json: { schema: { $ref: "#/components/schemas/SettingSaved" } } } }
         default: { $ref: "#/components/responses/Error" }

@@ -56,6 +56,7 @@ CHECKED_GETS = [
     ),
     ("/api/tunes/{tune_id}/detail", "/api/tunes/1/detail"),
     ("/api/tunes/{tune_id}/history", "/api/tunes/27/history"),
+    ("/api/tunes/{tune_id}/played-with", "/api/tunes/27/played-with"),
     ("/api/tunes/{tune_id}/preview", "/api/tunes/1/preview"),
     ("/api/sessions/with-today-status", "/api/sessions/with-today-status"),
     ("/api/sessions/{session_path}/detail", "/api/sessions/austin/mueller/detail"),
