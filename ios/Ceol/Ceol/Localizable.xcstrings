@@ -7633,6 +7633,16 @@
         }
       }
     },
+    "Played At": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seinnte ag"
+          }
+        }
+      }
+    },
     "Played With": {
       "localizations": {
         "ga": {

@@ -1610,7 +1610,8 @@ My List / Details / History / Played With). It rises to ~94% height on a phone; 
 the only change, and it is a Sheet prop.
 
 The app's tune sheet (`TunesViews.swift`) took the web drawer's shape on 2026-10-25:
-the name and notation, then the four tabs. My List (the status panel, notes, tags, and
+the name and notation, then three tabs (the web's Played With is the second half of
+History, under a Played At | Played With switch). My List (the status panel, notes, tags, and
 Configure: your own name, setting and key through `PUT /api/my-tunes/{id}`), Details
 (the session's name, setting and key for the tune — fields for its admins through
 `PUT /api/sessions/{path}/tunes/{id}`, now documented with alias and key — then the

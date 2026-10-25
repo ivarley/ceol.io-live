@@ -1,5 +1,6 @@
-// History and Played With: the web tune drawer's two right-hand tabs, as panes of the
-// app's tune sheet (TunesViews.swift). Each pane says which plays it is showing and
+// History: the web tune drawer's History and Played With tabs, as the two halves of
+// the app sheet's History tab (TunesViews.swift) — Played At (the nights) and Played
+// With (the companions). Each pane says which plays it is showing and
 // offers "Change…", which opens the choices the web's droplist holds: at the session
 // the sheet came from, one of its nights, every session you belong to, or every session
 // on Ceol (History); at this session, my sessions, while I was there, or globally (Played
@@ -77,6 +78,41 @@ struct TunePlayTarget {
     let sessionName: String
     let date: String
     let sessionInstanceTuneID: Int
+}
+
+/// History's second level: Played At (the nights) or Played With (the companions). A
+/// small filled segment, so it reads as a switch within the tab, not another tab row.
+enum HistorySub: Hashable { case playedAt, playedWith }
+
+struct HistorySubTabs: View {
+    @Binding var selection: HistorySub
+
+    var body: some View {
+        HStack(spacing: 4) {
+            segment(.playedAt, tr("Played At"), id: "history.playedAt")
+            segment(.playedWith, tr("Played With"), id: "history.playedWith")
+        }
+        .padding(4)
+        .background(CeolTokens.bgColor, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+    }
+
+    private func segment(_ sub: HistorySub, _ label: String, id: String) -> some View {
+        let on = selection == sub
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) { selection = sub }
+        } label: {
+            Text(label).font(.ceol(size: 14, weight: on ? .semibold : .medium))
+                .foregroundStyle(on ? .white : CeolTokens.textMuted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(on ? CeolTokens.primaryFill : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
 }
 
 /// "At Mueller Session   Change…": what a pane shows, and the way to another choice.

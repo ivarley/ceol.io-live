@@ -362,11 +362,13 @@ struct TuneSheetBody: View {
     @State private var notationNoticeDone = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
-    /// The tabs under the notation, as the web's; My List is the landing tab signed in,
-    /// History otherwise, picked once the detail is here.
-    enum Tab: Hashable { case myList, details, history, playedWith }
+    /// The tabs under the notation, as the web's (its Played With is the second half of
+    /// History here); My List is the landing tab signed in, History otherwise, picked
+    /// once the detail is here.
+    enum Tab: Hashable { case myList, details, history }
     @State private var tab: Tab = .history
     @State private var tabChosen = false
+    @State private var historySub: HistorySub = .playedAt
     @State private var historyScope: TuneHistoryScope = .all
     /// My List's Configure fold: your own name, setting and key for the tune.
     @State private var configOpen = false
@@ -566,7 +568,7 @@ struct TuneSheetBody: View {
         let loggedIn = !model.isGuest
         let tabs: [(id: Tab, label: String, count: Int?)] =
             (loggedIn ? [(.myList, tr("My List"), nil)] : [])
-            + [(.details, tr("Details"), nil), (.history, tr("History"), nil), (.playedWith, tr("Played With"), nil)]
+            + [(.details, tr("Details"), nil), (.history, tr("History"), nil)]
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 // The web's header: the type chip beside the name, the notation under it.
@@ -575,12 +577,16 @@ struct TuneSheetBody: View {
                     Text(t.tuneName).font(.ceol(size: 26, weight: .semibold, relativeTo: .title)).foregroundStyle(CeolTokens.textColor)
                 }
                 notation(t)
-                UnderlineTabs(items: tabs, selection: $tab, size: 15)
+                UnderlineTabs(items: tabs, selection: $tab, size: 17)
                 switch tab {
                 case .myList: myListTab(t)
                 case .details: detailsTab(t)
                 case .history:
-                    TuneHistoryPane(
+                    HistorySubTabs(selection: $historySub)
+                    if historySub == .playedWith {
+                        TunePlayedWithPane(tune: tune, session: historySession(t))
+                    } else {
+                        TuneHistoryPane(
                         tune: tune, session: historySession(t), nights: nights(t),
                         counts: TuneHistoryCounts(here: t.timesPlayed, mine: t.memberPlayCount, all: t.globalPlayCount),
                         scope: $historyScope,
@@ -588,18 +594,18 @@ struct TuneSheetBody: View {
                             guard canEditInstance(t), let path = tune.sessionPath else { return nil }
                             return (id: night, setting: t.settingOverride, change: { chooser = .night(path: path, instanceID: night) })
                         }
-                    ) { play in
-                        // The night's log, in the Sessions tab, with this play highlighted:
-                        // the sheet goes first, so the log is what you land on.
-                        close()
-                        model.openNight(
-                            id: play.instanceID,
-                            title: "\(play.sessionName) · \(SessionsL10n.shortDate(play.date))",
-                            sessionPath: play.sessionPath, sessionName: play.sessionName,
-                            highlight: .server(play.sessionInstanceTuneID))
+                        ) { play in
+                            // The night's log, in the Sessions tab, with this play
+                            // highlighted: the sheet goes first, so the log is what you
+                            // land on.
+                            close()
+                            model.openNight(
+                                id: play.instanceID,
+                                title: "\(play.sessionName) · \(SessionsL10n.shortDate(play.date))",
+                                sessionPath: play.sessionPath, sessionName: play.sessionName,
+                                highlight: .server(play.sessionInstanceTuneID))
+                        }
                     }
-                case .playedWith:
-                    TunePlayedWithPane(tune: tune, session: historySession(t))
                 }
             }
             .padding(20)
@@ -715,6 +721,7 @@ struct TuneSheetBody: View {
 
     private func showHistory(_ scope: TuneHistoryScope) {
         historyScope = scope
+        historySub = .playedAt
         tab = .history
     }
 

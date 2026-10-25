@@ -133,8 +133,8 @@ final class TuneHistoryUITests: XCTestCase {
         sleep(1)
         snapshot("7 history at my sessions")
 
-        // Played With: companions, each pushing its own sheet.
-        app.buttons["Played With"].firstMatch.tap()
+        // Played With, History's second half: companions, each pushing its own sheet.
+        app.buttons["history.playedWith"].firstMatch.tap()
         let companion = app.buttons["playedwith.row"].firstMatch
         XCTAssertTrue(companion.waitForExistence(timeout: 15))
         XCTAssertEqual(app.staticTexts["playedwith.change.label"].label, "At Mueller Session")
@@ -151,6 +151,7 @@ final class TuneHistoryUITests: XCTestCase {
         // A night opens its log at the play.
         XCTAssertTrue(historyTab.waitForExistence(timeout: 10))
         historyTab.tap()
+        app.buttons["history.playedAt"].firstMatch.tap()
         XCTAssertTrue(night.waitForExistence(timeout: 15))
         reveal(app, night)
         night.tap()
