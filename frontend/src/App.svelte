@@ -2192,6 +2192,13 @@
       // arrives and the row would keep showing the old key until a reload. put() is
       // idempotent, so the echo that follows is a no-op.
       onSave: (data) => { for (const rec of data?.records || []) put(rec) },
+      // Statuses auto-save in the sheet (no Save): mirror each change into the
+      // my-list map so the highlight mode's chips follow at once.
+      onStatusChange: (change) => {
+        if (!listLoaded || change.tune_id == null) return
+        if (change.on_list === false) myList.delete(change.tune_id)
+        else myList.set(change.tune_id, { learn_status: change.learn_status, instrument_status: change.instrument_status || {} })
+      },
     })
     // background-render+cache the notation (incipit + full) so the drawer shows dots
     // next time (the abc-renderer service does the rendering, never the client)

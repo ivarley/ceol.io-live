@@ -471,6 +471,36 @@ describe('session detail page view', () => {
     )
   })
 
+  it('a status changed in the drawer re-colors the row behind it at once', async () => {
+    // A tiny in-memory stand-in for tunebook_status.js: the real one is a static
+    // script, not a module; what matters here is that TunesTab passes the sheet an
+    // onStatusChange that writes through to the cache and re-renders.
+    const entries = new Map()
+    window.TunebookStatus = {
+      isLoaded: () => true,
+      load: vi.fn().mockResolvedValue(),
+      statusFor: (id) => (entries.has(id) ? entries.get(id).learn_status : 'not on list'),
+      update: (c) => (c.on_list === false ? entries.delete(c.tune_id) : entries.set(c.tune_id, c)),
+      classFor: (st) => 'ls-' + st.replace(/ /g, '-'),
+      getInstruments: () => [],
+    }
+    const { container } = renderApp()
+    const select = container.querySelector('#mystatus-filter')
+    select.value = 'all'
+    await fireEvent.change(select)
+    const row = () => container.querySelector('.tune-row[data-tune-id="101"]')
+    expect(row().classList.contains('ls-not-on-list')).toBe(true)
+
+    await fireEvent.click(row())
+    const cfg = window.TuneDetailModal.show.mock.calls.at(-1)[0]
+    expect(typeof cfg.onStatusChange).toBe('function')
+    cfg.onStatusChange({ tune_id: 101, learn_status: 'learning', instrument_status: {}, on_list: true, person_tune_id: 9 })
+    await waitFor(() => expect(row().classList.contains('ls-learning')).toBe(true))
+
+    cfg.onStatusChange({ tune_id: 101, learn_status: null, instrument_status: {}, on_list: false, person_tune_id: null })
+    await waitFor(() => expect(row().classList.contains('ls-not-on-list')).toBe(true))
+  })
+
   it('the People tab (confirmed only) fetches and renders people on first view', async () => {
     fetchRoutes['/people'] = {
       success: true,

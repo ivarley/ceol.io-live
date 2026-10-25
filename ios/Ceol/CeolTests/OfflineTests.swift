@@ -18,6 +18,17 @@ private final class TokenForgottenTransport: ClientTransport, @unchecked Sendabl
     }
 }
 
+/// A server that takes every tunebook op.
+private final class AcceptingTransport: ClientTransport, @unchecked Sendable {
+    func send(_ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String) async throws -> (HTTPResponse, HTTPBody?) {
+        let sent = try await Data(collecting: body ?? HTTPBody(), upTo: 1 << 16)
+        let op = try JSONDecoder().decode(TuneOp.self, from: sent)
+        var response = HTTPResponse(status: .ok)
+        response.headerFields[.contentType] = "application/json"
+        return (response, HTTPBody(#"{"success": true, "op_id": "\#(op.opId)", "type": "\#(op._type.rawValue)", "tune_id": \#(op.tuneId)}"#))
+    }
+}
+
 extension OnePhoneTests {
 @MainActor
 struct OfflineTests {
@@ -114,6 +125,23 @@ struct OfflineTests {
         #expect(TuneQueue().isEmpty)
         let afterSignOut: PayloadStore.Stored<MyTunesPayload>? = PayloadStore.load("my-tunes")
         #expect(afterSignOut == nil)
+    }
+
+    @Test func aChangeTheServerTookShowsAtOnceToo() async throws {
+        // Online, the kept tunebook follows the op as well (not only when it queues):
+        // a session's Tunes tab coloured by your status, open behind the tune's
+        // sheet, must show the new status without a fetch.
+        let app = AppModel(server: URL(string: "http://127.0.0.1:9")!, store: MemoryTokenStore(), transport: AcceptingTransport())
+        Self.clean(app)
+        try app.auth.store.setToken("fresh")
+        app.enter(try Self.user(7), next: nil)
+        app.myTunes.replace(Self.emptyTunebook())
+        try await app.applyTuneOp(.add, tuneID: 42, learnStatus: .wantToLearn, name: "The Kesh", tuneType: "jig")
+        try await app.applyTuneOp(.setStatus, tuneID: 42, learnStatus: .learning)
+        #expect(app.tuneQueue.isEmpty)
+        #expect(app.myTunes.value?.tunes.map(\.tuneName) == ["The Kesh"])
+        #expect(app.myTunes.value?.tunes.first?.learnStatus == LearnStatus.learning.rawValue)
+        Self.clean(app)
     }
 
     @Test func aRefusalIsThrownNotQueued() async {

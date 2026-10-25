@@ -2,9 +2,10 @@
 // offline queue sends to POST /api/my-tunes/ops. Each is an absolute set (a status, a
 // heard count, the notes), so sending one twice does no harm.
 //
-// With no signal (Phase 6) an op waits in TuneQueue and is applied to the kept
-// Tunebook here, so the list and Home's counts show it at once; the caller sees it
-// saved. Only a refusal the server answered is thrown.
+// Every op is applied to the kept Tunebook here too, so the list, Home's counts and any
+// screen coloured by your status show it at once. With no signal (Phase 6) it waits in
+// TuneQueue as well, and the caller sees it saved. Only a refusal the server answered
+// is thrown.
 //
 // i18n-converted (spec 057). The server's own message is shown as it comes (a later stage).
 
@@ -50,7 +51,9 @@ extension AppModel {
         if !tuneQueue.isEmpty { await tuneQueue.flush() }
         if tuneQueue.isEmpty {
             do {
-                return try await sendTuneOp(op)
+                let result = try await sendTuneOp(op)
+                keep(op, name: name, tuneType: tuneType)
+                return result
             } catch let f as TuneOpFailure where !f.connection && !f.signedOut {
                 throw f
             } catch {
@@ -59,6 +62,15 @@ extension AppModel {
             }
         }
         tuneQueue.enqueue(QueuedTuneOp(op: op, name: name, tuneType: tuneType, queuedAt: Date()))
+        keep(op, name: name, tuneType: tuneType)
+        return .init(success: true, opId: op.opId, _type: type.rawValue, tuneId: tuneID, heardCount: heardCount)
+    }
+
+    /// Apply an op to the kept Tunebook and Home's counts, whether the server has it
+    /// or it waits in the queue: every screen reading your tunebook (a session's Tunes
+    /// tab coloured by your status, a night's log) then shows the change at once,
+    /// instead of until its next fetch.
+    private func keep(_ op: TuneOp, name: String?, tuneType: String?) {
         let personID = user?.personId ?? 0
         myTunes.update { TunebookOps.apply(op, name: name, tuneType: tuneType, personID: personID, to: &$0) }
         if let tunes = myTunes.value?.tunes {
@@ -67,7 +79,6 @@ extension AppModel {
                 $0.wantToLearnCount = tunes.filter { $0.learnStatus == LearnStatus.wantToLearn.rawValue }.count
             }
         }
-        return .init(success: true, opId: op.opId, _type: type.rawValue, tuneId: tuneID, heardCount: heardCount)
     }
 
     /// One of a status plan's ops (SessionPage.planStatusOps), through applyTuneOp.

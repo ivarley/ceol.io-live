@@ -287,6 +287,14 @@
         // Reload to refresh the tune list
         window.location.reload()
       },
+      // Statuses auto-save in the sheet (no Save): mirror each change into the
+      // shared tunebook cache and re-color, so the list behind the sheet is
+      // current the moment it closes.
+      onStatusChange: function (change) {
+        const tb = window.TunebookStatus
+        if (tb && tb.update) tb.update(change)
+        tunebookVersion++
+      },
     })
   }
 

@@ -106,12 +106,29 @@
         return resolve(byTuneId.get(tuneId), instruments, scope);
     }
 
+    // A change made elsewhere on the page (the tune sheet's onStatusChange payload:
+    // {tune_id, learn_status, instrument_status, on_list}), mirrored into the loaded
+    // map so the host's coloring follows without a refetch. Nothing to do before
+    // the first load — load() fetches the current state anyway.
+    function update(change) {
+        if (!loaded || !change || change.tune_id == null) return;
+        if (change.on_list === false) {
+            byTuneId.delete(change.tune_id);
+            return;
+        }
+        byTuneId.set(change.tune_id, {
+            learn_status: change.learn_status,
+            instrument_status: change.instrument_status || {},
+        });
+    }
+
     const classFor = (st) => 'ls-' + st.replace(/ /g, '-');
 
     window.TunebookStatus = {
         load: load,
         isLoaded: () => loaded,
         statusFor: statusFor,
+        update: update,
         classFor: classFor,
         getInstruments: () => instruments,
         instrumentStatus: instrumentStatus,
