@@ -2440,6 +2440,16 @@
         }
       }
     },
+    "All sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gach seisiún"
+          }
+        }
+      }
+    },
     "All tags": {
       "localizations": {
         "ga": {
@@ -2739,6 +2749,7 @@
       }
     },
     "At every session on Ceol": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3581,6 +3592,7 @@
       }
     },
     "Couldn't load the play history.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5825,6 +5837,16 @@
         }
       }
     },
+    "My sessions": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mo sheisiúin"
+          }
+        }
+      }
+    },
     "My tunebook": {
       "localizations": {
         "ga": {
@@ -6600,6 +6622,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Níl ar do liosta"
+          }
+        }
+      }
+    },
+    "Not played at your sessions yet.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Níor seinneadh ag do sheisiúin fós é."
           }
         }
       }

@@ -72,6 +72,7 @@ final class TuneHistoryUITests: XCTestCase {
 
         // The sheet: the counts carry a chevron.
         let here = app.buttons["sheet.historyHere"]
+        let all = app.buttons["sheet.historyAll"]
         XCTAssertTrue(here.waitForExistence(timeout: 15))
         if !here.isHittable { app.swipeUp() }
         sleep(1)
@@ -81,6 +82,7 @@ final class TuneHistoryUITests: XCTestCase {
         // The nights at this session, then only the ones I was at.
         let night = app.buttons["history.night"].firstMatch
         XCTAssertTrue(night.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["At Mueller Session"].firstMatch.exists)
         sleep(1)
         snapshot("2 history at this session")
         // The Toggle's identifier spans its row; the switch sits at its right end.
@@ -93,19 +95,38 @@ final class TuneHistoryUITests: XCTestCase {
         attended.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         sleep(1)
 
-        // Back to the sheet, then every session on Ceol.
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        let all = app.buttons["sheet.historyAll"]
-        XCTAssertTrue(all.waitForExistence(timeout: 10))
-        all.tap()
+        // The scope chips: my sessions, then every session on Ceol.
+        app.buttons["My sessions"].firstMatch.tap()
+        sleep(2)
+        snapshot("4 history at my sessions")
+        app.buttons["All sessions"].firstMatch.tap()
+        sleep(2)
         XCTAssertTrue(night.waitForExistence(timeout: 15))
-        sleep(1)
-        snapshot("4 history at every session")
+        snapshot("5 history at every session")
 
         // A night opens its log, at the play.
         night.tap()
         XCTAssertTrue(app.buttons["night.tune"].firstMatch.waitForExistence(timeout: 15))
         sleep(2)
-        snapshot("5 the night at the play")
+        snapshot("6 the night at the play")
+
+        // From your own list there is no session: the history lands on every session,
+        // with "At ..." absent from the chips.
+        app.buttons["tab.tunes"].firstMatch.tap()
+        let mySearch = app.textFields["tunes.search"]
+        XCTAssertTrue(mySearch.waitForExistence(timeout: 10))
+        mySearch.tap()
+        mySearch.typeText("Drowsy")
+        let myRow = app.buttons["tunes.row"].firstMatch
+        XCTAssertTrue(myRow.waitForExistence(timeout: 10))
+        myRow.tap()
+        XCTAssertFalse(app.buttons["sheet.historyHere"].waitForExistence(timeout: 3))
+        XCTAssertTrue(all.waitForExistence(timeout: 15))
+        if !all.isHittable { app.swipeUp() }
+        all.tap()
+        XCTAssertTrue(night.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'At '")).firstMatch.exists)
+        sleep(1)
+        snapshot("7 from my tunes")
     }
 }

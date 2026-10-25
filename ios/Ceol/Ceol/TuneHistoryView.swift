@@ -1,9 +1,13 @@
 // The nights a tune was played: the web's tune drawer's History tab, as a screen of its
-// own. The tune sheet pushes it from its play counts ("Played at this session" gives the
-// nights at that session, "At sessions on Ceol" every night on Ceol), so it slides in from
-// the right and Back is the sheet. Each night opens its log at the play, as the web's
-// rows link; "Only when I was there" keeps to the nights you were at (signed in). The
-// list is the server's 100 most recent nights, and says so when there were more.
+// own. The tune sheet pushes it from its play counts, so it slides in from the right and
+// Back is the sheet. Its scope is a chip row, as the web's is a droplist: at the session
+// the sheet was opened from (when it was), at every session you belong to (signed in),
+// or at every session on Ceol. "Played at this session" lands on the first, "At sessions
+// on Ceol" on the last, and from your own list (no session) only the last two are
+// there. Across sessions each row names its session. "Only when I was there" starts off
+// and keeps to the nights you were at. Each night opens its log at the play, as the
+// web's rows link. The list is the server's 100 most recent nights, and says so when
+// there were more.
 //
 // i18n-converted (spec 057).
 
@@ -13,10 +17,22 @@ import CeolLogic
 import CeolSession
 import SwiftUI
 
-/// Which plays: at one session, or at every session on Ceol.
-enum TuneHistoryScope: Hashable {
-    case session(path: String, name: String)
-    case all
+/// Which plays: at the sheet's session, at every session you belong to, or at every
+/// session on Ceol (the web's 'general' / 'member' / 'all').
+enum TuneHistoryScope: String, Hashable {
+    case session, mine, all
+}
+
+/// The session a sheet was opened from, for the history's "At {name}" scope.
+struct TuneHistorySession: Hashable {
+    let path: String
+    let name: String
+}
+
+/// What a play count pushes: the scope to land on, and the sheet's session if any.
+struct TuneHistoryPush: Hashable {
+    let scope: TuneHistoryScope
+    let session: TuneHistorySession?
 }
 
 typealias TunePlay = Components.Schemas.TuneHistory.PlayInstancesPayloadPayload
@@ -24,10 +40,14 @@ typealias TunePlay = Components.Schemas.TuneHistory.PlayInstancesPayloadPayload
 struct TuneHistoryView: View {
     @Environment(AppModel.self) private var model
     let tune: TuneRef
-    let scope: TuneHistoryScope
+    /// The sheet's session, when it has one: the "At {name}" scope.
+    let session: TuneHistorySession?
+    /// The scope to land on (a session's own count, or the Ceol-wide one).
+    let initial: TuneHistoryScope
     /// A night tapped: opens its log at this play (the sheet closes itself first).
     let openNight: (TunePlay) -> Void
 
+    @State private var scope: TuneHistoryScope = .all
     @State private var history: LoadState<Components.Schemas.TuneHistory> = .loading
     @State private var attendedOnly = false
 
@@ -36,14 +56,19 @@ struct TuneHistoryView: View {
             .background(TuneSheet.surface)
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.inline)
-            // The filter is the server's, as on the web: the list is capped at 100
-            // nights, so filtering here could lose older nights you were at.
-            .task(id: attendedOnly) { await load() }
+            .onAppear { scope = session == nil && initial == .session ? .all : initial }
+            // Both are the server's, as on the web: the list is capped at 100 nights, so
+            // narrowing here could lose older nights.
+            .task(id: "\(scope.rawValue)|\(attendedOnly)") { await load() }
     }
 
-    private var sessionPath: String? {
-        if case .session(let path, _) = scope { return path }
-        return nil
+    /// The scopes on offer: the session's own only with a session, yours only signed in.
+    private var scopes: [(id: TuneHistoryScope, label: String)] {
+        var all: [(id: TuneHistoryScope, label: String)] = []
+        if let session { all.append((.session, tr("At \(session.name)"))) }
+        if !model.isGuest { all.append((.mine, tr("My sessions"))) }
+        all.append((.all, tr("All sessions")))
+        return all
     }
 
     private func load() async {
@@ -51,7 +76,10 @@ struct TuneHistoryView: View {
         do {
             let h = try await model.auth.client.getTuneHistory(
                 path: .init(tuneId: tune.id),
-                query: .init(sessionPath: sessionPath, attended: attendedOnly ? true : nil)
+                query: .init(
+                    sessionPath: scope == .session ? session?.path : nil,
+                    scope: scope == .mine ? .member : nil,
+                    attended: attendedOnly ? true : nil)
             ).ok.body.json
             history = .loaded(h)
         } catch {
@@ -62,12 +90,15 @@ struct TuneHistoryView: View {
     @ViewBuilder private func content(_ h: Components.Schemas.TuneHistory) -> some View {
         let plays = h.playInstances
         List {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     if let type = tune.type { TypeChip(label: TunesWords.type(type), size: 14) }
                     Text(tune.name).font(.ceol(size: 20, weight: .semibold)).foregroundStyle(CeolTokens.textColor).lineLimit(2)
                 }
-                Text(scopeLabel).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
+                if scopes.count > 1 {
+                    ChoiceChips(label: tr("Show"), options: scopes, selection: $scope)
+                        .accessibilityIdentifier("history.scope")
+                }
                 if !model.isGuest {
                     Toggle(isOn: $attendedOnly) {
                         Text("Only when I was there").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
@@ -121,11 +152,11 @@ struct TuneHistoryView: View {
         let position = tr("Set \(play.setNumber), Tune \(play.positionInSet)")
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                if case .all = scope {
+                if scope == .session {
+                    Text(date).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor)
+                } else {
                     Text(play.sessionName).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor).lineLimit(2)
                     Text("\(date) · \(position)").font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
-                } else {
-                    Text(date).font(.ceol(size: 17, weight: .medium)).foregroundStyle(CeolTokens.textColor)
                 }
             }
             Spacer(minLength: 8)
@@ -133,7 +164,7 @@ struct TuneHistoryView: View {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 15)).foregroundStyle(CeolTokens.primary)
                     .accessibilityLabel(Text("You were there"))
             }
-            if case .session = scope {
+            if scope == .session {
                 Text(position).font(.ceol(size: 14)).foregroundStyle(CeolTokens.textMuted)
             }
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.textMuted)
@@ -142,16 +173,12 @@ struct TuneHistoryView: View {
         .contentShape(Rectangle())
     }
 
-    private var scopeLabel: String {
-        switch scope {
-        case .session(_, let name): tr("At \(name)")
-        case .all: tr("At every session on Ceol")
-        }
-    }
-
     private var emptyText: String {
         if attendedOnly { return tr("No nights you were at.") }
-        if case .session = scope { return tr("Not played here yet.") }
-        return tr("No plays logged yet.")
+        switch scope {
+        case .session: return tr("Not played here yet.")
+        case .mine: return tr("Not played at your sessions yet.")
+        case .all: return tr("No plays logged yet.")
+        }
     }
 }

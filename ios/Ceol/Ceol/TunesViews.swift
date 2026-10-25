@@ -342,8 +342,9 @@ struct TuneSheet: View {
     @State private var notationNoticeDone = false
     @State private var notationFailed = false
     @State private var chooser: SettingLayer?
-    /// The nights the tune was played, pushed from a play count.
-    @State private var history: TuneHistoryScope?
+    /// The nights the tune was played, pushed from a play count: the scope to land on
+    /// and the sheet's session (one value, so the push sees both at once).
+    @State private var history: TuneHistoryPush?
 
     var body: some View {
         NavigationStack {
@@ -391,8 +392,8 @@ struct TuneSheet: View {
                 .fullScreenCover(isPresented: $fullScreen) {
                     if let image = showFull ? (full ?? incipit) : incipit { NotationFullScreen(image: image, name: tune.name) }
                 }
-                .navigationDestination(item: $history) { scope in
-                    TuneHistoryView(tune: tune, scope: scope) { play in
+                .navigationDestination(item: $history) { push in
+                    TuneHistoryView(tune: tune, session: push.session, initial: push.scope) { play in
                         // The night's log, in the Sessions tab, with this play highlighted:
                         // the sheet goes first, so the log is what you land on.
                         dismiss()
@@ -567,13 +568,16 @@ struct TuneSheet: View {
                 VStack(spacing: 0) {
                     // The two play counts open the nights behind them (the web's History
                     // tab), pushed so they slide in from the right.
-                    if let path = tune.sessionPath {
+                    let here = tune.sessionPath.map { TuneHistorySession(path: $0, name: sessionName(t)) }
+                    if here != nil {
                         statLink(tr("Played at this session"), t.timesPlayed, id: "sheet.historyHere") {
-                            history = .session(path: path, name: sessionName(t))
+                            history = TuneHistoryPush(scope: .session, session: here)
                         }
                         Hairline()
                     }
-                    statLink(tr("At sessions on Ceol"), t.globalPlayCount, id: "sheet.historyAll") { history = .all }
+                    statLink(tr("At sessions on Ceol"), t.globalPlayCount, id: "sheet.historyAll") {
+                        history = TuneHistoryPush(scope: .all, session: here)
+                    }
                     Hairline()
                     stat(tr("Sessions that play it"), t.sessionCount)
                     if let books = t.tunebookCount {
