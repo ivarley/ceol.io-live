@@ -1111,6 +1111,19 @@ def blog_rss():
     return resp
 
 
+# Ian's page: who makes Ceol, and how to reach him. Prose in both languages.
+IAN_THESESSION_URL = "https://thesession.org/members/99113"
+IAN_CONTACT_EMAIL = "support@ceol.app"
+
+
+def ian_page():
+    return render_template(
+        localized("ian.html"),
+        thesession_url=IAN_THESESSION_URL,
+        contact_email=IAN_CONTACT_EMAIL,
+    )
+
+
 def register():
     # Get session_id from query parameter if present
     session_id_param = request.args.get("session_id")

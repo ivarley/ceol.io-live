@@ -595,6 +595,7 @@ app.add_url_rule(
 app.add_url_rule(
     "/help/release-notes/<month>", "help_release_notes", help_release_notes
 )
+app.add_url_rule("/ian", "ian_page", ian_page)
 app.add_url_rule("/blog", "blog_index", blog_index)
 app.add_url_rule("/blog/rss", "blog_rss", blog_rss)
 app.add_url_rule("/blog/<slug>", "blog_post", blog_post)

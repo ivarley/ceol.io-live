@@ -93,3 +93,20 @@ def test_the_feed_takes_its_language_from_the_query(client):
 def test_the_blog_is_in_the_menu_and_on_about(client):
     assert 'href="/blog"' in client.get("/about").get_data(as_text=True)
     assert 'href="/blog"' in client.get("/help").get_data(as_text=True)
+
+
+@pytest.mark.parametrize("url", ["/ian"])
+def test_ians_page_comes_in_both_languages(client, url):
+    english = client.get(url)
+    assert english.status_code == 200
+    html = english.get_data(as_text=True)
+    assert "I'm the developer of the Ceol app." in html
+    assert "images/ian.jpg" in html
+    client.set_cookie("ceol_lang", "ga")
+    irish = client.get(url)
+    assert _lang_of(irish.get_data(as_text=True)) == "ga"
+    assert "Is mé forbróir aip Ceol." in irish.get_data(as_text=True)
+
+
+def test_the_post_signs_off_with_a_link_to_ian(client):
+    assert 'href="/ian">Ian</a>' in client.get("/blog/welcome").get_data(as_text=True)

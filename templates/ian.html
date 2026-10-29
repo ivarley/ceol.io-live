@@ -1,0 +1,19 @@
+{# Ian's page (/ian), prose written once per language: templates/ga/ian.html is the Irish. #}
+{% extends "base.html" %}
+
+{% block title %}Ian Varley - Ceol{% endblock %}
+{% block description %}Ian Varley, the developer of Ceol{% endblock %}
+
+{% block extra_css %}
+{% include "ian_style.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="person-page">
+    <img class="person-photo" src="{{ url_for('static', filename='images/ian.jpg') }}" alt="Ian Varley on a boat" width="479" height="415">
+    <h1>Hi! I'm Ian Varley.</h1>
+    <p>I'm the developer of the Ceol app. I'm a software engineer living in Austin, TX. I'm also a musician&mdash;I play banjo, accordion, guitar, piano, bouzouki, and something vaguely approximating concertina. You can find me on <a href="{{ thesession_url }}" target="_blank" rel="noopener">TheSession</a>, too.</p>
+    <p>I'm always happy to hear from players who've found the app helpful. <a href="mailto:{{ contact_email }}">Drop me a line!</a></p>
+    <p class="person-links"><a href="{{ url_for('blog_index') }}">The Ceol blog</a> &middot; <a href="{{ url_for('help_page') }}">What's Ceol?</a></p>
+</div>
+{% endblock %}

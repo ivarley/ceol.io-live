@@ -1,0 +1,19 @@
+{# Leathanach Ian (/ian). Dréacht le hathbhreithniú (spec 057). #}
+{% extends "base.html" %}
+
+{% block title %}Ian Varley - Ceol{% endblock %}
+{% block description %}Ian Varley, forbróir Ceol{% endblock %}
+
+{% block extra_css %}
+{% include "ian_style.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="person-page">
+    <img class="person-photo" src="{{ url_for('static', filename='images/ian.jpg') }}" alt="Ian Varley ar bhád" width="479" height="415">
+    <h1>Dia dhuit! Is mise Ian Varley.</h1>
+    <p>Is mé forbróir aip Ceol. Is innealtóir bogearraí mé atá i mo chónaí in Austin, Texas. Is ceoltóir mé freisin&mdash;seinnim an bainseó, an bosca ceoil, an giotár, an pianó, an búsúcaí, agus rud éigin a bhfuil cosúlacht bheag aige le consairtín. Is féidir teacht orm ar <a href="{{ thesession_url }}" target="_blank" rel="noopener">TheSession</a> freisin.</p>
+    <p>Bíonn áthas orm i gcónaí cloisteáil ó cheoltóirí a bhfuil an aip ina cabhair dóibh. <a href="mailto:{{ contact_email }}">Scríobh chugam!</a></p>
+    <p class="person-links"><a href="{{ url_for('blog_index') }}">Blag Ceol</a> &middot; <a href="{{ url_for('help_page') }}">Cad é Ceol?</a></p>
+</div>
+{% endblock %}
