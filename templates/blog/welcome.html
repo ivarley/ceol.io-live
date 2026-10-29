@@ -1,4 +1,6 @@
 {# The first post, 2026-10-29. Its Irish twin is templates/ga/blog/welcome.html. #}
+<img class="blog-figure-right" src="/static/images/blog/ceol-app-icon.png" alt="The Ceol app icon: a green C on a dark square" width="160" height="160">
+
 <p>Howdy! Fáilte!</p>
 
 <p>This is the first entry on the brand new ceol.app blog. If you haven't used it already, Ceol is a new app intended to help you have more fun playing traditional Irish music. Specifically, it's here to help you learn more tunes, and be more likely to learn the tunes that the people around you play.</p>
@@ -17,4 +19,4 @@
 
 <p class="blog-sign-off">Hup!<br>&ndash; Ian</p>
 
-<p class="blog-ps">P.S. As with every page on the app, this post is available in both English and Irish. Switch back and forth anytime!</p>
+<p class="blog-ps">P.S. As with every page on the app, this post is available in both English and Irish. <a href="{{ url_for('set_language', code='ga', next='/blog/welcome') }}" hreflang="ga">Switch back and forth</a> anytime!</p>

@@ -100,6 +100,14 @@
 
     .blog-body a { color: var(--link-color); }
 
+    .blog-body .blog-figure-right {
+        float: right;
+        width: 160px;
+        height: auto;
+        margin: 0 0 1rem 1.5rem;
+        border-radius: 28px;
+    }
+
     .blog-body .blog-sign-off { margin-top: 1.5rem; }
 
     .blog-body .blog-ps {
@@ -121,6 +129,7 @@
     @media (max-width: 768px) {
         .blog-page { padding: 16px 16px 32px; }
         .blog-head h1, .blog-post h1 { font-size: 1.5rem; }
+        .blog-body .blog-figure-right { width: 96px; margin: 0 0 0.5rem 1rem; border-radius: 18px; }
     }
 </style>
 {% endblock %}
