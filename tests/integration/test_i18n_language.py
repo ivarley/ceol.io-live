@@ -168,6 +168,7 @@ HELP_URLS = [
     "/help/listen",
     "/help/search-by-notes",
     "/help/thesession",
+    "/help/credits",
     "/help/release-notes",
     "/help/release-notes/2026-07",
 ]

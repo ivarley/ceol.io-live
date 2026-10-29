@@ -989,6 +989,10 @@ def help_thesession():
     return render_template(localized("help_thesession.html"))
 
 
+def help_credits():
+    return render_template(localized("help_credits.html"))
+
+
 # Release notes months, most recent first. Single source of truth shared by
 # the index page and the per-month detail pages.
 RELEASE_NOTES_MONTHS = [

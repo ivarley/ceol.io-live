@@ -183,6 +183,7 @@ Words the translation needed that neither list covered, grouped by where they ap
 | English | Irish | Usage notes |
 |---|---|---|
 | Release notes | Nótaí eisiúna | Help section. |
+| Credits | Admhálacha | The help page thanking the people and projects Ceol is built on. |
 | blog / blog post | blag / postáil | The blog at /blog; "Gach postáil" = all posts. |
 | RSS feed | fotha RSS | |
 | Help topics | Ábhair chabhrach | Help sidebar. |

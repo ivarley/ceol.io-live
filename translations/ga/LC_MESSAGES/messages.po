@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-29 15:56-0500\n"
+"POT-Creation-Date: 2026-10-29 16:30-0500\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -28,22 +28,22 @@ msgstr "Tá cuntas ann cheana don seoladh ríomhphoist seo. Sínigh isteach leis
 msgid "Invalid or expired link. Please request a new one."
 msgstr "Nasc neamhbhailí nó as feidhm. Iarr ceann nua."
 
-#: api_app_routes.py:273 web_routes.py:1788
+#: api_app_routes.py:273 web_routes.py:1805
 #, review
 msgid "This account has been deactivated."
 msgstr "Díghníomhachtaíodh an cuntas seo."
 
-#: api_app_routes.py:288 api_app_routes.py:347 web_routes.py:1562
+#: api_app_routes.py:288 api_app_routes.py:347 web_routes.py:1579
 #, review
 msgid "Email address is required"
 msgstr "Tá seoladh ríomhphoist riachtanach"
 
-#: api_app_routes.py:293 web_routes.py:2634
+#: api_app_routes.py:293 web_routes.py:2651
 #, review
 msgid "If an unverified account with that email exists, a verification email has been sent."
 msgstr "Má tá cuntas gan fíorú ann leis an ríomhphost sin, seoladh ríomhphost fíoraithe."
 
-#: api_app_routes.py:355 web_routes.py:2208
+#: api_app_routes.py:355 web_routes.py:2225
 #, review
 msgid "If an account with that email exists, password reset instructions have been sent."
 msgstr "Má tá cuntas ann leis an ríomhphost sin, seoladh treoracha athshocraithe pasfhocail."
@@ -451,8 +451,8 @@ msgstr "Earráid agus na foinn choiteanna á bhfáil: %(error)s"
 #: api_routes.py:13716 api_routes.py:13780 api_routes.py:14492
 #: api_routes.py:14643 api_routes.py:14703 api_routes.py:14815
 #: api_routes.py:14841 api_routes.py:14911 api_routes.py:15458
-#: live_logging_routes.py:3579 web_routes.py:3330 web_routes.py:3389
-#: web_routes.py:3540
+#: live_logging_routes.py:3579 web_routes.py:3347 web_routes.py:3406
+#: web_routes.py:3557
 #, review
 msgid "Session not found"
 msgstr "Níor aimsíodh an seisiún"
@@ -465,7 +465,7 @@ msgstr "Níor aimsíodh an seisiún"
 #: live_logging_routes.py:2028 live_logging_routes.py:2128
 #: live_logging_routes.py:2670 live_logging_routes.py:3184
 #: live_logging_routes.py:3503 live_logging_routes.py:3574
-#: recording_routes.py:128 web_routes.py:3977
+#: recording_routes.py:128 web_routes.py:3994
 #, review
 msgid "Session instance not found"
 msgstr "Níor aimsíodh an tarlú seisiúin"
@@ -1111,7 +1111,7 @@ msgstr "Theip ar na daoine a fháil: %(error)s"
 msgid "Not allowed to see this session's people"
 msgstr "Níl cead agat daoine an tseisiúin seo a fheiceáil"
 
-#: api_routes.py:5678 api_routes.py:8712 api_routes.py:8852 web_routes.py:3427
+#: api_routes.py:5678 api_routes.py:8712 api_routes.py:8852 web_routes.py:3444
 #, review
 msgid "Person not found in this session"
 msgstr "Níor aimsíodh an duine sa seisiún seo"
@@ -1120,7 +1120,7 @@ msgstr "Níor aimsíodh an duine sa seisiún seo"
 #: api_routes.py:8926 api_routes.py:9120 api_routes.py:10646
 #: api_routes.py:10746 api_routes.py:10989 api_routes.py:11123
 #: api_routes.py:11354 api_routes.py:13997 api_routes.py:15427
-#: web_routes.py:3614
+#: web_routes.py:3631
 #, review
 msgid "Person not found"
 msgstr "Níor aimsíodh an duine"
@@ -2052,27 +2052,27 @@ msgstr "Tá loser_person_id agus winner_person_id araon riachtanach"
 msgid "Please log in to access this page."
 msgstr "Sínigh isteach chun an leathanach seo a oscailt."
 
-#: app.py:2060
+#: app.py:2062
 #, review
 msgid "Page not found. The session you're looking for might have ended, or the URL might be incorrect."
 msgstr "Níor aimsíodh an leathanach. B'fhéidir go bhfuil an seisiún atá uait thart, nó go bhfuil an seoladh gréasáin mícheart."
 
-#: app.py:2076
+#: app.py:2078
 #, review
 msgid "You don't have permission to access this page. You might need to log in or contact an admin."
 msgstr "Níl cead agat an leathanach seo a oscailt. B'fhéidir go gcaithfidh tú síniú isteach nó dul i dteagmháil le bainisteoir."
 
-#: app.py:2092
+#: app.py:2094
 #, review
 msgid "You must be logged in to access this page. Please log in and try again."
 msgstr "Caithfidh tú a bheith sínithe isteach chun an leathanach seo a oscailt. Sínigh isteach agus bain triail eile as."
 
-#: app.py:2108
+#: app.py:2110
 #, review
 msgid "A server error occurred. Our team has been notified and will look into this issue."
 msgstr "Tharla earráid fhreastalaí. Cuireadh ár bhfoireann ar an eolas agus féachfaidh siad isteach air."
 
-#: app.py:2127
+#: app.py:2129
 #, python-format, review
 msgid "An unexpected error occurred: %(error)s"
 msgstr "Tharla earráid gan choinne: %(error)s"
@@ -4250,7 +4250,7 @@ msgid "Ingest failed: %(detail)s"
 msgstr "Theip ar an bpróiseáil: %(detail)s"
 
 #: templates/admin_recordings.html:201 templates/admin_recordings.html:797
-#: web_routes.py:4193
+#: web_routes.py:4210
 #, review
 msgid "no detail recorded"
 msgstr "níor taifeadadh aon sonra"
@@ -6105,12 +6105,12 @@ msgstr "Scipeáil anois"
 msgid "Type a password in both boxes, or choose Skip for now."
 msgstr "Clóscríobh pasfhocal sa dá bhosca, nó roghnaigh Scipeáil anois."
 
-#: templates/auth/set_password.html:92 web_routes.py:1884
+#: templates/auth/set_password.html:92 web_routes.py:1901
 #, review
 msgid "Your password needs at least 8 characters. Make it longer, or choose Skip for now."
 msgstr "Teastaíonn 8 gcarachtar ar a laghad i do phasfhocal. Déan níos faide é, nó roghnaigh Scipeáil anois."
 
-#: templates/auth/set_password.html:99 web_routes.py:1893
+#: templates/auth/set_password.html:99 web_routes.py:1910
 #, review
 msgid "The two passwords don't match. Type the same password in both boxes."
 msgstr "Níl an dá phasfhocal mar an gcéanna. Clóscríobh an pasfhocal céanna sa dá bhosca."
@@ -6544,12 +6544,17 @@ msgstr "TheSession.org"
 msgid "Contact & Support"
 msgstr "Teagmháil agus tacaíocht"
 
-#: templates/help_base.html:400
+#: templates/help_base.html:399
+#, review
+msgid "Credits"
+msgstr "Admhálacha"
+
+#: templates/help_base.html:403
 #, review
 msgid "Release Notes"
 msgstr "Nótaí eisiúna"
 
-#: templates/help_base.html:417 templates/help_base.html:428
+#: templates/help_base.html:420 templates/help_base.html:431
 #, review
 msgid "Help Topics"
 msgstr "Ábhair chabhrach"
@@ -7873,296 +7878,296 @@ msgstr "Níor aimsíodh an tarlú seisiúin: aitheantas %(id)s don seisiún %(pa
 msgid "Players tab requires a specific session instance. Please select a date from the session page."
 msgstr "Teastaíonn tarlú seisiúin ar leith don chluaisín Ceoltóirí. Roghnaigh dáta ó leathanach an tseisiúin."
 
-#: web_routes.py:1134
+#: web_routes.py:1151
 #, review
 msgid "Username, password, first name, last name, and email are required."
 msgstr "Tá ainm úsáideora, pasfhocal, céadainm, sloinne agus ríomhphost riachtanach."
 
-#: web_routes.py:1140 web_routes.py:2228
+#: web_routes.py:1157 web_routes.py:2245
 #, review
 msgid "Passwords do not match."
 msgstr "Níl na pasfhocail mar a chéile."
 
-#: web_routes.py:1144 web_routes.py:2232 web_routes.py:2356
+#: web_routes.py:1161 web_routes.py:2249 web_routes.py:2373
 #, review
 msgid "Password must be at least 8 characters long."
 msgstr "Caithfidh 8 gcarachtar ar a laghad a bheith sa phasfhocal."
 
-#: web_routes.py:1150
+#: web_routes.py:1167
 #, review
 msgid "Username already exists. Please choose a different one."
 msgstr "Tá an t-ainm úsáideora sin in úsáid cheana. Roghnaigh ceann eile."
 
-#: web_routes.py:1160 web_routes.py:1199
+#: web_routes.py:1177 web_routes.py:1216
 #, review
 msgid "Email address already registered with a user account. Please try logging in or use password reset if needed."
 msgstr "Tá an seoladh ríomhphoist seo cláraithe le cuntas úsáideora cheana. Bain triail as síniú isteach, nó athshocraigh an pasfhocal más gá."
 
-#: web_routes.py:1248
+#: web_routes.py:1265
 #, review
 msgid "Failed to create person record"
 msgstr "Theip ar thaifead an duine a chruthú"
 
-#: web_routes.py:1283
+#: web_routes.py:1300
 #, review
 msgid "Failed to create user account"
 msgstr "Theip ar an gcuntas úsáideora a chruthú"
 
-#: web_routes.py:1328
+#: web_routes.py:1345
 #, review
 msgid "Registration successful! Please check your email to verify your account before logging in."
 msgstr "D'éirigh leis an gclárú! Féach ar do ríomhphost chun do chuntas a fhíorú sula síneoidh tú isteach."
 
-#: web_routes.py:1335
+#: web_routes.py:1352
 #, review
 msgid "Registration successful, but failed to send verification email. Please contact support."
 msgstr "D'éirigh leis an gclárú, ach theip ar an ríomhphost fíoraithe a sheoladh. Déan teagmháil le tacaíocht."
 
-#: web_routes.py:1345
+#: web_routes.py:1362
 #, review
 msgid "Registration failed. Please try again."
 msgstr "Theip ar an gclárú. Bain triail eile as."
 
-#: web_routes.py:1380
+#: web_routes.py:1397
 #, review
 msgid "Username and password are required."
 msgstr "Tá ainm úsáideora agus pasfhocal riachtanach."
 
-#: web_routes.py:1396
+#: web_routes.py:1413
 #, review
 msgid "Please verify your email address before logging in. Check your email for a verification link."
 msgstr "Fíoraigh do sheoladh ríomhphoist sula síneoidh tú isteach. Féach ar do ríomhphost le haghaidh nasc fíoraithe."
 
-#: web_routes.py:1471
+#: web_routes.py:1488
 #, review
 msgid "Invalid username or password."
 msgstr "Ainm úsáideora nó pasfhocal mícheart."
 
-#: web_routes.py:1519
+#: web_routes.py:1536
 #, review
 msgid "You have been logged out."
 msgstr "Síníodh amach thú."
 
-#: web_routes.py:1556 web_routes.py:1670
+#: web_routes.py:1573 web_routes.py:1687
 #, review
 msgid "JSON request required"
 msgstr "Teastaíonn iarratas JSON"
 
-#: web_routes.py:1566
+#: web_routes.py:1583
 #, review
 msgid "Please enter a valid email address"
 msgstr "Cuir isteach seoladh ríomhphoist bailí"
 
-#: web_routes.py:1586
+#: web_routes.py:1603
 #, review
 msgid "This account has been deactivated. Please contact support."
 msgstr "Díghníomhachtaíodh an cuntas seo. Déan teagmháil le tacaíocht."
 
-#: web_routes.py:1600
+#: web_routes.py:1617
 #, review
 msgid "Enter your password to log in"
 msgstr "Cuir isteach do phasfhocal chun síniú isteach"
 
-#: web_routes.py:1637
+#: web_routes.py:1654
 #, review
 msgid "Check your email for a login link"
 msgstr "Féach ar do ríomhphost le haghaidh nasc síniú isteach"
 
-#: web_routes.py:1661
+#: web_routes.py:1678
 #, review
 msgid "We don't have an account for this email yet. We've sent a link to create one."
 msgstr "Níl cuntas againn don ríomhphost seo fós. Sheolamar nasc chun ceann a chruthú."
 
-#: web_routes.py:1677
+#: web_routes.py:1694
 #, review
 msgid "Email and password are required"
 msgstr "Tá ríomhphost agus pasfhocal riachtanach"
 
-#: web_routes.py:1698 web_routes.py:1728
+#: web_routes.py:1715 web_routes.py:1745
 #, review
 msgid "Invalid email or password"
 msgstr "Ríomhphost nó pasfhocal mícheart"
 
-#: web_routes.py:1712
+#: web_routes.py:1729
 #, review
 msgid "This account has been deactivated"
 msgstr "Díghníomhachtaíodh an cuntas seo"
 
-#: web_routes.py:1743
+#: web_routes.py:1760
 #, review
 msgid "Please verify your email address first"
 msgstr "Fíoraigh do sheoladh ríomhphoist ar dtús"
 
-#: web_routes.py:1784
+#: web_routes.py:1801
 #, review
 msgid "Invalid or expired login link. Please request a new one."
 msgstr "Tá an nasc síniú isteach neamhbhailí nó imithe as feidhm. Iarr ceann nua."
 
-#: web_routes.py:1862
+#: web_routes.py:1879
 #, review
 msgid "You have been logged in."
 msgstr "Síníodh isteach thú."
 
-#: web_routes.py:1932
+#: web_routes.py:1949
 #, review
 msgid "Password set successfully! You can use it to log in next time."
 msgstr "Socraíodh an pasfhocal! Is féidir leat é a úsáid chun síniú isteach an chéad uair eile."
 
-#: web_routes.py:2075
+#: web_routes.py:2092
 #, review
 msgid "Profile updated!"
 msgstr "Próifíl nuashonraithe!"
 
-#: web_routes.py:2189 web_routes.py:2551
+#: web_routes.py:2206 web_routes.py:2568
 #, review
 msgid "Email address is required."
 msgstr "Tá seoladh ríomhphoist riachtanach."
 
-#: web_routes.py:2196
+#: web_routes.py:2213
 #, review
 msgid "Password reset instructions have been sent to your email."
 msgstr "Seoladh treoracha athshocraithe pasfhocail chuig do ríomhphost."
 
-#: web_routes.py:2201
+#: web_routes.py:2218
 #, review
 msgid "Failed to send reset email. Please try again later."
 msgstr "Theip ar an ríomhphost athshocraithe a sheoladh. Bain triail eile as ar ball."
 
-#: web_routes.py:2224
+#: web_routes.py:2241
 #, review
 msgid "Both password fields are required."
 msgstr "Tá an dá réimse pasfhocail riachtanach."
 
-#: web_routes.py:2292
+#: web_routes.py:2309
 #, review
 msgid "Password has been reset successfully. Please log in."
 msgstr "Athshocraíodh an pasfhocal. Sínigh isteach."
 
-#: web_routes.py:2296 web_routes.py:2316
+#: web_routes.py:2313 web_routes.py:2333
 #, review
 msgid "Invalid or expired reset token."
 msgstr "Tá an comhartha athshocraithe neamhbhailí nó imithe as feidhm."
 
-#: web_routes.py:2338
+#: web_routes.py:2355
 #, review
 msgid "All password fields are required."
 msgstr "Tá gach réimse pasfhocail riachtanach."
 
-#: web_routes.py:2344
+#: web_routes.py:2361
 #, review
 msgid "Password fields are required."
 msgstr "Tá na réimsí pasfhocail riachtanach."
 
-#: web_routes.py:2350
+#: web_routes.py:2367
 #, review
 msgid "New passwords do not match."
 msgstr "Níl na pasfhocail nua mar a chéile."
 
-#: web_routes.py:2364
+#: web_routes.py:2381
 #, review
 msgid "Current password is incorrect."
 msgstr "Tá an pasfhocal reatha mícheart."
 
-#: web_routes.py:2399
+#: web_routes.py:2416
 #, review
 msgid "Password changed successfully."
 msgstr "Athraíodh an pasfhocal."
 
-#: web_routes.py:2401
+#: web_routes.py:2418
 #, review
 msgid "Password created successfully."
 msgstr "Cruthaíodh an pasfhocal."
 
-#: web_routes.py:2449
+#: web_routes.py:2466
 #, review
 msgid "Email verified! Welcome to Ceol."
 msgstr "Fíoraíodh an ríomhphost! Fáilte go Ceol."
 
-#: web_routes.py:2485
+#: web_routes.py:2502
 #, review
 msgid "There's already an account for this email address. Enter the address below to log in."
 msgstr "Tá cuntas ann cheana don seoladh ríomhphoist seo. Cuir isteach an seoladh thíos chun síniú isteach."
 
-#: web_routes.py:2529
+#: web_routes.py:2546
 #, review
 msgid "This link is invalid or has expired. Enter your email below and we'll send a new one."
 msgstr "Tá an nasc seo neamhbhailí nó imithe as feidhm. Cuir isteach do ríomhphost thíos agus seolfaimid ceann nua."
 
-#: web_routes.py:2542
+#: web_routes.py:2559
 #, review
 msgid "Email verified successfully! You can now log in."
 msgstr "Fíoraíodh an ríomhphost! Is féidir leat síniú isteach anois."
 
-#: web_routes.py:2605
+#: web_routes.py:2622
 #, review
 msgid "Verification email sent! Please check your email."
 msgstr "Seoladh an ríomhphost fíoraithe! Féach ar do ríomhphost."
 
-#: web_routes.py:2610
+#: web_routes.py:2627
 #, review
 msgid "Failed to send verification email. Please try again later."
 msgstr "Theip ar an ríomhphost fíoraithe a sheoladh. Bain triail eile as ar ball."
 
-#: web_routes.py:2619
+#: web_routes.py:2636
 #, review
 msgid "We've sent a new link. Check your email to create your account."
 msgstr "Sheolamar nasc nua. Féach ar do ríomhphost chun do chuntas a chruthú."
 
-#: web_routes.py:2626
+#: web_routes.py:2643
 #, review
 msgid "Failed to send the email. Please try again in a few minutes."
 msgstr "Theip ar an ríomhphost a sheoladh. Bain triail eile as i gceann cúpla nóiméad."
 
-#: web_routes.py:2655 web_routes.py:2673 web_routes.py:2693 web_routes.py:2711
+#: web_routes.py:2672 web_routes.py:2690 web_routes.py:2710 web_routes.py:2728
 #, review
 msgid "This unsubscribe link is not valid."
 msgstr "Níl an nasc díliostála seo bailí."
 
-#: web_routes.py:2681
+#: web_routes.py:2698
 #, review
 msgid "You've been unsubscribed from app updates."
 msgstr "Díliostáladh thú ó nuashonruithe na haipe."
 
-#: web_routes.py:2721
+#: web_routes.py:2738
 #, review
 msgid "You won't get emails when someone is added to a session you look after."
 msgstr "Ní bhfaighidh tú ríomhphost nuair a chuirtear duine le seisiún a bhfuil cúram agat air."
 
-#: web_routes.py:2730 web_routes.py:2743 web_routes.py:2929 web_routes.py:2947
-#: web_routes.py:2965 web_routes.py:2976 web_routes.py:2991 web_routes.py:3002
-#: web_routes.py:3096 web_routes.py:3106 web_routes.py:3186 web_routes.py:3318
-#: web_routes.py:3377 web_routes.py:3533 web_routes.py:3709 web_routes.py:4072
-#: web_routes.py:4116 web_routes.py:4156
+#: web_routes.py:2747 web_routes.py:2760 web_routes.py:2946 web_routes.py:2964
+#: web_routes.py:2982 web_routes.py:2993 web_routes.py:3008 web_routes.py:3019
+#: web_routes.py:3113 web_routes.py:3123 web_routes.py:3203 web_routes.py:3335
+#: web_routes.py:3394 web_routes.py:3550 web_routes.py:3726 web_routes.py:4089
+#: web_routes.py:4133 web_routes.py:4173
 #, review
 msgid "You must be authorized to view this page."
 msgstr "Ní mór cead a bheith agat chun an leathanach seo a fheiceáil."
 
-#: web_routes.py:3204
+#: web_routes.py:3221
 #, review
 msgid "Person not found."
 msgstr "Níor aimsíodh an duine."
 
-#: web_routes.py:3622
+#: web_routes.py:3639
 #, review
 msgid "This person does not have a user account"
 msgstr "Níl cuntas úsáideora ag an duine seo"
 
-#: web_routes.py:3672
+#: web_routes.py:3689
 #, review
 msgid "Error loading page"
 msgstr "Earráid agus an leathanach á lódáil"
 
-#: web_routes.py:4181
+#: web_routes.py:4198
 #, review
 msgid "That recording doesn't exist."
 msgstr "Níl an taifeadadh sin ann."
 
-#: web_routes.py:4197
+#: web_routes.py:4214
 #, python-format, review
 msgid "That recording could not be processed (%(detail)s). Retry it from the list."
 msgstr "Níorbh fhéidir an taifeadadh sin a phróiseáil (%(detail)s). Bain triail eile as ón liosta."
 
-#: web_routes.py:4206
+#: web_routes.py:4223
 #, review
 msgid "That recording is still being processed — its waveform isn't ready yet."
 msgstr "Tá an taifeadadh sin fós á phróiseáil — níl a thonnchruth réidh fós."

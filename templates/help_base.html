@@ -395,6 +395,9 @@
             <li class="help-nav-item">
                 <a href="{{ url_for('privacy_page') }}" class="help-nav-link {{ 'active' if active_page == 'privacy' else '' }}">{{ _('Privacy Policy') }}</a>
             </li>
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_credits') }}" class="help-nav-link {{ 'active' if active_page == 'credits' else '' }}">{{ _('Credits') }}</a>
+            </li>
             <li class="help-nav-section {{ 'expanded' if active_page and active_page.startswith('release-') else '' }}">
                 <a href="{{ url_for('help_release_notes_index') }}" class="help-nav-section-header {{ 'active' if active_page == 'release-index' else '' }}">
                     <span>{{ _('Release Notes') }}</span>

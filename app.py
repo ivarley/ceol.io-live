@@ -589,6 +589,7 @@ app.add_url_rule("/help/festivals", "help_festivals", help_festivals)
 app.add_url_rule("/help/listen", "help_listen", help_listen)
 app.add_url_rule("/help/search-by-notes", "help_search_by_notes", help_search_by_notes)
 app.add_url_rule("/help/thesession", "help_thesession", help_thesession)
+app.add_url_rule("/help/credits", "help_credits", help_credits)
 app.add_url_rule(
     "/help/release-notes/", "help_release_notes_index", help_release_notes_index
 )

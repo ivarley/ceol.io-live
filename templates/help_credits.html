@@ -1,0 +1,65 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Credits" %}
+{% set page_description = "The people, projects and research Ceol is built on" %}
+{% set active_page = "credits" %}
+
+{% block help_content %}
+<h1>Credits</h1>
+
+<p>Ceol is made by <a href="/ian">one person</a>, but it stands on a great deal of other people's work. This page says thank you.</p>
+
+<h2>TheSession.org</h2>
+
+<p>None of this would exist without <a href="https://thesession.org">TheSession.org</a>. Every tune in Ceol is a tune there: the names, the settings, the ABC notation and the tunebooks all come from it, and Ceol's tune pages link back to it. Its <a href="https://github.com/adactio/TheSession-data">public data dump</a> is what lets Listen compare what it hears with every tune the community has written down.</p>
+
+<p>A special thank you to <strong>Jeremy Keith</strong>, who has built and run TheSession.org for over twenty years, kept it open and free, and published its data for anyone to use. It is the reason a site like Ceol can exist at all.</p>
+
+<h2>Friends of the music</h2>
+
+<ul>
+    <li><strong>Michael Eskin</strong> made the <a href="https://michaeleskin.com/abctools/abctools.html">ABC Transcription Tools</a>. Every tune's notation in Ceol has a link that opens the tune there, where you can play it, slow it down, transpose it and print it. Michael's tools are a gift to everyone who learns from the dots.</li>
+    <li><strong>Alan Ng</strong> built <a href="https://www.irishtune.info">irishtune.info</a>, the index of Irish tunes on recordings. Ceol will offer deeper integration with it soon, so that a tune you are learning leads you to the recordings it is on.</li>
+</ul>
+
+<h2>Listen: the research and the models</h2>
+
+<p>Listen works out which tune is playing. It tracks the pitch of what it hears, turns that into a run of notes, and compares the run with every tune in TheSession.org's data, then decides over time which tune fits best. The method was worked out in an evaluation lab against hundreds of hand-labelled tune segments from real session recordings, and only ideas that measured better were kept. It builds on this work:</p>
+
+<ul>
+    <li><strong>YIN</strong>, the pitch estimator: Alain de Cheveigné and Hideki Kawahara, "YIN, a fundamental frequency estimator for speech and music", <em>Journal of the Acoustical Society of America</em>, 2002. Ceol uses the probabilistic form from <a href="https://librosa.org">librosa</a>.</li>
+    <li><strong>Basic Pitch</strong>, a small neural note transcriber from Spotify: Rachel Bittner, Juan José Bosch, David Rubinstein, Gabriel Meseguer-Brocal and Sebastian Ewert, "A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation", <em>ICASSP</em>, 2022. <a href="https://github.com/spotify/basic-pitch">github.com/spotify/basic-pitch</a>.</li>
+    <li><strong>PESTO</strong>, a self-supervised pitch estimator: Alain Riou, Stefan Lattner, Gaëtan Hadjeres and Geoffroy Peeters, "PESTO: Pitch Estimation with Self-supervised Transposition-equivariant Objective", <em>ISMIR</em>, 2023. <a href="https://github.com/SonyCSLParis/pesto">github.com/SonyCSLParis/pesto</a>.</li>
+    <li><strong>CREPE</strong>, evaluated in the lab alongside the others: Jong Wook Kim, Justin Salamon, Peter Li and Juan Pablo Bello, "CREPE: A Convolutional Representation for Pitch Estimation", <em>ICASSP</em>, 2018.</li>
+    <li><strong>mir_eval</strong>, for scoring: Colin Raffel and others, "mir_eval: A Transparent Implementation of Common MIR Metrics", <em>ISMIR</em>, 2014.</li>
+    <li><strong>librosa</strong>, the audio analysis library the lab and the listening service are built with: Brian McFee and others, "librosa: Audio and Music Signal Analysis in Python", <em>SciPy</em>, 2015.</li>
+</ul>
+
+<p>The matching itself is classical: an index of short note sequences (n-grams) over every tune, with a decoder that follows the best-fitting tune through time and prefers the tunes your own session plays. On the iPhone, the same models run on the phone itself through Core ML and Apple's Accelerate framework, so Listen works with no connection.</p>
+
+<h2>Open source</h2>
+
+<p>Ceol is built with these libraries and tools, all open source. Thank you to everyone who writes and maintains them.</p>
+
+<h3>The server</h3>
+<p><a href="https://flask.palletsprojects.com">Flask</a>, <a href="https://gunicorn.org">Gunicorn</a>, <a href="https://www.postgresql.org">PostgreSQL</a> (with the <code>pg_trgm</code> and <code>unaccent</code> extensions), <a href="https://www.psycopg.org">psycopg2</a>, <a href="https://github.com/MagicStack/asyncpg">asyncpg</a>, <a href="https://flask-login.readthedocs.io">Flask-Login</a>, <a href="https://python-babel.github.io/flask-babel/">Flask-Babel</a> and <a href="https://babel.pocoo.org">Babel</a>, <a href="https://www.starlette.io">Starlette</a>, <a href="https://www.uvicorn.org">Uvicorn</a>, <a href="https://numpy.org">NumPy</a>, <a href="https://requests.readthedocs.io">Requests</a>, <a href="https://github.com/theskumar/python-dotenv">python-dotenv</a>, <a href="https://github.com/pyca/bcrypt">bcrypt</a>, <a href="https://github.com/JoshData/python-email-validator">email-validator</a>, <a href="https://github.com/lincolnloop/python-qrcode">qrcode</a>, <a href="https://python-pillow.org">Pillow</a>, <a href="https://python-markdown.github.io">Python-Markdown</a>, <a href="https://github.com/jiaaro/pydub">pydub</a>, <a href="https://ffmpeg.org">FFmpeg</a> (through imageio-ffmpeg), <a href="https://github.com/boto/boto3">boto3</a> and the <a href="https://github.com/sendgrid/sendgrid-python">SendGrid</a> library.</p>
+
+<h3>The website</h3>
+<p><a href="https://svelte.dev">Svelte</a>, <a href="https://vite.dev">Vite</a>, <a href="https://vitest.dev">Vitest</a>, <a href="https://bits-ui.com">Bits UI</a>, <a href="https://react-spectrum.adobe.com/internationalized/date/">@internationalized/date</a>, <a href="https://testing-library.com">Testing Library</a>, <a href="https://github.com/jsdom/jsdom">jsdom</a>, <a href="https://github.com/dumbmatter/fakeIndexedDB">fake-indexeddb</a>, <a href="https://www.typescriptlang.org">TypeScript</a>, <a href="https://webpack.js.org">webpack</a>, <a href="https://jestjs.io">Jest</a>, <a href="https://playwright.dev">Playwright</a>, <a href="https://github.com/pieroxy/lz-string">lz-string</a> by pieroxy, and the <a href="https://fonts.google.com/specimen/Poppins">Poppins</a> typeface by the Indian Type Foundry.</p>
+
+<h3>Notation</h3>
+<p>The dots are drawn by <a href="https://abcjs.net">abcjs</a>, by Paul Rosen and Gregory Dyke, in a small service built on <a href="https://expressjs.com">Express</a>, jsdom and <a href="https://sharp.pixelplumbing.com">sharp</a>.</p>
+
+<h3>The listening service</h3>
+<p><a href="https://pytorch.org">PyTorch</a> and torchaudio, <a href="https://librosa.org">librosa</a>, <a href="https://scipy.org">SciPy</a>, <a href="https://scikit-learn.org">scikit-learn</a>, <a href="https://numba.pydata.org">Numba</a>, <a href="https://onnxruntime.ai">ONNX Runtime</a>, <a href="https://github.com/bastibe/python-soundfile">soundfile</a>, <a href="https://github.com/bmcfee/resampy">resampy</a>, <a href="https://github.com/craffel/pretty-midi">pretty_midi</a>, <a href="https://github.com/mir-evaluation/mir_eval">mir_eval</a>, <a href="https://websockets.readthedocs.io">websockets</a>, and the Basic Pitch and PESTO models above.</p>
+
+<h3>The iPhone app</h3>
+<p>Swift and SwiftUI, Core ML, Accelerate and AVFoundation, and Apple's <a href="https://github.com/apple/swift-openapi-generator">Swift OpenAPI Generator</a> with its runtime, URLSession transport and <a href="https://github.com/apple/swift-http-types">swift-http-types</a>, plus <a href="https://github.com/apple/swift-collections">swift-collections</a>, <a href="https://github.com/apple/swift-algorithms">swift-algorithms</a>, <a href="https://github.com/apple/swift-numerics">swift-numerics</a>, <a href="https://github.com/mattpolzin/OpenAPIKit">OpenAPIKit</a> and <a href="https://github.com/jpsim/Yams">Yams</a>.</p>
+
+<h3>Services</h3>
+<p>Ceol runs on <a href="https://render.com">Render</a>, stores recordings on <a href="https://aws.amazon.com/s3/">Amazon S3</a>, sends email with <a href="https://sendgrid.com">SendGrid</a>, and sits behind <a href="https://www.cloudflare.com">Cloudflare</a>.</p>
+
+<h2>And you</h2>
+
+<p>Thank you to the players who log their sessions, label recordings, report what's wrong and write in. Every night you log makes Ceol better for the next person who sits down at your session.</p>
+{% endblock %}

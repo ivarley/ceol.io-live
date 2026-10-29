@@ -1,0 +1,65 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Admhálacha" %}
+{% set page_description = "Na daoine, na tionscadail agus an taighde a bhfuil Ceol tógtha orthu" %}
+{% set active_page = "credits" %}
+
+{% block help_content %}
+<h1>Admhálacha</h1>
+
+<p>Is <a href="/ian">duine amháin</a> a dhéanann Ceol, ach tá sé ina sheasamh ar an-chuid oibre ó dhaoine eile. Deir an leathanach seo go raibh maith agaibh.</p>
+
+<h2>TheSession.org</h2>
+
+<p>Ní bheadh aon chuid de seo ann gan <a href="https://thesession.org">TheSession.org</a>. Is fonn ansin gach fonn i gCeol: tagann na hainmneacha, na leaganacha, an nodaireacht ABC agus na leabhair fonn ar fad uaidh, agus nascann leathanaigh fonn Cheol ar ais chuige. Is é a <a href="https://github.com/adactio/TheSession-data">dhumpa sonraí poiblí</a> a ligeann do Listen an rud a chloiseann sé a chur i gcomparáid le gach fonn atá scríofa síos ag an bpobal.</p>
+
+<p>Buíochas ar leith le <strong>Jeremy Keith</strong>, a thóg agus a reáchtáil TheSession.org le breis is fiche bliain, a choinnigh oscailte agus saor in aisce é, agus a d'fhoilsigh a chuid sonraí le go n-úsáidfeadh duine ar bith iad. Is é an chúis é gur féidir le suíomh mar Cheol a bheith ann ar chor ar bith.</p>
+
+<h2>Cairde an cheoil</h2>
+
+<ul>
+    <li>Rinne <strong>Michael Eskin</strong> na <a href="https://michaeleskin.com/abctools/abctools.html">ABC Transcription Tools</a>. Tá nasc ag nodaireacht gach fhoinn i gCeol a osclaíonn an fonn ansin, áit ar féidir leat é a sheinm, a mhoilliú, a thraschur agus a phriontáil. Is bronntanas iad uirlisí Michael do gach duine a fhoghlaimíonn ó na poncanna.</li>
+    <li>Thóg <strong>Alan Ng</strong> <a href="https://www.irishtune.info">irishtune.info</a>, innéacs na bhfonn Gaelach ar thaifeadtaí. Tairgfidh Ceol comhtháthú níos doimhne leis go luath, ionas go dtreoróidh fonn atá á fhoghlaim agat chuig na taifeadtaí a bhfuil sé orthu.</li>
+</ul>
+
+<h2>Listen: an taighde agus na samhlacha</h2>
+
+<p>Oibríonn Listen amach cén fonn atá á sheinm. Rianaíonn sé airde an rud a chloiseann sé, déanann sé sraith nótaí de, cuireann sé an tsraith i gcomparáid le gach fonn i sonraí TheSession.org, agus socraíonn sé le himeacht ama cén fonn is fearr a oireann. Oibríodh amach an modh i saotharlann meastóireachta in aghaidh na gcéadta mír fonn a lipéadaigh daoine de láimh ó thaifeadtaí seisiún fíora, agus níor coinníodh ach na smaointe a thomhais níos fearr. Tógann sé ar an obair seo:</p>
+
+<ul>
+    <li><strong>YIN</strong>, an meastóir airde: Alain de Cheveigné agus Hideki Kawahara, "YIN, a fundamental frequency estimator for speech and music", <em>Journal of the Acoustical Society of America</em>, 2002. Úsáideann Ceol an leagan dóchúlaíoch ó <a href="https://librosa.org">librosa</a>.</li>
+    <li><strong>Basic Pitch</strong>, trascríobhaí nótaí néarach beag ó Spotify: Rachel Bittner, Juan José Bosch, David Rubinstein, Gabriel Meseguer-Brocal agus Sebastian Ewert, "A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation", <em>ICASSP</em>, 2022. <a href="https://github.com/spotify/basic-pitch">github.com/spotify/basic-pitch</a>.</li>
+    <li><strong>PESTO</strong>, meastóir airde féinmhaoirsithe: Alain Riou, Stefan Lattner, Gaëtan Hadjeres agus Geoffroy Peeters, "PESTO: Pitch Estimation with Self-supervised Transposition-equivariant Objective", <em>ISMIR</em>, 2023. <a href="https://github.com/SonyCSLParis/pesto">github.com/SonyCSLParis/pesto</a>.</li>
+    <li><strong>CREPE</strong>, a measadh sa tsaotharlann in éineacht leis na cinn eile: Jong Wook Kim, Justin Salamon, Peter Li agus Juan Pablo Bello, "CREPE: A Convolutional Representation for Pitch Estimation", <em>ICASSP</em>, 2018.</li>
+    <li><strong>mir_eval</strong>, le haghaidh scórála: Colin Raffel agus daoine eile, "mir_eval: A Transparent Implementation of Common MIR Metrics", <em>ISMIR</em>, 2014.</li>
+    <li><strong>librosa</strong>, an leabharlann anailíse fuaime a bhfuil an tsaotharlann agus an tseirbhís éisteachta tógtha léi: Brian McFee agus daoine eile, "librosa: Audio and Music Signal Analysis in Python", <em>SciPy</em>, 2015.</li>
+</ul>
+
+<p>Is modh clasaiceach é an mheaitseáil féin: innéacs de shraitheanna gearra nótaí (n-gramanna) thar gach fonn, le díchódóir a leanann an fonn is fearr a oireann tríd an am agus a thugann tús áite do na foinn a sheinneann do sheisiún féin. Ar an iPhone, ritheann na samhlacha céanna ar an bhfón féin trí Core ML agus creatlach Accelerate Apple, mar sin oibríonn Listen gan aon cheangal.</p>
+
+<h2>Foinse oscailte</h2>
+
+<p>Tá Ceol tógtha leis na leabharlanna agus na huirlisí seo, iad ar fad foinse oscailte. Go raibh maith ag gach duine a scríobhann agus a chothaíonn iad.</p>
+
+<h3>An freastalaí</h3>
+<p><a href="https://flask.palletsprojects.com">Flask</a>, <a href="https://gunicorn.org">Gunicorn</a>, <a href="https://www.postgresql.org">PostgreSQL</a> (leis na síntí <code>pg_trgm</code> agus <code>unaccent</code>), <a href="https://www.psycopg.org">psycopg2</a>, <a href="https://github.com/MagicStack/asyncpg">asyncpg</a>, <a href="https://flask-login.readthedocs.io">Flask-Login</a>, <a href="https://python-babel.github.io/flask-babel/">Flask-Babel</a> agus <a href="https://babel.pocoo.org">Babel</a>, <a href="https://www.starlette.io">Starlette</a>, <a href="https://www.uvicorn.org">Uvicorn</a>, <a href="https://numpy.org">NumPy</a>, <a href="https://requests.readthedocs.io">Requests</a>, <a href="https://github.com/theskumar/python-dotenv">python-dotenv</a>, <a href="https://github.com/pyca/bcrypt">bcrypt</a>, <a href="https://github.com/JoshData/python-email-validator">email-validator</a>, <a href="https://github.com/lincolnloop/python-qrcode">qrcode</a>, <a href="https://python-pillow.org">Pillow</a>, <a href="https://python-markdown.github.io">Python-Markdown</a>, <a href="https://github.com/jiaaro/pydub">pydub</a>, <a href="https://ffmpeg.org">FFmpeg</a> (trí imageio-ffmpeg), <a href="https://github.com/boto/boto3">boto3</a> agus leabharlann <a href="https://github.com/sendgrid/sendgrid-python">SendGrid</a>.</p>
+
+<h3>An suíomh gréasáin</h3>
+<p><a href="https://svelte.dev">Svelte</a>, <a href="https://vite.dev">Vite</a>, <a href="https://vitest.dev">Vitest</a>, <a href="https://bits-ui.com">Bits UI</a>, <a href="https://react-spectrum.adobe.com/internationalized/date/">@internationalized/date</a>, <a href="https://testing-library.com">Testing Library</a>, <a href="https://github.com/jsdom/jsdom">jsdom</a>, <a href="https://github.com/dumbmatter/fakeIndexedDB">fake-indexeddb</a>, <a href="https://www.typescriptlang.org">TypeScript</a>, <a href="https://webpack.js.org">webpack</a>, <a href="https://jestjs.io">Jest</a>, <a href="https://playwright.dev">Playwright</a>, <a href="https://github.com/pieroxy/lz-string">lz-string</a> le pieroxy, agus an cló <a href="https://fonts.google.com/specimen/Poppins">Poppins</a> ón Indian Type Foundry.</p>
+
+<h3>Nodaireacht</h3>
+<p>Is é <a href="https://abcjs.net">abcjs</a>, le Paul Rosen agus Gregory Dyke, a tharraingíonn na poncanna, i seirbhís bheag atá tógtha ar <a href="https://expressjs.com">Express</a>, jsdom agus <a href="https://sharp.pixelplumbing.com">sharp</a>.</p>
+
+<h3>An tseirbhís éisteachta</h3>
+<p><a href="https://pytorch.org">PyTorch</a> agus torchaudio, <a href="https://librosa.org">librosa</a>, <a href="https://scipy.org">SciPy</a>, <a href="https://scikit-learn.org">scikit-learn</a>, <a href="https://numba.pydata.org">Numba</a>, <a href="https://onnxruntime.ai">ONNX Runtime</a>, <a href="https://github.com/bastibe/python-soundfile">soundfile</a>, <a href="https://github.com/bmcfee/resampy">resampy</a>, <a href="https://github.com/craffel/pretty-midi">pretty_midi</a>, <a href="https://github.com/mir-evaluation/mir_eval">mir_eval</a>, <a href="https://websockets.readthedocs.io">websockets</a>, agus na samhlacha Basic Pitch agus PESTO thuas.</p>
+
+<h3>An aip iPhone</h3>
+<p>Swift agus SwiftUI, Core ML, Accelerate agus AVFoundation, agus <a href="https://github.com/apple/swift-openapi-generator">Swift OpenAPI Generator</a> Apple lena am rite, a iompar URLSession agus <a href="https://github.com/apple/swift-http-types">swift-http-types</a>, chomh maith le <a href="https://github.com/apple/swift-collections">swift-collections</a>, <a href="https://github.com/apple/swift-algorithms">swift-algorithms</a>, <a href="https://github.com/apple/swift-numerics">swift-numerics</a>, <a href="https://github.com/mattpolzin/OpenAPIKit">OpenAPIKit</a> agus <a href="https://github.com/jpsim/Yams">Yams</a>.</p>
+
+<h3>Seirbhísí</h3>
+<p>Ritheann Ceol ar <a href="https://render.com">Render</a>, stórálann sé taifeadtaí ar <a href="https://aws.amazon.com/s3/">Amazon S3</a>, seolann sé ríomhphost le <a href="https://sendgrid.com">SendGrid</a>, agus tá sé taobh thiar de <a href="https://www.cloudflare.com">Cloudflare</a>.</p>
+
+<h2>Agus tusa</h2>
+
+<p>Go raibh maith ag na ceoltóirí a logálann a seisiúin, a lipéadaíonn taifeadtaí, a thuairiscíonn a bhfuil mícheart agus a scríobhann chugainn. Déanann gach oíche a logálann tú Ceol níos fearr don chéad duine eile a shuíonn síos ag do sheisiún.</p>
+{% endblock %}
