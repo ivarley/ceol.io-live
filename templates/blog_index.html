@@ -1,0 +1,25 @@
+{# i18n-converted #}
+{% extends "blog_base.html" %}
+
+{% set tab_title = _('Blog') %}
+{% set page_description = _('News and stories from Ceol: features, people and sessions') %}
+
+{% block blog_content %}
+<header class="blog-head">
+    <div>
+        <h1>{{ _('The Ceol blog') }}</h1>
+        <p>{{ _('What is new in Ceol, and stories about people and sessions.') }}</p>
+    </div>
+    <a class="blog-feed-link" href="{{ url_for('blog_rss', lang=lang if lang != 'en' else None) }}">{{ _('RSS feed') }}</a>
+</header>
+
+<ul class="blog-list">
+    {% for post in posts %}
+    <li>
+        <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
+        <p class="blog-meta"><time datetime="{{ post.date.isoformat() }}">{{ post.date_label }}</time> · {{ post.author }}</p>
+        <p>{{ post.summary }} <a href="{{ post.url }}">{{ _('Read more') }}</a></p>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}

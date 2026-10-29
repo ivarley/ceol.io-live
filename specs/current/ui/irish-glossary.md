@@ -183,6 +183,8 @@ Words the translation needed that neither list covered, grouped by where they ap
 | English | Irish | Usage notes |
 |---|---|---|
 | Release notes | Nótaí eisiúna | Help section. |
+| blog / blog post | blag / postáil | The blog at /blog; "Gach postáil" = all posts. |
+| RSS feed | fotha RSS | |
 | Help topics | Ábhair chabhrach | Help sidebar. |
 | Features | Gnéithe | |
 | Working offline | Ag obair as líne | |

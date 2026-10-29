@@ -11,7 +11,8 @@ from flask import (
     current_app,
     abort,
 )
-from i18n import localized, request_language
+from i18n import LANGUAGES, get_locale, localized, request_language
+import blog
 from flask_babel import format_date, gettext as _
 import random
 import bcrypt
@@ -1033,6 +1034,81 @@ def help_release_notes(month):
     return render_template(
         localized("help_release_notes.html"), month=month, month_name=month_name
     )
+
+
+# ---------------------------------------------------------------------------
+# The blog (blog.py): hand-written posts in both languages, and an RSS feed.
+
+
+def _blog_post_context(p, lang):
+    """What the index and the post page show of a post, in `lang`."""
+    return {
+        "slug": p["slug"],
+        "title": p["title"][lang],
+        "summary": p["summary"][lang],
+        "author": p["author"],
+        "date": p["date"],
+        "date_label": format_date(p["date"], "long"),
+        "url": url_for("blog_post", slug=p["slug"]),
+    }
+
+
+def blog_index():
+    lang = get_locale()
+    return render_template(
+        "blog_index.html",
+        posts=[_blog_post_context(p, lang) for p in blog.posts()],
+    )
+
+
+def blog_post(slug):
+    p = blog.post(slug)
+    if p is None:
+        abort(404)
+    lang = get_locale()
+    return render_template(
+        "blog_post.html",
+        post=_blog_post_context(p, lang),
+        post_body=localized(blog.body_template(p)),
+    )
+
+
+def blog_rss():
+    """RSS 2.0, in the request's language; `?lang=ga` names it for feed readers,
+    which send no cookie. Links in the posts are made absolute for them too."""
+    from flask_babel import force_locale
+    from email.utils import format_datetime
+
+    lang = request.args.get("lang")
+    if lang not in LANGUAGES:
+        lang = get_locale()
+    site = request.url_root.rstrip("/")
+    with force_locale(lang):
+        items = []
+        for p in blog.posts():
+            body = render_template(localized(blog.body_template(p), lang=lang))
+            body = re.sub(r'(href|src)="/', rf'\1="{site}/', body)
+            items.append(
+                dict(
+                    _blog_post_context(p, lang),
+                    body=body,
+                    link=url_for("blog_post", slug=p["slug"], _external=True),
+                    pub_date=format_datetime(blog.published_at(p)),
+                )
+            )
+        xml = render_template(
+            "blog_rss.xml",
+            items=items,
+            lang=lang,
+            site=site,
+            feed_url=url_for(
+                "blog_rss", lang=lang if lang != "en" else None, _external=True
+            ),
+            blog_url=url_for("blog_index", _external=True),
+        )
+    resp = make_response(xml)
+    resp.headers["Content-Type"] = "application/rss+xml; charset=utf-8"
+    return resp
 
 
 def register():

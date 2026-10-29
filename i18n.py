@@ -71,11 +71,12 @@ def request_language():
     return get_locale() if has_request_context() else DEFAULT
 
 
-def localized(template):
-    """A prose page written once per language (the help pages): templates/ga/<name>
-    on an Irish request, else the English page. render_template takes the list and
-    uses the first that exists."""
-    if get_locale() == "ga":
+def localized(template, lang=None):
+    """A prose page written once per language (the help pages, the blog's posts):
+    templates/ga/<name> on an Irish request, else the English page. render_template
+    takes the list and uses the first that exists. `lang` names the language outright
+    (the blog's feed, which a reader fetches with no cookie)."""
+    if (lang or get_locale()) == "ga":
         return [f"ga/{template}", template]
     return template
 

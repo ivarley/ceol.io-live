@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>{{ _('Ceol blog') }}</title>
+  <link>{{ blog_url }}</link>
+  <description>{{ _('News and stories from Ceol: features, people and sessions') }}</description>
+  <language>{{ lang }}</language>
+  <atom:link href="{{ feed_url }}" rel="self" type="application/rss+xml"/>
+  {%- for item in items %}
+  <item>
+    <title>{{ item.title }}</title>
+    <link>{{ item.link }}</link>
+    <guid isPermaLink="true">{{ item.link }}</guid>
+    <pubDate>{{ item.pub_date }}</pubDate>
+    <dc:creator>{{ item.author }}</dc:creator>
+    <description><![CDATA[{{ item.body | safe }}]]></description>
+  </item>
+  {%- endfor %}
+</channel>
+</rss>
