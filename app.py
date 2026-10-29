@@ -598,6 +598,7 @@ app.add_url_rule(
 )
 app.add_url_rule("/ian", "ian_page", ian_page)
 app.add_url_rule("/blog", "blog_index", blog_index)
+app.add_url_rule("/api/blog/<slug>/send", "blog_send", blog_send, methods=["POST"])
 app.add_url_rule("/blog/rss", "blog_rss", blog_rss)
 app.add_url_rule("/blog/<slug>", "blog_post", blog_post)
 app.add_url_rule("/share", "share_page", share_page)

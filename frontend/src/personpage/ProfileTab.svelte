@@ -664,7 +664,7 @@
             <div class="kit-check-field">
               <label class="kit-check-label" for="receive_update_emails">
                 <input type="checkbox" id="receive_update_emails" name="receive_update_emails" bind:checked={receiveUpdateEmails} />
-                {t('Email me about updates to this app')}
+                {t('Email me new blog posts and updates to this app')}
               </label>
             </div>
             <div class="kit-check-field">

@@ -19,7 +19,13 @@ from database import (
     normalize_quotes_sql,
     check_in_person as db_check_in_person,
 )
-from email_utils import send_person_added_email, send_update_email
+from email_utils import (
+    send_blog_post_email,
+    send_person_added_email,
+    send_update_email,
+)
+import blog
+from i18n import LANGUAGES
 from instruments import normalize_instrument, normalize_instruments
 from session_path import normalize_session_path
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
@@ -610,67 +616,132 @@ def admin_email_updates_send():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT user_id, user_email FROM user_account
-            WHERE receive_update_emails = TRUE AND is_active = TRUE AND user_email IS NOT NULL
-            ORDER BY user_id
-            """
+        recipients = _update_subscribers(cur)
+        email_message_id = _record_update_message(
+            cur, subject, body_markdown, len(recipients)
         )
-        recipients = cur.fetchall()
 
+        def send_one(user_id, email, _lang):
+            return send_update_email(user_id, email, subject, body_markdown)
+
+        counts = _deliver_update(cur, email_message_id, recipients, send_one)
+        conn.commit()
+        return jsonify(dict(success=True, recipient_count=len(recipients), **counts))
+    finally:
+        conn.close()
+
+
+def _update_subscribers(cur):
+    """(user_id, email, language) of everyone the update emails go to."""
+    cur.execute(
+        """
+        SELECT user_id, user_email, language FROM user_account
+        WHERE receive_update_emails = TRUE AND is_active = TRUE AND user_email IS NOT NULL
+        ORDER BY user_id
+        """
+    )
+    return [
+        (uid, email, lang if lang in LANGUAGES else "en")
+        for uid, email, lang in cur.fetchall()
+    ]
+
+
+def _record_update_message(
+    cur, subject, body_markdown, recipient_count, blog_slug=None
+):
+    cur.execute(
+        """
+        INSERT INTO email_message
+            (subject, body_markdown, sent_by_user_id, recipient_count, blog_slug)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING email_message_id
+        """,
+        (subject, body_markdown, current_user.user_id, recipient_count, blog_slug),
+    )
+    return cur.fetchone()[0]
+
+
+def _deliver_update(cur, email_message_id, recipients, send_one):
+    """Send to each recipient through send_one(user_id, email, lang) -> bool, recording
+    one email_message_recipient row each; a failure is recorded and skipped, never
+    aborts the send. Returns {success_count, failure_count}."""
+    success_count = 0
+    failure_count = 0
+    for user_id, email, lang in recipients:
+        try:
+            sent = send_one(user_id, email, lang)
+            error_message = None if sent else "SendGrid send failed"
+        except Exception as e:
+            sent = False
+            error_message = str(e)
+        if sent:
+            success_count += 1
+        else:
+            failure_count += 1
         cur.execute(
             """
-            INSERT INTO email_message (subject, body_markdown, sent_by_user_id, recipient_count)
-            VALUES (%s, %s, %s, %s)
-            RETURNING email_message_id
+            INSERT INTO email_message_recipient (email_message_id, user_id, email, status, error_message)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (subject, body_markdown, current_user.user_id, len(recipients)),
+            (
+                email_message_id,
+                user_id,
+                email,
+                "sent" if sent else "failed",
+                error_message,
+            ),
         )
-        email_message_id = cur.fetchone()[0]
+    cur.execute(
+        "UPDATE email_message SET success_count = %s, failure_count = %s WHERE email_message_id = %s",
+        (success_count, failure_count, email_message_id),
+    )
+    return {"success_count": success_count, "failure_count": failure_count}
 
-        success_count = 0
-        failure_count = 0
-        for recipient_user_id, recipient_email in recipients:
-            try:
-                sent = send_update_email(
-                    recipient_user_id, recipient_email, subject, body_markdown
-                )
-                error_message = None if sent else "SendGrid send failed"
-            except Exception as e:
-                sent = False
-                error_message = str(e)
-            if sent:
-                success_count += 1
-            else:
-                failure_count += 1
-            cur.execute(
-                """
-                INSERT INTO email_message_recipient (email_message_id, user_id, email, status, error_message)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (
-                    email_message_id,
-                    recipient_user_id,
-                    recipient_email,
-                    "sent" if sent else "failed",
-                    error_message,
+
+@api_login_required
+def blog_send(slug):
+    """System-admin only: email a blog post (blog.py) to every update subscriber, each
+    in their own language, once. POST /api/blog/<slug>/send. Recorded like an app
+    update, with the post's slug on the email_message row (migration 066)."""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": _("Not authorized")}), 403
+    p = blog.post(slug)
+    if p is None:
+        return jsonify({"success": False, "error": _("No such post")}), 404
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT email_message_id FROM email_message WHERE blog_slug = %s", (slug,)
+        )
+        if cur.fetchone():
+            return (
+                jsonify(
+                    {"success": False, "error": _("This post has already been sent.")}
                 ),
+                409,
+            )
+        recipients = _update_subscribers(cur)
+        site = request.url_root.rstrip("/")
+        bodies = {lang: blog.email_body(p, lang, site) for lang in LANGUAGES}
+        email_message_id = _record_update_message(
+            cur,
+            p["title"]["en"],
+            f"{p['title']['en']}\n{site}/blog/{slug}",
+            len(recipients),
+            blog_slug=slug,
+        )
+
+        def send_one(user_id, email, lang):
+            body_html, body_text = bodies[lang]
+            return send_blog_post_email(
+                user_id, email, p["title"][lang], body_html, body_text, lang
             )
 
-        cur.execute(
-            "UPDATE email_message SET success_count = %s, failure_count = %s WHERE email_message_id = %s",
-            (success_count, failure_count, email_message_id),
-        )
+        counts = _deliver_update(cur, email_message_id, recipients, send_one)
         conn.commit()
-        return jsonify(
-            {
-                "success": True,
-                "recipient_count": len(recipients),
-                "success_count": success_count,
-                "failure_count": failure_count,
-            }
-        )
+        return jsonify(dict(success=True, recipient_count=len(recipients), **counts))
     finally:
         conn.close()
 

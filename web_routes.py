@@ -1074,7 +1074,38 @@ def blog_post(slug):
         "blog_post.html",
         post=_blog_post_context(p, lang),
         post_body=localized(blog.body_template(p)),
+        mailing=_blog_mailing(p) if _is_system_admin() else None,
     )
+
+
+def _is_system_admin():
+    return current_user.is_authenticated and current_user.is_system_admin
+
+
+def _blog_mailing(p):
+    """For the post page's admin bar: how many update subscribers there are, and
+    when the post went to them, if it has (email_message.blog_slug, migration 066)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM user_account
+            WHERE receive_update_emails = TRUE AND is_active = TRUE AND user_email IS NOT NULL
+            """
+        )
+        subscribers = cur.fetchone()[0]
+        cur.execute(
+            "SELECT sent_date, success_count FROM email_message WHERE blog_slug = %s",
+            (p["slug"],),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    sent = None
+    if row:
+        sent = {"date_label": format_date(row[0].date(), "long"), "count": row[1]}
+    return {"subscribers": subscribers, "sent": sent}
 
 
 def blog_rss():

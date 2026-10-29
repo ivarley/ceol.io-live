@@ -13,8 +13,66 @@
     </div>
 </article>
 
+{# A system admin's bar: email the post to the update subscribers, once (blog_send). #}
+{% if mailing %}
+<div class="blog-admin">
+    {% if mailing.sent %}
+    <span>{{ ngettext('Emailed to %(num)d subscriber on %(date)s.', 'Emailed to %(num)d subscribers on %(date)s.', mailing.sent.count, date=mailing.sent.date_label) }}</span>
+    {% else %}
+    <button type="button" id="blog-send" class="blog-admin-button"
+            data-url="{{ url_for('blog_send', slug=post.slug) }}">{{ _('Email this post to subscribers') }}</button>
+    <span id="blog-send-status"></span>
+    {% endif %}
+</div>
+{% endif %}
+
 <nav class="blog-foot">
     <a href="{{ url_for('blog_index') }}">← {{ _('All posts') }}</a>
     <a href="{{ url_for('blog_rss', lang=lang if lang != 'en' else None) }}">{{ _('RSS feed') }}</a>
 </nav>
+{% endblock %}
+
+{% block extra_js %}
+{% if mailing and not mailing.sent %}
+<script>
+(function () {
+    const CONFIRM = {{ ngettext('Send to %(num)d subscriber? Click again to confirm.', 'Send to %(num)d subscribers? Click again to confirm.', mailing.subscribers) | tojson }};
+    const SEND = {{ _('Send') | tojson }};
+    const SENDING = {{ _('Sending…') | tojson }};
+    const DONE = {{ js_ngettext('Sent to {n} subscriber.', 'Sent to {n} subscribers.') | tojson }};
+    const FAILED = {{ _('Could not send. Try again.') | tojson }};
+    const btn = document.getElementById('blog-send');
+    const status = document.getElementById('blog-send-status');
+    let armed = false;
+    btn.addEventListener('click', async () => {
+        if (!armed) {
+            armed = true;
+            status.textContent = CONFIRM;
+            btn.textContent = SEND;
+            return;
+        }
+        btn.disabled = true;
+        status.textContent = SENDING;
+        try {
+            const resp = await fetch(btn.dataset.url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                status.textContent = ceolPlural(DONE, data.success_count).replace('{n}', data.success_count);
+                btn.remove();
+            } else {
+                status.textContent = data.error || data.message || FAILED;
+                btn.disabled = false;
+            }
+        } catch (e) {
+            status.textContent = FAILED;
+            btn.disabled = false;
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

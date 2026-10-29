@@ -382,8 +382,10 @@ CREATE TABLE email_message (
     sent_date          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     recipient_count    INTEGER NOT NULL DEFAULT 0,
     success_count      INTEGER NOT NULL DEFAULT 0,
-    failure_count      INTEGER NOT NULL DEFAULT 0
+    failure_count      INTEGER NOT NULL DEFAULT 0,
+    blog_slug          TEXT  -- the blog post this send was, if it was one (migration 066)
 );
+CREATE UNIQUE INDEX idx_email_message_blog_slug ON email_message (blog_slug) WHERE blog_slug IS NOT NULL;
 
 -- One row per recipient per message
 CREATE TABLE email_message_recipient (

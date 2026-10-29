@@ -477,18 +477,16 @@ def verify_person_unsubscribe_token(token):
         return None
 
 
-def send_update_email(user_id, to_email, subject, body_markdown):
-    """Send one app-update email (spec 027): Markdown body, personalized
-    unsubscribe link, from the updates sender (default ceol@ceol.app)."""
-    from_email = os.environ.get("MAIL_UPDATES_SENDER", "ceol@ceol.app")
-
+def _update_email_footer(user_id, lang=None):
+    """What every update email ends with: why it came, the unsubscribe link and the
+    settings line, in the recipient's language. Returns (text, html, unsubscribe_url).
+    """
     unsubscribe_url = url_for(
         "unsubscribe_updates",
         token=generate_unsubscribe_token(user_id),
         _external=True,
     )
-
-    with force_locale(_language_of_user_id(user_id)):
+    with force_locale(lang or _language_of_user_id(user_id)):
         opted_in = _("You're receiving this because you opted in to updates on Ceol.")
         unsubscribe = _("Unsubscribe")
         settings_text, settings_html = _settings_footer()
@@ -499,25 +497,51 @@ def send_update_email(user_id, to_email, subject, body_markdown):
             + "\n"
             + settings_text
         )
-    # Plain-text part is the raw Markdown source (readable as-is)
-    body_text = f"{body_markdown}\n\n--\n{footer_text}\n"
-
-    body_html = f"""
-    {markdown.markdown(body_markdown)}
-    <hr style="margin-top: 2em; border: none; border-top: 1px solid #ddd;">
-    <p style="color: #6c757d; font-size: 0.85em;">
+    footer_html = f"""
+    {_FOOTER_RULE}
+    <p style="{_FOOTER_STYLE}">
         {opted_in}
         <a href="{unsubscribe_url}">{unsubscribe}</a>
         <br>{settings_html}
     </p>
     """
+    return footer_text, footer_html, unsubscribe_url
 
+
+def _updates_sender():
+    return os.environ.get("MAIL_UPDATES_SENDER", "ceol@ceol.app")
+
+
+def send_update_email(user_id, to_email, subject, body_markdown):
+    """Send one app-update email (spec 027): Markdown body, personalized
+    unsubscribe link, from the updates sender (default ceol@ceol.app)."""
+    footer_text, footer_html, unsubscribe_url = _update_email_footer(user_id)
+    # Plain-text part is the raw Markdown source (readable as-is)
+    body_text = f"{body_markdown}\n\n--\n{footer_text}\n"
+    body_html = f"""
+    {markdown.markdown(body_markdown)}
+    {footer_html}
+    """
     return send_email_via_sendgrid(
         to_email,
         subject,
         body_text,
         body_html,
-        from_email=from_email,
+        from_email=_updates_sender(),
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+def send_blog_post_email(user_id, to_email, subject, body_html, body_text, lang):
+    """Send one blog post (blog.email_body) to one update subscriber, in `lang`,
+    with the same footer and unsubscribe link as an app update."""
+    footer_text, footer_html, unsubscribe_url = _update_email_footer(user_id, lang)
+    return send_email_via_sendgrid(
+        to_email,
+        subject,
+        f"{body_text}\n\n--\n{footer_text}\n",
+        f"{body_html}\n{footer_html}",
+        from_email=_updates_sender(),
         unsubscribe_url=unsubscribe_url,
     )
 
