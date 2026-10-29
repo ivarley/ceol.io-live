@@ -1113,7 +1113,7 @@ def blog_rss():
 
 # Ian's page: who makes Ceol, and how to reach him. Prose in both languages.
 IAN_THESESSION_URL = "https://thesession.org/members/99113"
-IAN_CONTACT_EMAIL = "support@ceol.app"
+IAN_CONTACT_EMAIL = "ian@ceol.app"
 
 
 def ian_page():
