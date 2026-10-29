@@ -1,0 +1,65 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Seisiúin" %}
+{% set page_description = "Seisiúin a aimsiú, dul isteach iontu, agus iad a chur le Ceol" %}
+{% set active_page = "session-tracking" %}
+
+{% block help_content %}
+<h1>Seisiúin</h1>
+
+<p>Is cruinniú rialta ceoltóirí é seisiún ar Cheol. Tá ainm, ionad, sceideal (mar shampla, gach Déardaoin), agus baile aige. Tá leathanach ag gach seisiún ag seoladh mar <code>ceol.app/sessions/austin/mueller</code>. Tá trí chluaisín ar an leathanach:</p>
+
+<ul>
+    <li><a href="/help/session-tracking/tunes">Foinn</a> - Na foinn ar fad a seinneadh ag an seisiún</li>
+    <li><a href="/help/session-tracking/logs">Logaí</a> - Loga amháin do gach oíche. Scríobhann tú na logaí leis <a href="/help/session-tracking/live-logger">an logálaí beo</a></li>
+    <li><a href="/help/session-tracking/members">Daoine</a> - Na daoine a sheinneann ag an seisiún, agus cé a bhí ann gach oíche</li>
+</ul>
+
+<p>Is féidir le duine ar bith na foinn agus na logaí a fheiceáil. Ní fheiceann ach baill an tseisiúin na daoine. Nuair atá seisiún ar siúl, taispeánann a leathanach cnaipe <strong>Oscail loga an tseisiúin inniu</strong> ag an mbarr.</p>
+
+<h2>Seisiún a aimsiú</h2>
+
+<p>Tá bosca cuardaigh ar <a href="/sessions">liosta na seisiún</a>. Clóscríobh ainm nó áit. Tá na scagairí seo ar an roghchlár <strong>Cé na seisiúin le taispeáint</strong>:</p>
+
+<ul>
+    <li><strong>Ar siúl anois</strong> - Seisiúin atá ar siúl anois</li>
+    <li><strong>Mo sheisiúin</strong> - Seisiúin a bhfuil tú i do bhall díobh</li>
+    <li><strong>Cuairteanna</strong> - Seisiúin ar sheiceáil tú isteach iontu</li>
+    <li><strong>Gach ceann gníomhach</strong> - Gach seisiún atá fós ar siúl</li>
+    <li><strong>Neamhghníomhach</strong> - Seisiúin atá stoptha</li>
+</ul>
+
+<p>Tapáil baile seisiúin chun na seisiúin eile in aice leis a fheiceáil (féach <a href="/help/places">Láithreacha</a>). Taispeántar féile uair amháin sa liosta, fiú nuair atá roinnt blianta aici (féach <a href="/help/festivals">Féilte</a>).</p>
+
+<p>Nuair atá tú sínithe isteach, taispeánann an leathanach baile na chéad oícheanta eile de do sheisiúin, na seisiúin atá ar siúl anois, agus aon loga nach bhfuil críochnaithe agat.</p>
+
+<h2>Dul isteach i seisiún</h2>
+
+<p>Ar leathanach seisiúin, fiafraíonn Ceol: <strong>An bhfreastalaíonn tú ar an seisiún seo?</strong> Tá dhá fhreagra ann:</p>
+
+<ul>
+    <li>Déanann <strong>Freastalaím ar an seisiún seo</strong> ball díot. Taispeántar an seisiún faoi Mo sheisiúin. Áirítear a chuid fonn agus a stair mar do chuid féin.</li>
+    <li>Taifeadann <strong>Ar cuairt amháin</strong> go raibh tú ann. Ní dhéantar seisiún de do chuid féin de.</li>
+</ul>
+
+<p>Deimhníonn bainisteoirí an tseisiúin baill nua. Go dtí go ndeimhníonn bainisteoir thú, taispeántar thú mar neamhdheimhnithe agus ní féidir leat liosta na ndaoine a fheiceáil. Is féidir leat d'fhreagra a athrú nó an seisiún a fhágáil ón áit chéanna.</p>
+
+<h2>Seisiún a chur leis</h2>
+
+<p>Oscail <a href="/add-session">Cuir seisiún leis</a>. Lorgaíonn Ceol an seisiún ar TheSession.org ar dtús. Greamaigh a nasc nó a aitheantas, nó cuardaigh é. Cóipeálann Ceol an t-ainm, an t-ionad, an baile, agus an sceideal. Mura bhfuil an seisiún ar TheSession.org, is féidir leat é a chur leis tú féin. Cuir isteach ainm, cathair, an teach tábhairne nó an halla, agus sceideal. Is féidir leis an sceideal a bheith gach seachtain, gach ré-sheachtain, lá amháin den tseachtain sa mhí, nó gan sceideal. Chun féile a chur leis, cuir isteach ainm na féile agus an bhliain in ionad ainm seisiúin.</p>
+
+<p>Is é an duine a chuireann seisiún leis a chéad bhainisteoir. Tógann Ceol seoladh gréasáin an tseisiúin óna bhaile agus óna ainm. Má tá an baile laistigh de chathair, is féidir leat an baile nó an chathair a roghnú don seoladh.</p>
+
+<h2>Bainisteoirí seisiúin</h2>
+
+<p>Bainistíonn bainisteoirí seisiúin é óna leathanach <strong>Riarachán</strong>. Is féidir leo na rudaí seo a athrú ansin:</p>
+
+<ul>
+    <li>na sonraí: ionad, sceideal, nótaí, seoladh gréasáin, agus an nasc le TheSession.org</li>
+    <li>liosta na bhfonn</li>
+    <li>na logaí</li>
+    <li><strong>Rianú daoine</strong>: liosta na ndaoine, tinreamh, agus tosaitheoirí seite. Is féidir gach ceann díobh seo a bheith ar siúl nó as.</li>
+</ul>
+
+<p>Deimhníonn bainisteoirí baill. Is féidir leo daoine nach bhfuil cuntas acu a chur leis. Is féidir leo baill eile a dhéanamh ina mbainisteoirí freisin. Is féidir le bainisteoirí an tsuímh é seo ar fad a dhéanamh d'aon seisiún.</p>
+{% endblock %}

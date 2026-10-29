@@ -324,10 +324,26 @@
             <li class="help-nav-item">
                 <a href="{{ url_for('help_sessions') }}" class="help-nav-link {{ 'active' if active_page == 'sessions' else '' }}">{{ _("What's a Session?") }}</a>
             </li>
-            <li class="help-nav-item">
-                <a href="{{ url_for('help_offline') }}" class="help-nav-link {{ 'active' if active_page == 'offline' else '' }}">{{ _('Working Offline') }}</a>
+            <li class="help-nav-section {{ 'expanded' if active_page in ['account', 'phone', 'offline'] else '' }}">
+                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                    <span>{{ _('Getting Started') }}</span>
+                    <span class="chevron">&#9656;</span>
+                </div>
+                <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_account') }}" class="help-nav-link {{ 'active' if active_page == 'account' else '' }}">{{ _('Your Account') }}</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_phone') }}" class="help-nav-link {{ 'active' if active_page == 'phone' else '' }}">{{ _('On Your Phone') }}</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_offline') }}" class="help-nav-link {{ 'active' if active_page == 'offline' else '' }}">{{ _('Working Offline') }}</a>
+                    </li>
+                </ul>
             </li>
-            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'live-logger', 'members'] else '' }}">
+            {% set session_pages = ['session-tracking', 'tunes', 'logs', 'live-logger', 'members'] %}
+            {% set feature_pages = ['my-tunes', 'places', 'festivals', 'listen', 'search-by-notes', 'thesession'] + session_pages %}
+            <li class="help-nav-section {{ 'expanded' if active_page in feature_pages else '' }}">
                 <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
                     <span>{{ _('Features') }}</span>
                     <span class="chevron">&#9656;</span>
@@ -336,11 +352,11 @@
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_my_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'my-tunes' else '' }}">{{ _('My Tune List') }}</a>
                     </li>
-                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'live-logger', 'members'] else '' }}">
-                        <div class="help-nav-section-header" onclick="event.stopPropagation(); toggleSection(this.parentElement)">
-                            <span>{{ _('Session Tracking') }}</span>
+                    <li class="help-nav-section {{ 'expanded' if active_page in session_pages else '' }}">
+                        <a href="{{ url_for('help_session_tracking') }}" class="help-nav-section-header {{ 'active' if active_page == 'session-tracking' else '' }}">
+                            <span>{{ _('Sessions') }}</span>
                             <span class="chevron">&#9656;</span>
-                        </div>
+                        </a>
                         <ul class="help-nav-subnav">
                             <li class="help-nav-item">
                                 <a href="{{ url_for('help_session_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'tunes' else '' }}">{{ _('Tunes') }}</a>
@@ -355,6 +371,21 @@
                                 <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">{{ _('People') }}</a>
                             </li>
                         </ul>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_places') }}" class="help-nav-link {{ 'active' if active_page == 'places' else '' }}">{{ _('Places') }}</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_festivals') }}" class="help-nav-link {{ 'active' if active_page == 'festivals' else '' }}">{{ _('Festivals') }}</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_listen') }}" class="help-nav-link {{ 'active' if active_page == 'listen' else '' }}">{{ _('Listen') }}</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_search_by_notes') }}" class="help-nav-link {{ 'active' if active_page == 'search-by-notes' else '' }}">{{ _('Searching by Notes') }}</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_thesession') }}" class="help-nav-link {{ 'active' if active_page == 'thesession' else '' }}">{{ _('TheSession.org') }}</a>
                     </li>
                 </ul>
             </li>

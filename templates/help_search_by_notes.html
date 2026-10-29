@@ -1,0 +1,34 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Searching by Notes" %}
+{% set page_description = "Find a tune by typing a few of its notes in ABC" %}
+{% set active_page = "search-by-notes" %}
+
+{% block help_content %}
+<h1>Searching by Notes</h1>
+
+<p>Sometimes you know a tune but not its name. Wherever you can search for a tune by name, you can type a few of its notes instead. Ceol finds the tunes that contain those notes.</p>
+
+<h2>How to Type the Notes</h2>
+
+<p>Use the note letters of ABC notation, as tunes are written on TheSession.org. For example: <code>GED BED</code>, or <code>fdd cAA | B</code>.</p>
+
+<ul>
+    <li>Capital letters and small letters give the same result.</li>
+    <li>Spaces and bar lines are not necessary.</li>
+    <li>Do not type ornaments or grace notes. For example, <code>AAABc</code> finds a tune that is written with rolls and cuts on those notes.</li>
+    <li>Type at least three notes. More notes give a shorter list.</li>
+    <li>The notes can be from any part of the tune, not only the start.</li>
+    <li>Type the notes in the key the tune is usually written in. Ceol compares them with the settings on TheSession.org.</li>
+</ul>
+
+<h2>Where You Can Search by Notes</h2>
+
+<ul>
+    <li>In the search box on <a href="/help/my-tunes">My Tunes</a> and on the <a href="/help/session-tracking/tunes">Tunes</a> tab of a session. A match by notes has a ♪ mark.</li>
+    <li>In the add-tune search. The deeper search can be limited to names, to notes, or to both.</li>
+    <li>In <a href="/help/session-tracking/live-logger">The Live Logger</a>. This is the quickest way to log a tune when nobody knows its name.</li>
+</ul>
+
+<p><a href="/help/offline">Offline</a>, searching by notes works only on the first bars of each tune. The full notation is not saved on your device.</p>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "TheSession.org" %}
+{% set page_description = "What Ceol takes from TheSession.org, and how the two fit together" %}
+{% set active_page = "thesession" %}
+
+{% block help_content %}
+<h1>TheSession.org</h1>
+
+<p><a href="https://thesession.org">TheSession.org</a> is the community's reference website for Irish traditional music. It has tens of thousands of tunes, each with its settings in ABC notation. It also has sessions, recordings, and discussions. Ceol does not replace any of this. The tunes in Ceol are the tunes of TheSession.org. Ceol adds what happens around them: who knows them, where they are played, and on which nights.</p>
+
+<h2>Tunes</h2>
+
+<p>A tune in Ceol has the name, the type, and the settings from TheSession.org. Open a tune to:</p>
+
+<ul>
+    <li>see its notation</li>
+    <li>page through its <strong>settings</strong> and choose the one you play, or the one your session plays</li>
+    <li>open the tune on TheSession.org</li>
+    <li>open the tune in ABC Tools and hear it played</li>
+</ul>
+
+<p>The "everywhere" popularity of a tune is the number of TheSession.org tunebooks that contain it. When TheSession.org merges two copies of a tune, Ceol follows. Old links open the tune that remains.</p>
+
+<h2>Searching</h2>
+
+<p>When you search for a tune, Ceol first looks in its own catalogue. Then it looks on TheSession.org for tunes that are not in Ceol yet. You can also paste the link or the ID of a tune on TheSession.org to open that tune. <a href="/help/search-by-notes">Searching by notes</a> uses the notation of the settings.</p>
+
+<h2>Your Tunebook</h2>
+
+<p>If you have a tunebook on TheSession.org, you can copy it into <a href="/help/my-tunes">My Tunes</a>. Open the add-tune pane and tap <strong>Sync it here</strong>. You need your TheSession.org user ID. It is in the address of your profile there. The sync adds the tunes you do not have yet, with the status you choose.</p>
+
+<h2>Sessions</h2>
+
+<p>When you <a href="/help/session-tracking">add a session</a>, Ceol first looks for it on TheSession.org. It copies the name, the venue, the town, and the schedule, and keeps the link. The page of the session shows <strong>View on TheSession.org</strong>. You can add a session that is not on TheSession.org yourself.</p>
+{% endblock %}

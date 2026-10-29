@@ -1,0 +1,65 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Sessions" %}
+{% set page_description = "Finding, joining, and adding sessions on Ceol" %}
+{% set active_page = "session-tracking" %}
+
+{% block help_content %}
+<h1>Sessions</h1>
+
+<p>A session on Ceol is a regular gathering of players. It has a name, a venue, a schedule (for example, every Thursday), and a town. Each session has a page at an address like <code>ceol.app/sessions/austin/mueller</code>. The page has three tabs:</p>
+
+<ul>
+    <li><a href="/help/session-tracking/tunes">Tunes</a> - All the tunes that have been played at the session</li>
+    <li><a href="/help/session-tracking/logs">Logs</a> - One log for each night. You write the logs with <a href="/help/session-tracking/live-logger">The Live Logger</a></li>
+    <li><a href="/help/session-tracking/members">People</a> - The people who play at the session, and who was there each night</li>
+</ul>
+
+<p>Anyone can see the tunes and the logs. Only the members of the session can see the people. When a session is on, its page shows an <strong>Open Today's Session Log</strong> button at the top.</p>
+
+<h2>Finding a Session</h2>
+
+<p>The <a href="/sessions">sessions list</a> has a search box. Type a name or a place. The <strong>Which sessions to show</strong> menu has these filters:</p>
+
+<ul>
+    <li><strong>On Now</strong> - Sessions that are happening now</li>
+    <li><strong>My Sessions</strong> - Sessions you are a member of</li>
+    <li><strong>Visited</strong> - Sessions you have checked in to</li>
+    <li><strong>All Active</strong> - All sessions that still happen</li>
+    <li><strong>Inactive</strong> - Sessions that have stopped</li>
+</ul>
+
+<p>Tap the town of a session to see the other sessions near it (see <a href="/help/places">Places</a>). A festival appears once in the list, even when it has several years (see <a href="/help/festivals">Festivals</a>).</p>
+
+<p>When you are signed in, the home page shows the next nights of your sessions, the sessions that are on now, and any log you have not finished.</p>
+
+<h2>Joining a Session</h2>
+
+<p>On the page of a session, Ceol asks: <strong>Do you attend this session?</strong> There are two answers:</p>
+
+<ul>
+    <li><strong>I attend this session</strong> makes you a member. The session appears under My Sessions. Its tunes and its history count as yours.</li>
+    <li><strong>Just visiting</strong> records that you were there. The session does not become one of yours.</li>
+</ul>
+
+<p>The admins of the session confirm new members. Until an admin confirms you, you are shown as unconfirmed and you cannot see the people list. You can change your answer or leave the session from the same place.</p>
+
+<h2>Adding a Session</h2>
+
+<p>Open <a href="/add-session">Add a session</a>. Ceol first looks for the session on TheSession.org. Paste its link or ID, or search for it. Ceol copies the name, the venue, the town, and the schedule. If the session is not on TheSession.org, you can add it yourself. Enter a name, a city, the pub or hall, and a schedule. The schedule can be every week, every other week, one weekday of the month, or no schedule. To add a festival, enter the name of the festival and the year instead of a session name.</p>
+
+<p>The person who adds a session becomes its first admin. Ceol builds the web address of the session from its town and its name. If the town is inside a city, you can choose the town or the city for the address.</p>
+
+<h2>Session Admins</h2>
+
+<p>The admins of a session manage it from its <strong>Admin</strong> page. There they can change:</p>
+
+<ul>
+    <li>the details: venue, schedule, comments, web address, and the link to TheSession.org</li>
+    <li>the tune list</li>
+    <li>the logs</li>
+    <li><strong>People Tracking</strong>: the people list, attendance, and set starters. Each of these can be on or off.</li>
+</ul>
+
+<p>Admins confirm members. They can add people who do not have an account. They can also make other members admins. Site admins can do all of this for any session.</p>
+{% endblock %}

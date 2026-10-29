@@ -1,0 +1,29 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Festivals" %}
+{% set page_description = "Festivals on Ceol: one address, a session for each year" %}
+{% set active_page = "festivals" %}
+
+{% block help_content %}
+<h1>Festivals</h1>
+
+<p>A festival has one address, for example <code>ceol.app/sessions/oflahertys</code>. Each year of the festival is a session under that address: <code>oflahertys/2025</code>, <code>oflahertys/2026</code>. Each year has its own venue, dates, schedule, and logs. The name and the address of the festival stay the same.</p>
+
+<h2>Opening the Right Year</h2>
+
+<p>In the week before a festival and in the month after it, the address of the festival opens this year's festival. At other times, it shows a list of all the years. The next year is first, with its dates. If the festival has only one year, the address opens that year.</p>
+
+<p>On the page of a year, the name of the festival at the top links to the list of years. The menu next to the name opens a different year.</p>
+
+<h2>A Festival Day</h2>
+
+<p>The <strong>Logs</strong> tab of a festival is its schedule. The sessions are grouped by day. Each session of the festival has its own log, with its room and its time. Several sessions can be on at the same time. On the home page, each day of a festival is one card, for example "Day 2 &middot; 8 sessions, 4 on now". The card opens the schedule.</p>
+
+<h2>Adding a Festival</h2>
+
+<p>Open <a href="/add-session">Add a session</a> and select <strong>Festival</strong>. Enter the name of the festival, without a year, and the year. Enter the first day and the last day. Ceol makes the address of the festival and its first year. You become the admin of that year.</p>
+
+<h2>Adding a New Year</h2>
+
+<p>The admins of a festival make the next year by copying the last one. On the Admin page of a year, tap <strong>Copy to a new year</strong>. Or, on the list of years, tap <strong>Add a year</strong>. The copy has the same venue, time zone, settings, and admins. The dates move to the same days of the week in the new year. The copy does not have the schedule or the logs. The new year starts with an empty schedule. You can also copy to an earlier year, to add a year that was not logged.</p>
+{% endblock %}

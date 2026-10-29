@@ -1,0 +1,29 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Féilte" %}
+{% set page_description = "Féilte ar Cheol: seoladh amháin, seisiún do gach bliain" %}
+{% set active_page = "festivals" %}
+
+{% block help_content %}
+<h1>Féilte</h1>
+
+<p>Tá seoladh amháin ag féile, mar shampla <code>ceol.app/sessions/oflahertys</code>. Is seisiún faoin seoladh sin gach bliain den fhéile: <code>oflahertys/2025</code>, <code>oflahertys/2026</code>. Tá a ionad, a dátaí, a sceideal, agus a logaí féin ag gach bliain. Fanann ainm agus seoladh na féile mar a chéile.</p>
+
+<h2>An bhliain cheart a oscailt</h2>
+
+<p>Sa tseachtain roimh fhéile agus sa mhí ina diaidh, osclaíonn seoladh na féile féile na bliana seo. Ag amanna eile, taispeánann sé liosta de na blianta ar fad. Tá an chéad bhliain eile ar dtús, lena dátaí. Mura bhfuil ach bliain amháin ag an bhféile, osclaíonn an seoladh an bhliain sin.</p>
+
+<p>Ar leathanach bliana, nascann ainm na féile ag an mbarr le liosta na mblianta. Osclaíonn an roghchlár in aice leis an ainm bliain eile.</p>
+
+<h2>Lá féile</h2>
+
+<p>Is é cluaisín <strong>Logaí</strong> féile a sceideal. Tá na seisiúin grúpáilte de réir lae. Tá a loga féin ag gach seisiún den fhéile, lena sheomra agus a am. Is féidir le roinnt seisiún a bheith ar siúl ag an am céanna. Ar an leathanach baile, is cárta amháin gach lá d'fhéile, mar shampla "Lá 2 &middot; 8 seisiún, 4 ar siúl anois". Osclaíonn an cárta an sceideal.</p>
+
+<h2>Féile a chur leis</h2>
+
+<p>Oscail <a href="/add-session">Cuir seisiún leis</a> agus roghnaigh <strong>Féile</strong>. Cuir isteach ainm na féile, gan bhliain, agus an bhliain. Cuir isteach an chéad lá agus an lá deiridh. Déanann Ceol seoladh na féile agus a céad bhliain. Déantar bainisteoir na bliana sin díot.</p>
+
+<h2>Bliain nua a chur leis</h2>
+
+<p>Déanann bainisteoirí féile an chéad bhliain eile trí cheann na bliana seo caite a chóipeáil. Ar leathanach Riaracháin bliana, tapáil <strong>Cóipeáil chuig bliain nua</strong>. Nó, ar liosta na mblianta, tapáil <strong>Cuir bliain leis</strong>. Tá an t-ionad, an crios ama, na socruithe, agus na bainisteoirí céanna ag an gcóip. Bogann na dátaí go dtí na laethanta céanna den tseachtain sa bhliain nua. Níl an sceideal ná na logaí ag an gcóip. Tosaíonn an bhliain nua le sceideal folamh. Is féidir leat cóipeáil chuig bliain níos luaithe freisin, chun bliain nár logáladh a chur leis.</p>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Listen" %}
+{% set page_description = "The iPhone app tells you the name of the tune that is playing, and can log a night" %}
+{% set active_page = "listen" %}
+
+{% block help_content %}
+<h1>Listen</h1>
+
+<p>Listen is a feature of the iPhone app. It tells you the name of the tune that is playing. It works on the phone, with no connection and no account. The website does not have Listen.</p>
+
+<h2>What Tune Is This?</h2>
+
+<p>Open the <strong>Listen</strong> tab, or tap <strong>What tune is this?</strong> on Home. Then tap <strong>Start Listening</strong>. The meter shows what it hears:</p>
+
+<ul>
+    <li><strong>No tune playing</strong> - It hears talk, tuning, or silence</li>
+    <li><strong>Figuring out the tune…</strong> - A tune is playing, but the meter is not sure yet which one</li>
+    <li>The name of the tune - The meter is sure</li>
+</ul>
+
+<p>If the name is wrong, or the players have moved to the next tune, tap the tune. Then tap <strong>Wrong tune</strong> or <strong>Tune changed</strong>.</p>
+
+<p>When the meter is sure, you can add the tune to your list, or change its status and its heard count. You can also open the notation full screen. <strong>Recent Tunes Heard</strong>, at the bottom of the screen, lists the last tunes the meter named. Tap one to open its sheet.</p>
+
+<p>Listen is also available where you add a tune. Under the empty search box, tap <strong>Listen To What's Playing Now</strong>. From the tune list of a session, you can add the tune the meter names to that list. From the log of a night, you can log it.</p>
+
+<h2>Logging a Night with Listen</h2>
+
+<p>On the log of a night, tap <strong>Listen</strong>. The meter now logs to that night. Each tune the meter is sure of goes into the log. The top of the screen says which night it logs to. Tap <strong>Stop logging</strong> to keep listening without logging. When <strong>Log automatically at 100%</strong> is on, the meter logs the tune without a tap. When it is off, the meter waits for you to confirm. Several phones can listen to the same night. Ceol does not log the same tune twice. You can also log tunes by hand at the same time.</p>
+
+<h2>Recording</h2>
+
+<p>When the meter logs a night, the app also records the audio. When you only ask what tune is playing, recording is off. You can turn it on. Recordings stay on the phone. You can play them there. If a session keeps recordings, you can upload a recording to its night. A recording made without a night must first be attached to a night.</p>
+
+<h2>Trying Listen</h2>
+
+<p>If no tune is playing near you, open <a href="/samples">Try Listen</a>. It plays two short clips from a real session. Hold your phone near the speaker.</p>
+{% endblock %}

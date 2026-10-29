@@ -1,0 +1,25 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Places" %}
+{% set page_description = "Towns, cities, and the sessions around them" %}
+{% set active_page = "places" %}
+
+{% block help_content %}
+<h1>Places</h1>
+
+<p>Each session belongs to a town. The address of the session starts with the town. For example, <code>ceol.app/sessions/austin/mueller</code> is the Mueller session in Austin. In the <a href="/sessions">sessions list</a>, tap the town of a session to open the page for that town.</p>
+
+<h2>A Town's Page</h2>
+
+<p>The page <code>ceol.app/sessions/austin</code> lists all the sessions in Austin. It has the same search box and filters as the full sessions list. A city's page also lists the towns around the city and their sessions. For example, a session in Conroe also appears on the page for Houston. A festival appears on the page of the town where it happens.</p>
+
+<p>When a town is inside a city, both addresses reach the session. For example, <code>houston/the-pub</code> and <code>conroe/the-pub</code> open the same session.</p>
+
+<h2>When You Add a Session</h2>
+
+<p>You enter the town, the state or county, and the country. Ceol compares them with the places it already knows. If it finds a match, it uses that place. If not, it makes a new one. Some names belong to more than one town, for example Athens, Georgia and Athens, Greece. Then Ceol asks you which one you mean. Sessions imported from TheSession.org go through the same steps.</p>
+
+<h2>Changes to Places</h2>
+
+<p>A place is shared by all the sessions in it. After a place is made, only site admins can change it. They can correct the spelling, put a town inside a city, or change its address. Old addresses continue to work after a change. If a town is spelled wrong, or belongs inside a nearby city, tell us through <a href="/support">Contact &amp; Support</a>.</p>
+{% endblock %}

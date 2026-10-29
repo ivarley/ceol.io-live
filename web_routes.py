@@ -956,6 +956,38 @@ def help_live_logger():
     return render_template(localized("help_live_logger.html"))
 
 
+def help_account():
+    return render_template(localized("help_account.html"))
+
+
+def help_phone():
+    return render_template(localized("help_phone.html"))
+
+
+def help_session_tracking():
+    return render_template(localized("help_session_tracking.html"))
+
+
+def help_places():
+    return render_template(localized("help_places.html"))
+
+
+def help_festivals():
+    return render_template(localized("help_festivals.html"))
+
+
+def help_listen():
+    return render_template(localized("help_listen.html"))
+
+
+def help_search_by_notes():
+    return render_template(localized("help_search_by_notes.html"))
+
+
+def help_thesession():
+    return render_template(localized("help_thesession.html"))
+
+
 # Release notes months, most recent first. Single source of truth shared by
 # the index page and the per-month detail pages.
 RELEASE_NOTES_MONTHS = [

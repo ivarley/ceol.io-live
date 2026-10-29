@@ -1,0 +1,55 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Your Account" %}
+{% set page_description = "Using Ceol with or without an account, signing in, and deleting your account" %}
+{% set active_page = "account" %}
+
+{% block help_content %}
+<h1>Your Account</h1>
+
+<h2>Without an Account</h2>
+
+<p>You do not need an account to look around Ceol, on the website or in the iPhone app. Without an account you can:</p>
+
+<ul>
+    <li>browse sessions, their tunes, and their logs</li>
+    <li>follow the log of a night while it is written</li>
+    <li>look up a tune and see its notation</li>
+    <li>use <a href="/help/listen">Listen</a> to find the name of the tune that is playing</li>
+</ul>
+
+<p>You need an account to keep your own tune list, to join a session, and to log or change anything. When you need an account, Ceol asks you to sign in. After you sign in, it takes you back to the page you were on.</p>
+
+<h2>Creating an Account</h2>
+
+<p>An account is free. Enter your email address on the <a href="/login">sign-in page</a>. Ceol sends you an email with a link. Open the link and choose a password. You can then fill in your profile: your name, your instruments, and your town. All of these are optional. They help the people at your session to find you.</p>
+
+<h2>Signing In</h2>
+
+<p>Sign in with your email address or your username, and your password. There are two other options on the password step:</p>
+
+<ul>
+    <li><strong>Email me a sign-in link instead</strong> sends you an email with a link. The link signs you in.</li>
+    <li><strong>Forgot your password?</strong> sends you an email with a link. The link lets you set a new password.</li>
+</ul>
+
+<p>Both options work on the website and in the app. Emails about your account come from support@ceol.app. You can reply to them.</p>
+
+<h2>Your Profile</h2>
+
+<p><a href="/me">Me</a> holds your profile and your settings:</p>
+
+<ul>
+    <li>your name and your town</li>
+    <li>your instruments, and whether each instrument follows your tune list automatically or is a list you build yourself (see <a href="/help/my-tunes">My Tune List</a>)</li>
+    <li>the emails you want to get from Ceol</li>
+</ul>
+
+<p>The Me page is also where you sign out, report a problem, and open these help pages.</p>
+
+<p>Ceol is available in English and in Irish. Use the <strong>Gaeilge</strong> or <strong>English</strong> link in the header of the website to change the language. If you are signed in, Ceol saves your choice in your account. The app uses the language of your phone.</p>
+
+<h2>Deleting Your Account</h2>
+
+<p>You can delete your account at any time. Go to <a href="/me">Me</a> and tap <strong>Delete Account</strong>. Ceol removes your login, your tune list, your instruments, and your contact details immediately. Your name stays on the sessions you were part of, in the same way as for a person a session admin adds. The tunes logged at those sessions stay in their logs. The <a href="/privacy">Privacy Policy</a> says what Ceol keeps about you and why.</p>
+{% endblock %}

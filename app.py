@@ -579,6 +579,16 @@ app.add_url_rule(
 app.add_url_rule(
     "/help/session-tracking/live-logger", "help_live_logger", help_live_logger
 )
+app.add_url_rule("/help/account", "help_account", help_account)
+app.add_url_rule("/help/phone", "help_phone", help_phone)
+app.add_url_rule(
+    "/help/session-tracking", "help_session_tracking", help_session_tracking
+)
+app.add_url_rule("/help/places", "help_places", help_places)
+app.add_url_rule("/help/festivals", "help_festivals", help_festivals)
+app.add_url_rule("/help/listen", "help_listen", help_listen)
+app.add_url_rule("/help/search-by-notes", "help_search_by_notes", help_search_by_notes)
+app.add_url_rule("/help/thesession", "help_thesession", help_thesession)
 app.add_url_rule(
     "/help/release-notes/", "help_release_notes_index", help_release_notes_index
 )
