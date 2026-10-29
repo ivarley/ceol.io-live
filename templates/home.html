@@ -76,16 +76,9 @@
     .ios-app-text { flex: 1; min-width: 0; }
     .ios-app-title { font-weight: 600; color: var(--text-color); }
     .ios-app-sub { font-size: 0.875rem; color: var(--text-muted); }
-    .ios-app-btn {
-        flex-shrink: 0;
-        padding: 0.45rem 1rem;
-        border-radius: var(--r-pill);
-        background: var(--primary-fill);
-        color: #fff;
-        font-weight: 500;
-        white-space: nowrap;
-    }
-    .ios-app-btn:hover { background: var(--primary-fill-hover); color: #fff; text-decoration: none; }
+    /* Apple's badge, unaltered; their guidelines ask for at least 40px tall. */
+    .ios-app-badge { flex-shrink: 0; line-height: 0; }
+    .ios-app-badge img { height: 40px; width: auto; }
 </style>
 {% endblock %}
 
@@ -98,7 +91,7 @@
         <div class="ios-app-title">{{ _('Ceol for iPhone') }}</div>
         <div class="ios-app-sub">{{ _('Free on the App Store.') }}</div>
     </div>
-    <a class="ios-app-btn" href="https://apps.apple.com/app/id6817016920">{{ _('Get the App') }}</a>
+    <a class="ios-app-badge" href="https://apps.apple.com/app/id6817016920"><img src="{{ url_for('static', filename='images/app-store-badge.png') }}" alt="{{ _('Download on the App Store') }}" width="135" height="40"></a>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}

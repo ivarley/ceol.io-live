@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-29 10:30-0500\n"
+"POT-Creation-Date: 2026-10-29 10:36-0500\n"
 "PO-Revision-Date: 2026-10-06 12:44+0530\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ga\n"
@@ -3535,7 +3535,7 @@ msgstr "Stair na n-athruithe"
 #: templates/auth/resend_verification.html:21
 #: templates/auth/reset_password.html:21 templates/auth/set_password.html:21
 #: templates/auth/set_password.html:61 templates/auth/setup_profile.html:21
-#: templates/base.html:512 templates/home.html:109
+#: templates/base.html:512 templates/home.html:102
 #: templates/modals/person_edit.html:8 templates/modals/person_edit.html:73
 #: templates/moved_banner.html:11 templates/session_admin_person.html:431
 #, review
@@ -6413,7 +6413,7 @@ msgstr "Sínithe isteach mar %(name)s."
 msgid "About"
 msgstr "Eolas"
 
-#: templates/hamburger_menu.html:79 templates/home.html:132
+#: templates/hamburger_menu.html:79 templates/home.html:125
 #, review
 msgid "Log In or Register"
 msgstr "Sínigh isteach nó cláraigh"
@@ -6478,37 +6478,37 @@ msgstr "Nótaí eisiúna"
 msgid "Help Topics"
 msgstr "Ábhair chabhrach"
 
-#: templates/home.html:98
+#: templates/home.html:91
 #, review
 msgid "Ceol for iPhone"
 msgstr "Ceol don iPhone"
 
-#: templates/home.html:99
+#: templates/home.html:92
 #, review
 msgid "Free on the App Store."
 msgstr "Saor in aisce ar an App Store."
 
-#: templates/home.html:101
+#: templates/home.html:94
 #, review
-msgid "Get the App"
-msgstr "Faigh an aip"
+msgid "Download on the App Store"
+msgstr "Íoslódáil ón App Store"
 
-#: templates/home.html:130
+#: templates/home.html:123
 #, review
 msgid "Track your tunes. Log your sessions."
 msgstr "Coinnigh cuntas ar do chuid fonn. Logáil do sheisiúin."
 
-#: templates/home.html:131
+#: templates/home.html:124
 #, review
 msgid "Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play at your session."
 msgstr "Coinnigh cuntas ar na foinn atá ar eolas agat nó le foghlaim agat, feic cad atá coitianta i seisiúin éagsúla, agus logáil a seinneann tú ag do sheisiún."
 
-#: templates/home.html:133
+#: templates/home.html:126
 #, review
 msgid "browse sessions"
 msgstr "seisiúin a bhrabhsáil"
 
-#: templates/home.html:134
+#: templates/home.html:127
 #, python-format, review
 msgid "Don't want an account? You can still %(link)s."
 msgstr "Níl cuntas uait? Is féidir leat %(link)s fós."
