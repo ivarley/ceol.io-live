@@ -1128,5 +1128,29 @@
   "Matched a tag, not the name": {
     "ga": "Meaitseáil le clib, ní leis an ainm",
     "review": true
+  },
+  "change listening on the server": {
+    "ga": "an éisteacht ar an bhfreastalaí a athrú",
+    "review": true
+  },
+  "Can listen on Ceol's server": {
+    "ga": "Is féidir éisteacht ar Fhreastalaí Ceol",
+    "review": true
+  },
+  "System admins always can.": {
+    "ga": "Is féidir le bainisteoirí córais i gcónaí.",
+    "review": true
+  },
+  "In the app, Listen can then use Ceol's server as well as the phone.": {
+    "ga": "San aip, is féidir le hÉist Freastalaí Ceol a úsáid ansin chomh maith leis an bhfón.",
+    "review": true
+  },
+  "Listen on Ceol's server": {
+    "ga": "Éisteacht ar Fhreastalaí Ceol",
+    "review": true
+  },
+  "Allowed": {
+    "ga": "Ceadaithe",
+    "review": true
   }
 }

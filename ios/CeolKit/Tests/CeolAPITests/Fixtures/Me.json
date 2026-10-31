@@ -1,6 +1,7 @@
 {
   "success": true,
   "user": {
+    "can_listen_on_server": true,
     "email": "ian@ceol.io",
     "email_verified": true,
     "first_name": "Ian",

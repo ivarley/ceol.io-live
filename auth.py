@@ -31,6 +31,7 @@ class User(UserMixin):
         auto_save_interval=60,
         active_session=None,
         language=None,
+        can_listen_on_server=None,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -50,6 +51,9 @@ class User(UserMixin):
         # Spec 057: 'en' or 'ga'. get_by_id (every request) reads it; a loader that
         # doesn't leaves None and i18n.user_language() fetches it when asked.
         self.language = language
+        # Spec 061: given the right to listen on the server. Loaded like language;
+        # read it through listens_on_server().
+        self.can_listen_on_server = can_listen_on_server
 
     @property
     def is_active(self):
@@ -58,6 +62,25 @@ class User(UserMixin):
 
     def get_id(self):
         return str(self.user_id)
+
+    def listens_on_server(self):
+        """May this person use the listening service (spec 061)? System admins
+        always; anyone else when an admin has given them the right."""
+        if self.is_system_admin:
+            return True
+        if self.can_listen_on_server is None:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT can_listen_on_server FROM user_account WHERE user_id = %s",
+                    (self.user_id,),
+                )
+                row = cur.fetchone()
+            finally:
+                conn.close()
+            self.can_listen_on_server = bool(row and row[0])
+        return bool(self.can_listen_on_server)
 
     @staticmethod
     def get_by_id(user_id):
@@ -69,7 +92,7 @@ class User(UserMixin):
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
                        ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval,
                        p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path,
-                       ua.hashed_password, ua.language
+                       ua.hashed_password, ua.language, ua.can_listen_on_server
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 LEFT JOIN session_instance si ON p.at_active_session_instance_id = si.session_instance_id
@@ -114,6 +137,7 @@ class User(UserMixin):
                 # the user through here).
                 user.hashed_password = user_data[20]
                 user.language = user_data[21]
+                user.can_listen_on_server = user_data[22]
                 return user
             return None
         finally:

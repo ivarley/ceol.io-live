@@ -7764,6 +7764,70 @@ def admin_verify_email(user_id):
 
 
 @api_login_required
+def set_user_listen_on_server(user_id):
+    """Give or take away the right to listen on the server (spec 061).
+
+    PUT /api/admin/user/<user_id>/listen-on-server  {"allowed": bool}
+
+    System admins only. A system admin has the right without the flag, so the
+    flag is theirs to set but changes nothing for them.
+    """
+    if not current_user.is_system_admin:
+        return (
+            jsonify(
+                {"success": False, "message": _("Unauthorized. Admin access required.")}
+            ),
+            403,
+        )
+    data = request.get_json(silent=True) or {}
+    allowed = data.get("allowed")
+    if not isinstance(allowed, bool):
+        return (
+            jsonify(
+                {"success": False, "message": _("'allowed' must be true or false")}
+            ),
+            400,
+        )
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT can_listen_on_server FROM user_account WHERE user_id = %s",
+            (user_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "message": _("User not found")}), 404
+        if row[0] != allowed:
+            save_to_history(
+                cur, "user_account", "UPDATE", user_id, user_id=get_current_user_id()
+            )
+            cur.execute(
+                """
+                UPDATE user_account
+                SET can_listen_on_server = %s, last_modified_date = %s,
+                    last_modified_user_id = %s
+                WHERE user_id = %s
+                """,
+                (allowed, now_utc(), get_current_user_id(), user_id),
+            )
+            conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "message": (
+                    _("They can listen on the server now")
+                    if allowed
+                    else _("They can no longer listen on the server")
+                ),
+                "can_listen_on_server": allowed,
+            }
+        )
+    finally:
+        conn.close()
+
+
+@api_login_required
 def toggle_person_active(person_id):
     """
     Toggle a person's active status (deactivate/reactivate).

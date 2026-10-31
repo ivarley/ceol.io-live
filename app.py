@@ -1412,6 +1412,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/admin/user/<int:user_id>/listen-on-server",
+    "set_user_listen_on_server",
+    set_user_listen_on_server,
+    methods=["PUT"],
+)
+app.add_url_rule(
     "/api/admin/person/<int:person_id>/active",
     "toggle_person_active",
     toggle_person_active,

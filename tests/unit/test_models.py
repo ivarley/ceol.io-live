@@ -88,6 +88,7 @@ class TestUser:
             None,  # session path
             None,  # hashed_password (spec 052: loaded so has_password() is right per-request)
             "en",  # language (spec 057)
+            False,  # can_listen_on_server (spec 061)
         )
         mock_cursor.fetchone.return_value = user_tuple
 

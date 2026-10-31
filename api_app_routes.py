@@ -81,6 +81,8 @@ def user_payload(user, *, profile_incomplete=None):
         "first_name": user.first_name,
         "last_name": user.last_name,
         "is_system_admin": bool(user.is_system_admin),
+        # Spec 061: may use the listening service (system admins always may).
+        "can_listen_on_server": user.listens_on_server(),
         "timezone": user.timezone or "UTC",
         # Spec 057: the interface language, 'en' or 'ga'.
         "language": i18n.user_language(user),

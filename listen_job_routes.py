@@ -414,14 +414,16 @@ def list_jobs(conn, limit=200):
 @api_login_required
 def instance_known_tunes(session_instance_id):
     """For live listening (spec 053): the tunes this session logged before the
-    night, which the listener prefers, and the session's keys for them."""
+    night, which the listener prefers, and the session's keys for them. The
+    listening service asks with the listener's token, so anyone who may listen on
+    the server (spec 061) may ask, as well as those who manage the recordings."""
     from recording_routes import _instance_gate
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         denied = _instance_gate(cur, session_instance_id)
-        if denied:
+        if denied and (denied[1] == 404 or not current_user.listens_on_server()):
             return denied
         ids, keys = known_tunes(cur, session_instance_id)
         return jsonify(

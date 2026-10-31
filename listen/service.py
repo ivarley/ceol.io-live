@@ -280,7 +280,8 @@ _app_tokens = {}      # token -> (allowed, checked at)
 
 
 def _app_token_allowed(token):
-    """Does this Ceol app token belong to a system admin? The web app says."""
+    """May this Ceol app token's person listen on the server (spec 061)? The web app
+    says: system admins, and anyone an admin has given the right."""
     import urllib.request
 
     hit = _app_tokens.get(token)
@@ -291,7 +292,9 @@ def _app_token_allowed(token):
         req = urllib.request.Request(f"{CEOL_API_URL}/api/me",
                                      headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen"})
         with urllib.request.urlopen(req, timeout=10) as r:
-            allowed = bool(json.loads(r.read()).get("user", {}).get("is_system_admin"))
+            user = json.loads(r.read()).get("user", {})
+            # is_system_admin: a web app from before the right existed
+            allowed = bool(user.get("can_listen_on_server", user.get("is_system_admin")))
     except Exception:
         allowed = False
     _app_tokens[token] = (allowed, time.time())

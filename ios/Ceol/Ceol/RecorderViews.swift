@@ -229,7 +229,7 @@ struct ListenStartView: View {
                 Text("Tell me what tune is playing. Nothing is logged unless you say so.")
                     .font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
             }
-            if app.user?.isSystemAdmin == true {
+            if app.user?.listensOnServer == true {
                 HStack(spacing: 10) {
                     Text("Listening on").font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
                     Picker("Listening on", selection: $place) {
@@ -248,7 +248,7 @@ struct ListenStartView: View {
                 .accessibilityIdentifier("start.recording")
             }
             Button {
-                if app.user?.isSystemAdmin == true { ListenWhere.preferred = place }
+                if app.user?.listensOnServer == true { ListenWhere.preferred = place }
                 onStart(recording)
             } label: {
                 Label { Text("Start Listening") } icon: { EarGlyph(size: 26) }
@@ -300,7 +300,7 @@ struct ListenMeterView: View {
                 }
             }
             Text(recorder.linkText).font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
-            if app.user?.isSystemAdmin == true { listenWhere }
+            if app.user?.listensOnServer == true { listenWhere }
             if let error = recorder.hearingError ?? recorder.error {
                 Text(error).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger)
             }

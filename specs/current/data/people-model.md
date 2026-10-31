@@ -32,6 +32,12 @@ Login credentials and preferences.
   users backfilled to true at launch). Toggled on the profile page (`/me`);
   cleared without login by the signed unsubscribe link in every update email
   (`/unsubscribe/<token>`).
+- can_listen_on_server - may use the listening service (spec 061, migration 067),
+  default false. A system admin sets it on `/admin/people/<id>`
+  (`PUT /api/admin/user/<id>/listen-on-server`); system admins have the right
+  without it. `/api/me` reports the effective right as `can_listen_on_server`
+  (`User.listens_on_server()`), which the listening service and the iPhone's
+  "Listening on" choice follow.
 - verification_token, password_reset_token
 
 See [Authentication](../logic/auth.md) for details.

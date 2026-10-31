@@ -172,9 +172,9 @@ final class AppModel {
         pendingLog = nil
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let id = logging.map { "night-\($0.instanceID)-\(stamp)" } ?? "listen-\(stamp)"
-        // the server admits system admins only (listen/service.py); everyone else listens
-        // on the phone
-        let place: ListenWhere = user?.isSystemAdmin == true ? .preferred : .phone
+        // the server admits only those with the right (spec 061, listen/service.py);
+        // everyone else listens on the phone
+        let place: ListenWhere = user?.listensOnServer == true ? .preferred : .phone
         let r = NightRecorder(logging: logging, recording: recording ?? (logging != nil), recordingID: id,
                               fileURL: recordings.dir.appending(path: "\(id).caf"),
                               meterLogURL: recordings.meterLog(id),

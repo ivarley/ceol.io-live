@@ -15,6 +15,12 @@ public typealias User = Components.Schemas.User
 public typealias AppConfig = Components.Schemas.AppConfig
 public typealias Profile = Components.Schemas.Profile
 
+extension User {
+    /// May listen on Ceol's server (spec 061): system admins, and anyone an admin has
+    /// given the right. A server from before the right existed sends only the admin bit.
+    public var listensOnServer: Bool { canListenOnServer ?? isSystemAdmin }
+}
+
 /// The server refused, and said why.
 public struct AuthFailure: Error, Equatable, Sendable {
     public let status: Int

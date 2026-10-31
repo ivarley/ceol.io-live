@@ -184,6 +184,34 @@
       })
   }
 
+  // --- Listening on Ceol's server (spec 061) ---------------------------------
+  // A right an admin gives; it saves as soon as the box changes. System admins
+  // have it anyway, so their box is ticked and fixed.
+  let listenOnServer = $state(user ? !!user.can_listen_on_server : false)
+  let savingListen = $state(false)
+
+  function setListenOnServer(allowed) {
+    savingListen = true
+    return fetch(`/api/admin/user/${user.user_id}/listen-on-server`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowed }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.success) throw new ServerError(data.message || '')
+        listenOnServer = data.can_listen_on_server
+        toast(data.message, 'success')
+      })
+      .catch((error) => {
+        listenOnServer = !allowed
+        toastFailure(t('change listening on the server'), error)
+      })
+      .finally(() => {
+        savingListen = false
+      })
+  }
+
   // --- Live instrument editor (changes save immediately) ----------------------
   let profileInstruments = $state([]) // [{instrument, is_auto, removal_loss_count}]
   let instrumentsLoaded = $state(false) // false until the first load lands
@@ -596,6 +624,36 @@
           </span>
         </div>
       </div>
+
+      <!-- Spec 061: who may listen on Ceol's server. An admin sets it here; your own
+           page says so only when you have it, as the rest of us never will need to. -->
+      {#if !isUserProfile}
+        <div class="kit-group">
+          <div class="kit-check-field">
+            <label class="kit-check-label" for="listen-on-server">
+              <input
+                type="checkbox"
+                id="listen-on-server"
+                checked={listenOnServer || !!user.is_system_admin}
+                disabled={!!user.is_system_admin || savingListen}
+                onchange={(e) => setListenOnServer(e.currentTarget.checked)} />
+              {t("Can listen on Ceol's server")}
+            </label>
+          </div>
+        </div>
+        <p class="kit-field-help">
+          {user.is_system_admin
+            ? t('System admins always can.')
+            : t("In the app, Listen can then use Ceol's server as well as the phone.")}
+        </p>
+      {:else if user.can_listen_on_server || user.is_system_admin}
+        <div class="kit-group">
+          <div class="kit-field" id="listen-on-server-row">
+            <span class="kit-field-label">{t("Listen on Ceol's server")}</span>
+            <span class="kit-field-value">{t('Allowed')}</span>
+          </div>
+        </div>
+      {/if}
 
       <!-- The card, not just the row, is conditional: the tune-logger row used to
            keep it company, and without that an admin looking at somebody else

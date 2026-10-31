@@ -70,6 +70,8 @@ components:
         first_name: { type: string }
         last_name: { type: string }
         is_system_admin: { type: boolean }
+        # Spec 061: may listen on the listening service. True for system admins.
+        can_listen_on_server: { type: boolean }
         timezone: { type: string }
         # Spec 057: the interface language, en or ga.
         language: { type: string, enum: [en, ga] }

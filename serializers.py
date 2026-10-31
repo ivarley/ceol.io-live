@@ -365,7 +365,7 @@ def build_person_details_payload(
         """
         SELECT user_id, username, user_email, email_verified, is_system_admin,
                is_active, created_date, timezone, hashed_password,
-               receive_update_emails, language
+               receive_update_emails, language, can_listen_on_server
         FROM user_account
         WHERE person_id = %s
         """,
@@ -394,6 +394,8 @@ def build_person_details_payload(
             "has_password": urow["hashed_password"] is not None and urow["hashed_password"] != "",
             "receive_update_emails": urow["receive_update_emails"],
             "language": urow["language"] or "en",  # spec 057
+            # Spec 061: given the right to listen on the server (admins have it anyway).
+            "can_listen_on_server": bool(urow["can_listen_on_server"]),
         }
 
     # Sessions this person is associated with (spec 034). `relationship` and `is_admin` are

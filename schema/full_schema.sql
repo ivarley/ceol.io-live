@@ -314,6 +314,7 @@ CREATE TABLE user_account (
     language VARCHAR(8) NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'ga')),
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
+    can_listen_on_server BOOLEAN NOT NULL DEFAULT FALSE,  -- may use the listening service; admins always may (spec 061)
     beta_live_logging BOOLEAN NOT NULL DEFAULT TRUE,  -- new live logger, now default-on for all users (spec 024)
     receive_update_emails BOOLEAN NOT NULL DEFAULT TRUE,  -- app update emails, on by default; opt-out on profile (spec 027)
     email_verified BOOLEAN DEFAULT FALSE,
@@ -1329,6 +1330,7 @@ CREATE TABLE user_account_history (
     language VARCHAR(8),
     is_active BOOLEAN,
     is_system_admin BOOLEAN,
+    can_listen_on_server BOOLEAN,
     receive_update_emails BOOLEAN,
     email_verified BOOLEAN,
     verification_token VARCHAR(255),
