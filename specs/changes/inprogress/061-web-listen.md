@@ -1,7 +1,8 @@
 # 061: Listen on the web
 
 **Date:** 2026-10-29
-**Status:** Stage 1 BUILT (the right to listen on the server); stages 2-6 PLANNED.
+**Status:** Stage 1 BUILT (the right to listen on the server); stage 2 BUILT, its
+field test on an Android phone at a session still to do; stages 3-6 PLANNED.
 The decisions below were made by the product owner on 2026-10-29.
 
 ## Why
@@ -95,6 +96,45 @@ what Chrome on Android does when the tab is hidden.
 
 *Done when:* a phone at a session, screen on, sees the right tunes named for an hour
 without a restart.
+
+*Built (2026-10-31):* `/listen/test` (`templates/listen_test.html`,
+`frontend/src/listentest/`), for those with the right; others are sent home.
+
+- **Sign-in.** `GET /api/listen/connection` gives the service's address
+  (`LISTEN_SERVICE_URL`) and a token: the web session's own `user_session` row
+  (`session["db_session_id"]`, made if the session has none), so signing out ends
+  it and a second visit gets the same one. A browser can set no header on a
+  WebSocket, and a token in the URL would be in the service's logs, so the
+  service now also takes `"token"` in the "start" message; a socket that arrives
+  with none is accepted and closed (4401) unless its start carries a good one
+  within 15 s. The service worker leaves `/api/listen/*` alone (no cached token).
+- **Capture** (`capture.js`): an AudioContext at the device's rate, an
+  AudioWorklet tap, and a windowed-sinc resampler to 22050 Hz (`resample.js`)
+  that keeps everything above the new Nyquist from folding back as a false
+  pitch. Microphone processing (echo cancellation, noise suppression, gain) is
+  off. A recording file can stand in for the microphone, through the same path.
+- **The night's clock** is the wall clock from the start, not the count of
+  samples: when audio stops arriving for more than 2 s (the page asleep), the
+  next chunk goes where the wall clock says, and the link sends a "skip" for
+  the gap.
+- **The link** (`link.js`) keeps every chunk until the service acknowledges it
+  (ten minutes at most; a skip covers anything older), reconnects with backoff
+  (1, 2, 4, 8, 15 s, and at once when the browser comes back online) on the same
+  stream_id, and resends from the "ready" message's `have`, even when that is
+  less than before (the service forgets a stream idle for five minutes).
+- **Staying awake**: the screen wake lock, taken again when the page is shown.
+  The page logs every page hide and show, freeze and resume, audio context
+  change, microphone mute, wake lock loss, gap and reconnect, with a Copy button,
+  so a night's log can be brought back from the table.
+- **Checked** with the service running locally and a non-admin with the right:
+  three minutes of night 137 named The Roaring Barmaid at 100%, answered 0.5 s
+  behind the audio; a socket cut at 0:20 reconnected in a second and the service
+  resumed at 19.9 s with nothing resent twice. Tests:
+  `tests/integration/test_web_listen_061.py`, `frontend/tests/listentest.test.js`.
+- **Still to find out, at a session:** whether Chrome on Android keeps the
+  microphone with the screen on for an hour; what happens when the screen does
+  go off (the log will say); how a phone's own microphone does against the
+  iPhone's. The help page is unchanged until stage 3.
 
 ### 3. The meter: Ad-hoc mode
 

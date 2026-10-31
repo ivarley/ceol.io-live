@@ -986,6 +986,57 @@ def _session_block(row):
     return {"session_id": row[0], "path": row[1], "name": row[2]}
 
 
+# The listening service's WebSocket (listen/service.py, `ceol-listen`).
+LISTEN_SERVICE_URL = os.environ.get(
+    "LISTEN_SERVICE_URL", "wss://ceol-listen.onrender.com/listen"
+)
+
+
+@api_login_required
+def listen_connection():
+    """Where the browser listens, and the token it signs in to the listening
+    service with (spec 061 stage 2). Only for those who may listen on the server.
+
+    The token is this web session's own user_session row (the one a cookie login
+    records, and logout deletes), so signing out of the web ends it too and a page
+    that asks again gets the same one. A cookie session with no row (one signed in
+    before rows were recorded) gets one made now. A Bearer caller already has its
+    token and gets it back."""
+    if not current_user.listens_on_server():
+        return api_error(_("You can't listen on Ceol's server."), 403)
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    else:
+        token = session.get("db_session_id")
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT 1 FROM user_session
+                WHERE session_id = %s AND user_id = %s
+                  AND expires_at > (NOW() AT TIME ZONE 'UTC')
+                """,
+                (token, current_user.user_id),
+            )
+            alive = token and cur.fetchone()
+        finally:
+            conn.close()
+        if not alive:
+            ip_address, user_agent = request_client_info()
+            token = create_session(current_user.user_id, ip_address, user_agent)
+            session["db_session_id"] = token
+    return jsonify(
+        {
+            "success": True,
+            "url": LISTEN_SERVICE_URL,
+            "token": token,
+            "sample_rate": 22050,
+        }
+    )
+
+
 def _instance_block(row):
     return {"session_instance_id": row[0], "date": row[1], "location_override": row[2]}
 

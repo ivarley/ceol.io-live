@@ -35,7 +35,7 @@
 // stale cached 301 from a hostname change can't strand a returning visitor.
 // Data is never stored here.
 
-const VERSION = 'v35'
+const VERSION = 'v36'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
@@ -217,6 +217,9 @@ self.addEventListener('fetch', (event) => {
     // The offline bundle has its own copy (IndexedDB, static/js/offline_data.js) and its
     // own version check; caching ~11 MB of it here too only spends storage.
     if (url.pathname === '/api/offline/bundle') return
+    // Listening (spec 061) carries a sign-in token, which no cache should keep, and
+    // is no use offline.
+    if (url.pathname.startsWith('/api/listen/')) return
     if (url.pathname === '/logout') return
     // NOTE: /admin is intentionally NOT bypassed — admin navigations still go through
     // handleNav so they show the offline page (rather than a browser error) when

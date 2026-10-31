@@ -19,6 +19,14 @@ An app built with the decider's data file decides on the phone as well
 phone then uses no service at all; see spec 053, "Listening on the phone,
 offline".
 
+A browser streams audio the same way (spec 061 stage 2, `/listen/test`,
+`frontend/src/listentest/`). It can set no header on a WebSocket, so it sends
+its token in the "start" message instead (see the protocol); it gets the token
+and this service's address from the web app's `GET /api/listen/connection`
+(`LISTEN_SERVICE_URL` there). To try it locally, run this service with
+`LISTEN_TOKEN` set and `CEOL_API_URL=http://localhost:<the app's port>`, and the
+app with `LISTEN_SERVICE_URL=ws://localhost:8440/listen`.
+
 This is the spike: one service, a shared token, no app page yet. It exists
 to measure a real instance before the native recorder is built.
 

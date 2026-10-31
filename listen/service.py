@@ -39,10 +39,14 @@ One WebSocket per stream, at /listen:
             detector's clock stays the recording's (the phone's own file is the
             complete recording)
 
-Authentication: `Authorization: Bearer <token>` (or `?token=`). Either the
-service's own LISTEN_TOKEN (the test client), or a Ceol app token belonging
-to a system admin, checked by asking the web app's /api/me (CEOL_API_URL)
-and cached for ten minutes, so this service needs no database credentials.
+Authentication: `Authorization: Bearer <token>` (or `?token=`), or, from a
+browser, which can set no header on a WebSocket and should not put a token in
+a URL that is logged, `"token"` in the "start" message (spec 061): a socket that
+arrives with no token is accepted, and closed (4401) unless its start carries
+one. Either the service's own LISTEN_TOKEN (the test client), or a Ceol app
+token whose person may listen on the server (system admins and those given the
+right), checked by asking the web app's /api/me (CEOL_API_URL) and cached for
+ten minutes, so this service needs no database credentials.
 
 Background work (spec 053, "053 files/find-tunes-on-the-server.md"): with
 LISTEN_JOB_TOKEN set (the same secret as the web app's), the service asks the
@@ -75,6 +79,7 @@ TOKEN = os.environ.get("LISTEN_TOKEN", "")
 STREAM_DIR = os.environ.get("LISTEN_STREAM_DIR") or os.path.join(tempfile.gettempdir(), "listen-streams")
 IDLE_S = 300            # a stream nobody has sent to for this long is closed
 KEEP_S = 120            # audio held in memory per stream
+START_S = 15            # a socket that came with no token must send its start within this
 
 NU_PARTLY = 0.5         # a popular tune's discount, as a fraction of an outside tune's (spec 053)
 state = {"models": None, "loading": True, "error": None, "started": time.time(), "load_s": None, "job": None}
@@ -301,10 +306,14 @@ def _app_token_allowed(token):
     return allowed
 
 
-async def _authorised(scope_headers, query):
-    """-> (allowed, the caller's Ceol app token or None)."""
+def _given_token(scope_headers, query):
+    """The token a socket arrived with: its Authorization header, or ?token=."""
     auth = dict(scope_headers).get(b"authorization", b"").decode()
-    token = auth[7:].strip() if auth.lower().startswith("bearer ") else (query.get("token") or "")
+    return auth[7:].strip() if auth.lower().startswith("bearer ") else (query.get("token") or "")
+
+
+async def _authorised(token):
+    """-> (allowed, the caller's Ceol app token or None)."""
     if not TOKEN and not token:
         return True, None             # local development
     if TOKEN and token == TOKEN:
@@ -514,10 +523,12 @@ async def health(request):
 
 
 async def listen(ws: WebSocket):
-    allowed, app_token = await _authorised(ws.scope.get("headers", []), dict(ws.query_params))
-    if not allowed:
+    token = _given_token(ws.scope.get("headers", []), dict(ws.query_params))
+    allowed, app_token = await _authorised(token)
+    if not allowed and token:
         await ws.close(code=4401)
         return
+    # no token yet (a browser, spec 061): accepted, and the start must carry one
     await ws.accept()
     if state["models"] is None:
         await _send(ws, {"type": "error", "error": "still loading" if state["loading"] else state["error"]})
@@ -526,7 +537,14 @@ async def listen(ws: WebSocket):
     stream = None
     try:
         while True:
-            msg = await ws.receive()
+            if allowed:
+                msg = await ws.receive()
+            else:
+                try:              # a socket with no token has a moment to send its start
+                    msg = await asyncio.wait_for(ws.receive(), START_S)
+                except asyncio.TimeoutError:
+                    await ws.close(code=4401)
+                    return
             if msg["type"] == "websocket.disconnect":
                 break
             if msg.get("bytes") is not None:
@@ -542,6 +560,12 @@ async def listen(ws: WebSocket):
             m = json.loads(msg.get("text") or "{}")
             kind = m.get("type")
             if kind == "start":
+                if not allowed:
+                    allowed, app_token = await _authorised(str(m.get("token") or ""))
+                    if not allowed:
+                        await _send(ws, {"type": "error", "error": "not allowed"})
+                        await ws.close(code=4401)
+                        return
                 if int(m.get("sample_rate", SR)) != SR:
                     await _send(ws, {"type": "error", "error": f"send {SR} Hz"})
                     continue

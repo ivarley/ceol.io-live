@@ -1,0 +1,238 @@
+{
+  "Not listening": {
+    "ga": "Gan éisteacht",
+    "review": true
+  },
+  "Not allowed": {
+    "ga": "Níl cead",
+    "review": true
+  },
+  "Stopped": {
+    "ga": "Stoptha",
+    "review": true
+  },
+  "You can't listen on Ceol's server.": {
+    "ga": "Ní féidir leat éisteacht ar Fhreastalaí Ceol.",
+    "review": true
+  },
+  "Back online.": {
+    "ga": "Ar líne arís.",
+    "review": true
+  },
+  "Offline.": {
+    "ga": "As líne.",
+    "review": true
+  },
+  "The file has finished.": {
+    "ga": "Tá deireadh leis an gcomhad.",
+    "review": true
+  },
+  "Couldn't use the microphone: {error}": {
+    "ga": "Níorbh fhéidir an micreafón a úsáid: {error}",
+    "review": true
+  },
+  "Couldn't play the file: {error}": {
+    "ga": "Níorbh fhéidir an comhad a sheinm: {error}",
+    "review": true
+  },
+  "Stopped. Answers: {states}. Reconnects: {reconnects}. Gaps: {skips}.": {
+    "ga": "Stoptha. Freagraí: {states}. Athcheangail: {reconnects}. Bearnaí: {skips}.",
+    "review": true
+  },
+  "Listen test": {
+    "ga": "Tástáil Éist",
+    "review": true
+  },
+  "Sends what this device hears to Ceol's server, and shows what the server thinks is playing. Keep this page open and the screen on.": {
+    "ga": "Seolann sé a gcloiseann an gléas seo chuig Freastalaí Ceol, agus taispeánann sé cad a cheapann an freastalaí atá á sheinm. Coinnigh an leathanach seo oscailte agus an scáileán ar siúl.",
+    "review": true
+  },
+  "The microphone": {
+    "ga": "An micreafón",
+    "review": true
+  },
+  "A recording file": {
+    "ga": "Comhad taifeadta",
+    "review": true
+  },
+  "Starting…": {
+    "ga": "Ag tosú…",
+    "review": true
+  },
+  "Start Listening": {
+    "ga": "Tosaigh ag éisteacht",
+    "review": true
+  },
+  "Connection": {
+    "ga": "Ceangal",
+    "review": true
+  },
+  "Server": {
+    "ga": "Freastalaí",
+    "review": true
+  },
+  "{seconds}s": {
+    "ga": "{seconds}s",
+    "review": true
+  },
+  "Level": {
+    "ga": "Leibhéal",
+    "review": true
+  },
+  "Answers": {
+    "ga": "Freagraí",
+    "review": true
+  },
+  "Playing now": {
+    "ga": "Á sheinm anois",
+    "review": true
+  },
+  "The first answer comes after a few seconds of audio.": {
+    "ga": "Tagann an chéad fhreagra tar éis cúpla soicind fuaime.",
+    "review": true
+  },
+  "No tune yet": {
+    "ga": "Gan fonn fós",
+    "review": true
+  },
+  "Not a tune": {
+    "ga": "Ní fonn é",
+    "review": true
+  },
+  "At {clock}. Sounds like a tune: {tuneness}. Answered {lag}s behind, in {compute}s.": {
+    "ga": "Ag {clock}. Is cosúil le fonn é: {tuneness}. Freagra {lag}s taobh thiar, i {compute}s.",
+    "review": true
+  },
+  "Heard so far": {
+    "ga": "Cloiste go dtí seo",
+    "review": true
+  },
+  "What happened": {
+    "ga": "Cad a tharla",
+    "review": true
+  },
+  "Nothing yet.": {
+    "ga": "Faic fós.",
+    "review": true
+  },
+  "Couldn't reach Ceol: {error}": {
+    "ga": "Níorbh fhéidir Ceol a shroicheadh: {error}",
+    "review": true
+  },
+  "Couldn't connect to Ceol's server: {error}": {
+    "ga": "Níorbh fhéidir ceangal le Freastalaí Ceol: {error}",
+    "review": true
+  },
+  "Ceol's server refused this sign-in.": {
+    "ga": "Dhiúltaigh Freastalaí Ceol don síniú isteach seo.",
+    "review": true
+  },
+  "The connection closed ({code}).": {
+    "ga": "Dúnadh an ceangal ({code}).",
+    "review": true
+  },
+  "Connected. The server has {seconds}s of audio.": {
+    "ga": "Ceangailte. Tá {seconds}s fuaime ag an bhfreastalaí.",
+    "review": true
+  },
+  "The server says: {error}": {
+    "ga": "Deir an freastalaí: {error}",
+    "review": true
+  },
+  "Sent {seconds}s of silence where audio was missing.": {
+    "ga": "Seoladh {seconds}s ciúnais san áit a raibh fuaim in easnamh.",
+    "review": true
+  },
+  "running": {
+    "ga": "ag rith",
+    "review": true
+  },
+  "suspended": {
+    "ga": "curtha ar fionraí",
+    "review": true
+  },
+  "interrupted": {
+    "ga": "briste isteach air",
+    "review": true
+  },
+  "closed": {
+    "ga": "dúnta",
+    "review": true
+  },
+  "Hearing at {rate} Hz, sending at {sent} Hz.": {
+    "ga": "Ag éisteacht ag {rate} Hz, ag seoladh ag {sent} Hz.",
+    "review": true
+  },
+  "Microphone: {name}, {rate} Hz.": {
+    "ga": "Micreafón: {name}, {rate} Hz.",
+    "review": true
+  },
+  "The browser muted the microphone.": {
+    "ga": "Chuir an brabhsálaí an micreafón ar balbh.",
+    "review": true
+  },
+  "The microphone is back.": {
+    "ga": "Tá an micreafón ar ais.",
+    "review": true
+  },
+  "The microphone stopped.": {
+    "ga": "Stop an micreafón.",
+    "review": true
+  },
+  "File: {name}, {seconds}s.": {
+    "ga": "Comhad: {name}, {seconds}s.",
+    "review": true
+  },
+  "No audio for {seconds}s. Was the page asleep?": {
+    "ga": "Gan fuaim ar feadh {seconds}s. An raibh an leathanach ina chodladh?",
+    "review": true
+  },
+  "This browser can't keep the screen on. Keep it on yourself.": {
+    "ga": "Ní féidir leis an mbrabhsálaí seo an scáileán a choinneáil ar siúl. Coinnigh ar siúl é tú féin.",
+    "review": true
+  },
+  "The screen stays on.": {
+    "ga": "Fanann an scáileán ar siúl.",
+    "review": true
+  },
+  "The screen may turn off again.": {
+    "ga": "Féadfaidh an scáileán múchadh arís.",
+    "review": true
+  },
+  "Couldn't keep the screen on: {error}": {
+    "ga": "Níorbh fhéidir an scáileán a choinneáil ar siúl: {error}",
+    "review": true
+  },
+  "Page shown. Audio is {state}.": {
+    "ga": "Leathanach le feiceáil. Tá an fhuaim {state}.",
+    "review": true
+  },
+  "Page hidden. Audio is {state}.": {
+    "ga": "Leathanach i bhfolach. Tá an fhuaim {state}.",
+    "review": true
+  },
+  "The browser froze the page.": {
+    "ga": "Reoigh an brabhsálaí an leathanach.",
+    "review": true
+  },
+  "The browser woke the page.": {
+    "ga": "Dhúisigh an brabhsálaí an leathanach.",
+    "review": true
+  },
+  "Audio is {state}.": {
+    "ga": "Tá an fhuaim {state}.",
+    "review": true
+  },
+  "Time listening": {
+    "ga": "Am éisteachta",
+    "review": true
+  },
+  "Still to send": {
+    "ga": "Fós le seoladh",
+    "review": true
+  },
+  "The browser is holding the audio back. Tap the page to let it start.": {
+    "ga": "Tá an brabhsálaí ag coinneáil siar na fuaime. Tapáil an leathanach chun ligean di tosú.",
+    "review": true
+  }
+}

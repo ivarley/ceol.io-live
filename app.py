@@ -33,6 +33,7 @@ from api_app_routes import (
     apple_app_site_association,
     delete_account_api,
     report_api,
+    listen_connection,
     listen_decider_data,
 )
 from api_routes import *
@@ -656,6 +657,12 @@ app.add_url_rule("/api/app-config", "app_config", app_config, methods=["GET"])
 app.add_url_rule("/api/home", "api_home", api_home, methods=["GET"])
 app.add_url_rule("/api/resolve", "resolve_path", resolve_path, methods=["GET"])
 app.add_url_rule(
+    "/api/listen/connection",
+    "listen_connection",
+    listen_connection,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/listen/decider-data",
     "listen_decider_data",
     listen_decider_data,
@@ -754,6 +761,7 @@ app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_hist
 app.add_url_rule("/admin/activity", "admin_activity", admin_activity)
 app.add_url_rule("/admin/people", "admin_people", admin_people)
 app.add_url_rule("/admin/places", "admin_places", admin_places)
+app.add_url_rule("/listen/test", "listen_test", listen_test)
 app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
 app.add_url_rule("/admin/tunes/merge", "admin_tune_merge", admin_tune_merge)
 app.add_url_rule("/admin/tunes/<int:tune_id>", "admin_tune_detail", admin_tune_detail)

@@ -3006,6 +3006,17 @@ def admin_places():
 
 
 @login_required
+def listen_test():
+    """The listen test page (spec 061 stage 2): the browser streams what it hears
+    to the listening service and shows the answers. Only for those who may listen
+    on the server."""
+    if not current_user.listens_on_server():
+        flash(_("You can't listen on Ceol's server."), "error")
+        return redirect(url_for("home"))
+    return render_template("listen_test.html")
+
+
+@login_required
 def admin_tunes():
     """Admin tunes page - shows all tunes with counts"""
     # Check if user is system admin
