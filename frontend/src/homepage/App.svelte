@@ -82,6 +82,15 @@
   {t('Welcome back,')} <strong>{payload?.viewer?.first_name || t('there')}</strong>
 </div>
 
+{#if payload?.viewer?.can_listen_on_server}
+  <!-- Listen (spec 061 stage 3), as the iOS Home has it: only for those who may
+       listen on Ceol's server. -->
+  <a class="home-listen" id="home-listen" href="/listen">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" /><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" /></svg>
+    {t('What tune is this?')}
+  </a>
+{/if}
+
 <TodayStrip sessions={today} />
 
 <section class="home-section" id="home-week">

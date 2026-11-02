@@ -19,6 +19,7 @@ vi.mock('../src/client.js', () => ({
   settingImage: vi.fn(() => Promise.resolve({ image: null })),
   renderRemoteAbc: vi.fn(() => Promise.resolve({ image: null })),
   fetchIncipit: vi.fn(async () => null),
+  listenHref: (config, back) => `/listen?scope=${JSON.stringify(config.searchScope || {})}&back=${back}`,
 }))
 
 const URL_WITH_SETTING = 'https://thesession.org/tunes/8645?setting=44656#setting44656'
@@ -107,5 +108,38 @@ describe('TuneSearch failed search', () => {
     await fireEvent.click(document.querySelector('.kit-load-retry'))
     await waitFor(() => expect(document.querySelector('.kit-load-error')).toBeFalsy())
     await waitFor(() => expect(document.body.textContent).toContain('The Kesh'))
+  })
+})
+
+// Spec 061 stage 3: "Listen To What's Playing Now" under the empty box, in the three
+// "Add a tune" searches, for those who may listen on Ceol's server.
+describe('Listen under the empty search box', () => {
+  const listenLink = () => document.querySelector('.deep-listen')
+
+  it('is offered to a listener while the box is empty, and goes with the scope', async () => {
+    window.CEOL_LISTENS = true
+    try {
+      render(TuneSearch, { props: { config: { searchScope: { session: 'austin/mueller' } }, variant: 'pane', offerListen: true, onAdd: vi.fn() } })
+      expect(listenLink().textContent).toContain("Listen To What's Playing Now")
+      expect(listenLink().getAttribute('href')).toBe(`/listen?scope={"session":"austin/mueller"}&back=${window.location.pathname}`)
+      const input = document.querySelector('.deep-field')
+      await typeInto(input, 'cool', 'insertText')
+      expect(listenLink()).toBeNull()
+    } finally {
+      delete window.CEOL_LISTENS
+    }
+  })
+
+  it('is not offered to anyone else, nor where the search did not ask for it', () => {
+    render(TuneSearch, { props: { config, variant: 'pane', offerListen: true, onAdd: vi.fn() } })
+    expect(listenLink()).toBeNull()
+    document.body.innerHTML = ''
+    window.CEOL_LISTENS = true
+    try {
+      render(TuneSearch, { props: { config, variant: 'pane', onAdd: vi.fn() } })
+      expect(listenLink()).toBeNull()
+    } finally {
+      delete window.CEOL_LISTENS
+    }
   })
 })

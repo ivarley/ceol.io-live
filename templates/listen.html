@@ -1,0 +1,21 @@
+{# i18n-converted #}
+{% extends "base.html" %}
+
+{% block title %}{{ _('Listen') }}{% endblock %}
+
+{% block extra_css %}
+{# Page styles are built with the Svelte bundle (frontend/src/listenpage/page.css). #}
+<link rel="stylesheet" href="{{ url_for('static', filename='listenpage/page.css') }}">
+{% endblock %}
+
+{% block content %}
+{# Spec 061 stage 3: the meter, Ad-hoc mode. The payload is only the context the
+   page was opened from (serializers.build_listen_payload); where to listen comes
+   from /api/listen/connection when listening starts. #}
+<div id="listen-root"></div>
+<script>window.__PAGE_DATA__ = {{ payload | tojson }};</script>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='listenpage/page.js') }}"></script>
+{% endblock %}

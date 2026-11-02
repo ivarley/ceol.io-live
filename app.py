@@ -761,6 +761,7 @@ app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_hist
 app.add_url_rule("/admin/activity", "admin_activity", admin_activity)
 app.add_url_rule("/admin/people", "admin_people", admin_people)
 app.add_url_rule("/admin/places", "admin_places", admin_places)
+app.add_url_rule("/listen", "listen_page", listen_page)
 app.add_url_rule("/listen/test", "listen_test", listen_test)
 app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
 app.add_url_rule("/admin/tunes/merge", "admin_tune_merge", admin_tune_merge)

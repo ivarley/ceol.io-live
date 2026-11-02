@@ -1350,6 +1350,17 @@ main.wide .hx-drawer {
   text-align: left; background: rgba(245, 197, 24, 0.1); border: 1px solid var(--insert);
   border-radius: 8px; color: #e8d28a; cursor: pointer;
 }
+/* "Listen To What's Playing Now" under the empty search box (spec 061 stage 3); the
+   add panes' copy is in mytunes/mytunes-add.css */
+.deep-listen {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 10px 14px 0; padding: 11px 14px; font-size: 14px; font-weight: 600;
+  border: 1px solid var(--accent); border-radius: 8px; color: var(--accent); text-decoration: none;
+}
+.deep-listen svg {
+  width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
 .deep-results { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .deep-empty { color: var(--muted); font-style: italic; text-align: center; padding: 24px 0; }
 .deep-card {

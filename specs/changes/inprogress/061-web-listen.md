@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-29
 **Status:** Stage 1 BUILT (the right to listen on the server); stage 2 BUILT, its
-field test on an Android phone at a session still to do; stages 3-6 PLANNED.
+field test on an Android phone at a session still to do; stage 3 BUILT (the meter,
+Ad-hoc mode); stages 4-6 PLANNED.
 The decisions below were made by the product owner on 2026-10-29.
 
 ## Why
@@ -134,7 +135,7 @@ without a restart.
 - **Still to find out, at a session:** whether Chrome on Android keeps the
   microphone with the screen on for an hour; what happens when the screen does
   go off (the log will say); how a phone's own microphone does against the
-  iPhone's. The help page is unchanged until stage 3.
+  iPhone's.
 
 ### 3. The meter: Ad-hoc mode
 
@@ -148,6 +149,52 @@ session's list, log this tune.
 
 *Done when:* a player with the right can answer "what tune is this?" on an Android
 phone, and put the answer where they want it.
+
+*Built (2026-11-01):* `/listen` (`templates/listen.html`, `frontend/src/listenpage/`,
+`serializers.build_listen_payload`), for those with the right; others are sent home.
+It streams through stage 2's capture and link (`frontend/src/listentest/`).
+
+- **The meter** (`meter.js`) has the iPhone's rules (`NightRecorder.swift`): waiting,
+  "No tune playing" (`none` over 0.5), "Figuring out the tune…" with the candidates
+  (every one at 5% or more, at most two under it, faded) and a ten-cell bar, or sure.
+  It is sure by itself when the tune shown reaches 99.5% and the listener isn't
+  watching for a change, and sure when a candidate is tapped (`tap this`). After at
+  least one step it lets go when the listener shows another tune, hears no tune, may
+  have changed, or holds it under 80%. "None of these" rules out every candidate;
+  "Wrong tune" rules out the sure one, which is then never sure by itself again that
+  run; "Tune changed" lets go of it and says "The tune may have changed (was …)" until
+  another is shown. The taps are the iPhone's messages, `why` included. "Not a tune"
+  is a state, not a tap, on the iPhone too.
+- **When sure:** the tune's place in your list (`TunebookBox.svelte`): add it as To
+  Learn, Learning or Learned (`POST /api/my-tunes` with the tune as a thesession.org
+  id, so a tune Ceol doesn't hold is imported), or, if it is on your list, change its
+  status and, while To Learn, its heard count (My Tunes ops). "Open the tune" opens
+  the app-wide tune sheet, or thesession.org for a tune Ceol doesn't hold yet: the
+  listener knows every thesession.org tune, and Ceol imports one only when someone
+  adds it. Wrong tune and Tune changed are buttons under the sure tune, not behind a
+  tap on it.
+- **Recent Tunes Heard**, at the bottom: the last 50 tunes it was sure of, the same
+  tune again within ten minutes counting once, kept in the browser (`localStorage`).
+  A row opens the tune.
+- **Ways in:** a fifth tab, Listen, with the ear, between Sessions and Tunes, and the
+  same link in the desktop header; Home's "What tune is this?" (`viewer.
+  can_listen_on_server` in the Home payload); "Listen To What's Playing Now" under the
+  empty box of the three "Add a tune" searches (`TuneSearch` `offerListen`, shown when
+  `window.CEOL_LISTENS`). From a search it goes to `/listen?session=` or `?instance=`,
+  with `back=` the page it came from (only ever a path on this site), and the sure
+  tune gets that search's one offer: "Add To This Session's Tune List" (`POST
+  /api/sessions/<path>/tunes`; already there counts as done) or "Log This Tune" (an
+  `add_tune` live op, at the end of the night). With a night, the listener prefers
+  that session's tunes, and a candidate new to it says so.
+- **Unlike the iPhone:** a page of its own rather than a sheet over the search, with
+  a link back; no "Listening on" choice (the web has only the server) and no
+  recording option (stage 5).
+- **Checked** with the service running locally: from a night's search, the clip of
+  night 137 named The Roaring Barmaid at 0:24; it was added to the list as Learning
+  and logged to the night; "Wrong tune" ruled it out and the listener moved on; Stop
+  left the service no streams; five tabs fit a 390 px screen. Tests:
+  `tests/integration/test_listen_page_061.py`, `frontend/tests/listenpage.test.js`,
+  `frontend/tests/tunesearch.test.js`.
 
 ### 4. Log mode
 
@@ -176,8 +223,8 @@ segmenter like one uploaded from an iPhone.
 
 Measure what a live stream costs the service, decide how many it can carry, and decide
 whether the right stays a given one or widens: everyone signed in, or everyone. Size
-the service for that. The help page's "the website does not have Listen" changes when
-stage 3 ships, and says who may use it.
+the service for that. The help page says who may use Listen on the website (stage 3);
+it changes again with the answer.
 
 ## What this does not do
 

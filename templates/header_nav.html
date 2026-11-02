@@ -16,6 +16,12 @@
     <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('sessions') }}</span>{{ _('Sessions') }}
   </a>
   {% if current_user.is_authenticated %}
+  {% if current_user.listens_on_server() %}
+  <a href="/listen" class="header-nav-item{% if p == '/listen' %} active{% endif %}"
+     {% if p == '/listen' %}aria-current="page"{% endif %}>
+    <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('listen') }}</span>{{ _('Listen') }}
+  </a>
+  {% endif %}
   <a href="/my-tunes" class="header-nav-item{% if p.startswith('/my-tunes') %} active{% endif %}"
      {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %}>
     <span class="header-nav-glyph" aria-hidden="true">{{ nav_icon('tunes') }}</span>{{ _('Tunes') }}

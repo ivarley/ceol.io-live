@@ -83,6 +83,18 @@ export class ListenLink {
     this.flush()
   }
 
+  /** A message to the service (a tap). False when not connected: a tap is about
+   * what is shown now, so it is not kept for later. */
+  send(message) {
+    if (!this.ws || !this.ready) return false
+    try {
+      this.ws.send(JSON.stringify(message))
+      return true
+    } catch {
+      return false
+    }
+  }
+
   /** Samples captured but not yet acknowledged. */
   backlog() {
     if (!this.queue.length) return 0

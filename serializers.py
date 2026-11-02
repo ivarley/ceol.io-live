@@ -2906,7 +2906,67 @@ def build_home_payload(conn, user) -> Dict[str, Any]:
         payload["viewer"] = {
             "person_id": user.person_id,
             "first_name": user.first_name,
+            # "What tune is this?" on Home (spec 061 stage 3)
+            "can_listen_on_server": user.listens_on_server(),
         }
         return payload
     finally:
         cur.close()
+
+
+def _same_site_path(target: Optional[str]) -> Optional[str]:
+    """A path on this site to go back to, or None."""
+    if not target or not target.startswith("/") or target.startswith("//"):
+        return None
+    if "\\" in target or any(ord(ch) < 32 for ch in target):
+        return None
+    return target
+
+
+def build_listen_payload(
+    conn,
+    session_path: Optional[str] = None,
+    instance_id: Optional[int] = None,
+    back: Optional[str] = None,
+) -> Dict[str, Any]:
+    """The Listen page's payload (spec 061 stage 3). Reached from the Listen tab and
+    Home with no context, and from an "Add a tune" search with one: a session (the
+    sure tune can go on its tune list) or a night (it can be logged to it). The
+    context is only what to offer; the add and the log are checked where they land.
+    `back` is where "Back" goes (the page the search was on), a path on this site."""
+    context = None
+    cur = conn.cursor()
+    try:
+        if instance_id is not None:
+            cur.execute(
+                """SELECT si.session_instance_id, si.date, s.name, s.path
+                   FROM session_instance si JOIN session s ON s.session_id = si.session_id
+                   WHERE si.session_instance_id = %s""",
+                (instance_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                context = {
+                    "kind": "night",
+                    "instance_id": row[0],
+                    "date": row[1],
+                    "session_name": row[2],
+                    "session_path": row[3],
+                    "back": _same_site_path(back) or f"/live/instances/{row[0]}",
+                }
+        elif session_path:
+            cur.execute(
+                "SELECT name, path FROM session WHERE path = %s",
+                (session_path.strip("/"),),
+            )
+            row = cur.fetchone()
+            if row:
+                context = {
+                    "kind": "session",
+                    "session_name": row[0],
+                    "session_path": row[1],
+                    "back": _same_site_path(back) or f"/sessions/{row[1]}",
+                }
+    finally:
+        cur.close()
+    return {"success": True, "context": context}

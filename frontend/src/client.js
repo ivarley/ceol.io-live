@@ -195,6 +195,16 @@ function scoped(config, path) {
   return q ? `${path}?${q}` : path
 }
 
+// "Listen To What's Playing Now" under an empty "Add a tune" search (spec 061 stage 3):
+// Listen, with the same scope, so what it is sure of can go where the search was for
+// (the session's list, or the night's log), and `back` to this page.
+export function listenHref(config, back) {
+  const params = searchScope(config)
+  if (back) params.set('back', back)
+  const q = params.toString()
+  return q ? `/listen?${q}` : '/listen'
+}
+
 // A search that FAILED, as opposed to one that found nothing: still an array (callers
 // iterate it), flagged so the UI can say "Couldn't search" instead of "No tunes match".
 function failedList() {

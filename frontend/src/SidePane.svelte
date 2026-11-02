@@ -51,5 +51,5 @@
       </div>
     </div>
   {/if}
-  <TuneSearch bind:this={searchEl} variant="pane" initialQuery="" {config} {preferType} {displayStatus} {history} {onRemember} {onAdd} />
+  <TuneSearch bind:this={searchEl} variant="pane" offerListen initialQuery="" {config} {preferType} {displayStatus} {history} {onRemember} {onAdd} />
 </aside>

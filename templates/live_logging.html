@@ -39,6 +39,8 @@
     // and "Find a tune" overlay render for logged-out viewers too and have no page
     // payload of their own to ask.
     window.CEOL_AUTHED = {{ current_user.is_authenticated | tojson }};
+    // May listen on Ceol's server (spec 061): the "Add a tune" searches offer Listen.
+    window.CEOL_LISTENS = {{ (current_user.is_authenticated and current_user.listens_on_server()) | tojson }};
   </script>
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#0e0e10">

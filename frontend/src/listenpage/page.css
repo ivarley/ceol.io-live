@@ -1,0 +1,415 @@
+/* Listen (spec 061 stage 3). Designed for a phone at the table first, after the
+   iPhone's meter (ios/Ceol/Ceol/RecorderViews.swift). */
+.lp {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 16px 48px;
+}
+
+.lp-back {
+  display: inline-block;
+  margin: 4px 0 8px;
+  color: var(--primary, #65b464);
+}
+
+.lp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lp-title {
+  font-size: 1.6rem;
+  color: var(--text-color, #e8e8e8);
+  margin: 8px 0 4px;
+}
+
+.lp-intro {
+  margin: 4px 0 4px;
+}
+
+.lp-note,
+.lp-sub,
+.lp-row-meta,
+.lp-empty,
+.lp-tuneness {
+  color: var(--secondary-text, #888);
+}
+
+.lp-note {
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+
+.lp-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  margin: 16px 0 24px;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary-fill, #4a8049);
+  border: none;
+  border-radius: var(--r, 8px);
+  cursor: pointer;
+}
+
+.lp-start:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lp-start svg,
+.lp-check {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.lp-stop {
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 16px;
+  color: #fff;
+  background: var(--danger, #c0392b);
+  border: none;
+  border-radius: var(--r, 8px);
+  cursor: pointer;
+}
+
+.lp-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.lp-tuneness {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.lp-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success, #65b464);
+}
+
+.lp-dot.is-off {
+  background: var(--border-color, #555);
+}
+
+.lp-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-linktext {
+  margin: 2px 0 8px;
+  font-size: 0.9rem;
+  color: var(--secondary-text, #888);
+}
+
+.lp-warn,
+.lp-error {
+  color: var(--danger, #e05a4c);
+}
+
+.lp-error {
+  margin: 8px 0;
+}
+
+.lp-meter {
+  margin: 12px 0 20px;
+}
+
+.lp-big {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
+
+.lp-sub {
+  margin: 0 0 8px;
+}
+
+.lp-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color, #555);
+  border-top-color: var(--primary, #65b464);
+  border-radius: 50%;
+  animation: lp-spin 0.9s linear infinite;
+  flex: none;
+}
+
+@keyframes lp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.lp-row,
+.lp-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: var(--card-bg, transparent);
+  border: 1px solid var(--border-color, #444);
+  border-radius: var(--r, 8px);
+  cursor: pointer;
+}
+
+.lp-row.is-shown {
+  border-color: var(--primary, #65b464);
+}
+
+.lp-row.is-weak {
+  opacity: 0.45;
+}
+
+.lp-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.lp-row-name {
+  font-weight: 600;
+  color: var(--text-color, #e8e8e8);
+  overflow-wrap: anywhere;
+}
+
+.lp-row-meta {
+  font-size: 0.85rem;
+}
+
+.lp-bar {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.lp-cell {
+  width: 6px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--border-color, #444);
+}
+
+.lp-cell.is-low {
+  background: var(--danger, #e05a4c);
+}
+
+.lp-cell.is-mid {
+  background: var(--warning, #e0a03c);
+}
+
+.lp-cell.is-high {
+  background: var(--success, #65b464);
+}
+
+.lp-none,
+.lp-sure-taps button,
+.lp-action {
+  font: inherit;
+  padding: 10px 14px;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--border-color, #444);
+  border-radius: var(--r, 8px);
+  cursor: pointer;
+}
+
+.lp-none {
+  width: 100%;
+}
+
+.lp-none:disabled,
+.lp-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lp-sure {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 2px solid var(--success, #65b464);
+  border-radius: var(--r, 8px);
+}
+
+.lp-check {
+  width: 30px;
+  height: 30px;
+  color: var(--success, #65b464);
+}
+
+.lp-sure-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lp-sure-name {
+  font-size: 1.4rem;
+  color: var(--text-color, #e8e8e8);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.lp-sure-taps {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+
+.lp-sure-taps button {
+  flex: 1;
+}
+
+#lp-wrong {
+  color: var(--danger, #e05a4c);
+}
+
+.lp-tunebook {
+  padding: 12px;
+  margin: 0 0 12px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: var(--r, 8px);
+}
+
+.lp-tunebook.is-on {
+  background: rgba(33, 74, 48, 0.6);
+  border-color: transparent;
+}
+
+.lp-tunebook-head {
+  margin: 0 0 8px;
+}
+
+.lp-seg {
+  display: flex;
+  border: 1px solid var(--border-color, #555);
+  border-radius: var(--r, 8px);
+  overflow: hidden;
+}
+
+.lp-seg button {
+  flex: 1;
+  padding: 8px 4px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.lp-seg button + button {
+  border-left: 1px solid var(--border-color, #555);
+}
+
+.lp-seg button.active {
+  color: #fff;
+  background: var(--primary-fill, #4a8049);
+}
+
+.lp-heard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.lp-stepper button {
+  width: 40px;
+  height: 34px;
+  font: inherit;
+  font-size: 1.1rem;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lp-action {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  font-weight: 600;
+  border-color: var(--primary, #65b464);
+}
+
+.lp-action.is-done {
+  color: var(--success, #65b464);
+  opacity: 1;
+}
+
+.lp-link {
+  font: inherit;
+  padding: 4px 0;
+  color: var(--primary, #65b464);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.lp-history {
+  padding: 4px 0 12px;
+  font-size: 0.9rem;
+}
+
+.lp-history-line {
+  padding: 2px 0;
+}
+
+.lp-recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.lp-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lp-type {
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 10px;
+  color: var(--secondary-text, #888);
+  flex: none;
+}

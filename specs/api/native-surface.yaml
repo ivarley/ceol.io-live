@@ -197,6 +197,8 @@ components:
           properties:
             person_id: { type: [integer, "null"] }
             first_name: { type: [string, "null"] }
+            # May listen on Ceol's server: the web Home's "What tune is this?" (spec 061)
+            can_listen_on_server: { type: boolean }
         upcoming_sessions:
           # This week's instances at the viewer's sessions. The Today card is the
           # subset whose date == `today`; there is no second list for it, so the two

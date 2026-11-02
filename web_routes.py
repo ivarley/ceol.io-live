@@ -3017,6 +3017,32 @@ def listen_test():
 
 
 @login_required
+def listen_page():
+    """Listen (spec 061 stage 3): what tune is this? The meter streams what this
+    device hears to the listening service and shows what it decides. From an "Add
+    a tune" search it carries the session (?session=<path>) or the night
+    (?instance=<id>) the sure tune can go to, and ?back= the page to return to.
+    Only for those who may listen on the server."""
+    if not current_user.listens_on_server():
+        flash(_("You can't listen on Ceol's server."), "error")
+        return redirect(url_for("home"))
+    from serializers import build_listen_payload
+
+    instance_id = request.args.get("instance", type=int)
+    conn = get_db_connection()
+    try:
+        payload = build_listen_payload(
+            conn,
+            session_path=request.args.get("session"),
+            instance_id=instance_id,
+            back=request.args.get("back"),
+        )
+    finally:
+        conn.close()
+    return render_template("listen.html", payload=payload)
+
+
+@login_required
 def admin_tunes():
     """Admin tunes page - shows all tunes with counts"""
     # Check if user is system admin

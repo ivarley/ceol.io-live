@@ -521,6 +521,8 @@
 // Is anyone signed in? App-wide bundles that render for logged-out viewers too (the
 // tune drawer / "Find a tune" overlay) have no __PAGE_DATA__ of their own to ask.
 window.CEOL_AUTHED = {{ current_user.is_authenticated | tojson }};
+// May listen on Ceol's server (spec 061): the "Add a tune" searches offer Listen.
+window.CEOL_LISTENS = {{ (current_user.is_authenticated and current_user.listens_on_server()) | tojson }};
 
 // Show any server-side flash messages as ephemeral messages on load.
 document.addEventListener('DOMContentLoaded', function() {

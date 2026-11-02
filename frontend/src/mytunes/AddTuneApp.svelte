@@ -265,6 +265,7 @@
         title={t('Search for a tune')}
         allowAsIs={false}
         dimOnList={true}
+        offerListen
         {initialQuery}
         {history}
         onRemember={remember}

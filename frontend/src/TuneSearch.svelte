@@ -3,7 +3,7 @@
   import { Chip, LoadError, t, tuneTypeName } from './lib/index.js'
   import { pluralTypeName } from './livelabels.js'
   import { onDestroy, untrack, tick } from 'svelte'
-  import { deepSearch, thesessionSearch, thesessionPreview, tunePreview } from './client.js'
+  import { deepSearch, thesessionSearch, thesessionPreview, tunePreview, listenHref } from './client.js'
   import Incipit from './Incipit.svelte'
   import TunePreview from './TunePreview.svelte'
   import { parseThesessionId, parseThesessionSettingId, historyStep } from './logstate.js'
@@ -28,11 +28,13 @@
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
     notice = null, // optional snippet rendered between the header and the search field
     previewFooter = null, // optional snippet replacing TunePreview's action button (see TunePreview `footer`)
+    offerListen = false, // an "Add a tune" search: Listen under the empty box, for those who may (spec 061)
     onRemember = () => {}, // record a used query into the shared history
     onAdd,
     onClose = () => {},
   } = $props()
 
+  const canListen = typeof window !== 'undefined' && !!window.CEOL_LISTENS
   const DEEP_TYPES = ['Reel', 'Jig', 'Slip Jig', 'Hornpipe', 'Polka', 'Slide', 'Waltz', 'Barndance', 'Mazurka', 'March', 'Strathspey', 'Three-Two']
   let deepQuery = $state(untrack(() => initialQuery)) // seed once; the field owns it after
   let deepType = $state(null) // hard tune-type filter (the popout)
@@ -551,6 +553,13 @@
         onDismiss={() => setDeepType(deepType)} />
     {/if}
   </div>
+{/if}
+{#if offerListen && canListen && !deepQuery.trim()}
+  <!-- Spec 061 stage 3: name the tune by ear instead, as the iOS search offers. -->
+  <a class="deep-listen" href={listenHref(config, window.location.pathname + window.location.search)}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" /><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" /></svg>
+    {t("Listen To What's Playing Now")}
+  </a>
 {/if}
 <!-- A tune URL / id in the field: the only sensible action is to open THAT tune, so it
      replaces both the remote-search and log-as-is rows (a URL is not a tune name). A

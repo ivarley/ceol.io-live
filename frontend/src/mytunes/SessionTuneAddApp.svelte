@@ -170,6 +170,7 @@
         variant="modal"
         title={t('Search for a tune')}
         allowAsIs={false}
+        offerListen
         actionLabel={t('＋ Add This Tune')}
         dimInSession={true}
         {initialQuery}

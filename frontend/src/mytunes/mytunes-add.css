@@ -435,3 +435,17 @@
   font: inherit; font-size: 14px; font-weight: 600; padding: 10px 16px; cursor: pointer;
   background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text);
 }
+
+/* "Listen To What's Playing Now" under the empty search box (spec 061 stage 3). The
+   live logger's copy of this rule is in app.css. */
+.deep-listen {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 10px 14px 0; padding: 11px 14px; font-size: 14px; font-weight: 600;
+  border: 1px solid var(--accent); border-radius: 8px; color: var(--link-color, var(--accent));
+  text-decoration: none;
+}
+.deep-listen:hover, .deep-listen:focus { text-decoration: none; color: var(--link-color, var(--accent)); }
+.deep-listen svg {
+  width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}

@@ -58,6 +58,39 @@
   font-weight: 600;
 }
 
+/* "What tune is this?" (spec 061 stage 3): the iOS Home's full-width button. */
+.home-listen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  margin: -0.5rem 0 1.5rem;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--primary, #65b464);
+  border: 1px solid var(--primary, #65b464);
+  border-radius: var(--r, 8px);
+  text-decoration: none;
+}
+
+.home-listen:hover,
+.home-listen:focus {
+  color: var(--primary, #65b464);
+  text-decoration: none;
+  background: rgba(101, 180, 100, 0.1);
+}
+
+.home-listen svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* ---- rows -------------------------------------------------------------------- */
 
 /* .session-item is a kit Row now (styled={false}), so Row supplies the flex box and

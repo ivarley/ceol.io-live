@@ -73,6 +73,12 @@
     background: rgba(101, 180, 100, 0.16);
   }
 
+  /* Five tabs (Listen, spec 061): a narrower lozenge, so a 320px phone keeps room
+     for the labels. Only how it looks; without :has() the wider one is still fine. */
+  .tab-bar:has(> .tab-bar-item:nth-child(5)) .tab-bar-item.active {
+    margin: 0 4px;
+  }
+
   /* The C is a mask taking currentColor, so it greens with its label for free —
      which is the reason it is a mask and not an <img> (see .tab-bar-c below). */
 

@@ -43,6 +43,18 @@
   </a>
 
   {% if current_user.is_authenticated %}
+  {# A fifth tab for those who may listen on Ceol's server (spec 061 stage 3), where
+     the iOS app has it: between Sessions and Tunes. Everyone else keeps four. #}
+  {% if current_user.listens_on_server() %}
+  <a href="/listen" class="tab-bar-item{% if p == '/listen' %} active{% endif %}"
+     {% if p == '/listen' %}aria-current="page"{% endif %} data-tab="listen">
+    <span class="tab-bar-glyph" aria-hidden="true">
+      {{ nav_icon('listen') }}
+    </span>
+    <span class="tab-bar-label">{{ _('Listen') }}</span>
+  </a>
+  {% endif %}
+
   <a href="/my-tunes" class="tab-bar-item{% if p.startswith('/my-tunes') %} active{% endif %}"
      {% if p.startswith('/my-tunes') %}aria-current="page"{% endif %} data-tab="tunes">
     <span class="tab-bar-glyph" aria-hidden="true">

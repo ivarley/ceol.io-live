@@ -4604,6 +4604,7 @@
     <div class="deep-modal" transition:fly={{ x: 420, opacity: 1, duration: 220 }}>
       <TuneSearch
         variant="modal"
+        offerListen
         initialQuery={input.trim()}
         initialPreview={deepPreview}
         preferType={cursorSetType()}
