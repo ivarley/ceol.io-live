@@ -12,6 +12,7 @@
   import SidePane from './SidePane.svelte'
   import RecordingsModal from './RecordingsModal.svelte'
   import FestivalJoinBanner from './shared/FestivalJoinBanner.svelte'
+  import NightListen from './listenpage/NightListen.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, optimisticBetween } from './fracindex.js'
   // The "is this notation?" rules are shared with every other search box in the app
@@ -3173,6 +3174,52 @@
     if (selectedId === tempId) selectedId = null
   }
 
+  // --- Listen and log (spec 061 stage 4) ---
+  // For those who may listen on Ceol's server: the meter logs the tunes it is sure of
+  // to this night (NightListen), through the same ops as a hand add, at the very end of
+  // the log whatever the cursor, so it never lands in the middle of someone's edit.
+  const canListen = typeof window !== 'undefined' && !!window.CEOL_LISTENS
+  let nightListen = $state(null)
+  let listenRunning = $state(false)
+  let listenLogging = $state(false)
+  const listenTitle = $derived(instanceName || (sessionDate ? t('{session}, {date}', { session: sessionName, date: sessionDate }) : sessionName))
+
+  // A tune the meter is sure of, by its thesession.org id (the server imports one Ceol
+  // doesn't hold yet). Returns the new row's id, or {already} when the open set has it
+  // already (the server would merge the add into it, §H30).
+  function listenLog(tune) {
+    const payload = { tune_id: tune.tune_id, name: tune.name || t('Tune {id}', { id: tune.tune_id }), tune_type: tune.type }
+    if (openSetMergeTarget(payload, ordered)) return { already: true }
+    const op_id = crypto.randomUUID()
+    const tempId = `temp-${op_id}`
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, name: payload.name, tune_id: tune.tune_id, tune_type: tune.type ?? null,
+      record_type: 'tune', order_position: generateAppend(maxPos(byId.values())), deleted: false, _temp: true, _status: 'sending',
+    })
+    trySend({
+      op_id, name: payload.name, op_type: 'add_tune',
+      payload: { thesession_id: tune.tune_id, name: payload.name, after_record_id: null, before_record_id: null },
+      status: 'sending', ts: nextTs(), tempId,
+    })
+    return { row: tempId }
+  }
+
+  // "Wrong tune": the row the meter logged comes back out. Still on its way, it is
+  // cancelled if queued, or removed once the server has given it its id.
+  function listenRemove(row, tries = 0) {
+    const real = typeof row === 'string' && row.startsWith('temp-') ? tempToReal.get(row) : row
+    if (real != null) { removeTune(real); return }
+    if ([...pending.values()].some((e) => e.tempId === row && e.status === 'queued')) { cancelQueuedRow(row); return }
+    if (tries < 20) setTimeout(() => listenRemove(row, tries + 1), 500)
+  }
+
+  // The searches' "Listen To What's Playing Now": here it listens on this page.
+  function listenFromSearch() {
+    closeDeep()
+    if (listenRunning) nightListen?.show()
+    else nightListen?.begin()
+  }
+
   // Restore a not-yet-synced removal: cancel the queued op, clear the mark.
   function restore(record_id) {
     const r = byId.get(record_id)
@@ -4212,6 +4259,14 @@
         </div>
       {/if}
     {/each}
+    {#if canListen && !readOnly && !logComplete && !listenLogging && !selectMode}
+      <!-- Hand the logging to the ear (spec 061 stage 4); the strip in the dock then
+           says it is listening. -->
+      <button type="button" class="listen-log" id="listen-log" onclick={() => nightListen?.begin()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" /><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" /></svg>
+        {t('Listen and log')}
+      </button>
+    {/if}
     {#if ordered.length && !endIsOpen && canEdit}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
       <div class="seam end-seam new-set-end" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={visibleSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
@@ -4250,6 +4305,19 @@
   {/if}
 
   <div class="dock">
+    {#if canListen && !readOnly}
+      <NightListen
+        bind:this={nightListen}
+        bind:running={listenRunning}
+        bind:logging={listenLogging}
+        instanceId={config.sessionInstanceId}
+        title={listenTitle}
+        {ordered}
+        canLog={!logComplete}
+        onLog={listenLog}
+        onRemove={listenRemove}
+        onEndSet={endSet} />
+    {/if}
     {#if playQ}
       <!-- in:, NOT transition:. stopPlayback() collapses the panel and drops the
            player in the same tick, so an OUTRO would be animating a container whose
@@ -4583,6 +4651,7 @@
       onAdd={paneAdd}
       onAddSuggestion={(s) => logTune({ tune_id: s.tune_id, name: s.name, tune_type: s.tune_type }, s.name)}
       onDismissSuggestion={dismissNext}
+      onListen={canListen && !readOnly ? listenFromSearch : null}
     />
   {/if}
 
@@ -4605,6 +4674,7 @@
       <TuneSearch
         variant="modal"
         offerListen
+        onListen={canListen && !readOnly ? listenFromSearch : null}
         initialQuery={input.trim()}
         initialPreview={deepPreview}
         preferType={cursorSetType()}

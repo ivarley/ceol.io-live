@@ -3,7 +3,8 @@
 **Date:** 2026-10-29
 **Status:** Stage 1 BUILT (the right to listen on the server); stage 2 BUILT, its
 field test on an Android phone at a session still to do; stage 3 BUILT (the meter,
-Ad-hoc mode); stages 4-6 PLANNED.
+Ad-hoc mode); stage 4 BUILT (Log mode), its two-phone test still to do; stages 5-6
+PLANNED.
 The decisions below were made by the product owner on 2026-10-29.
 
 ## Why
@@ -206,6 +207,43 @@ shows that Listen is logging it, as it does for the iPhone.
 
 *Done when:* an Android phone and an iPhone at the same table log one night together
 and every tune appears once.
+
+*Built (2026-11-02):* on the night's logger itself (`frontend/src/App.svelte`), not on
+`/listen`: the log stays in view while the meter fills it, and the tunes go through the
+logger's own ops, offline queue and live updates.
+
+- **The way in:** "Listen and log", under the last set, for those with the right while
+  the log isn't marked complete. While it listens, a strip across the bottom of the log
+  (in the dock) shows what the meter hears, the clock, and "End set" when it can end
+  one; a tap opens the meter in a sheet. The "Add a tune" searches on the logger (the
+  modal and the desktop pane) now listen there too (`TuneSearch` `onListen`), instead
+  of going to `/listen?instance=`, and open the meter as it is when it is already
+  listening; in either case the meter starts in Log mode. Leaving the page asks first,
+  since it would stop the microphone.
+- **The rules** are the iPhone's (`meter.js`, `NightListen.svelte`): a tune sure at 100%
+  is logged by itself when "Log automatically at 100%" is on (kept in the browser, on
+  by default), and otherwise by "Log This Tune" or by tapping a candidate; the tune
+  logged last, sure again, says "Logged to the night" and isn't logged twice; no tune
+  is logged by itself twice within ten minutes. Before logging, the night's latest set
+  is checked (`latestSetEndsWith`), and also the logger's own merge rule for the open
+  set (`openSetMergeTarget`): a tune already there is treated as logged, with no row.
+  "Wrong tune" takes back the row this page added (cancelled if still queued). Three
+  states of no tune with the log ending in a tune offer "End the set", and end it by
+  themselves with the switch on.
+- **The rows** are `add_tune` ops at the very end of the log whatever the cursor
+  (`after_record_id: null`), by thesession.org id, so the server links a tune Ceol has
+  and imports one it hasn't. The end of a set is the logger's own `set_break`.
+- **Stop logging** asks, then goes on listening in Ad-hoc mode: the sure tune's place in
+  your list and "Open the tune"; "Log to this night" starts logging again. Marking the
+  log complete stops the logging too.
+- **Shared with `/listen`:** the run (`listening.svelte.js`, the microphone, the link
+  and the meter) and the meter's view (`MeterView.svelte`).
+- **Checked** with the service running locally, on night 120 from a phone-width
+  browser fed the night 137 clip: The Roaring Barmaid was logged by itself to the end
+  of the open set; "Wrong tune" removed it; The Rose in the Heather was logged next.
+  Tests: `frontend/tests/nightlisten.test.js`, `frontend/tests/tunesearch.test.js`.
+- **Still to do:** the two-phone test (an Android phone and an iPhone logging one
+  night), at a session.
 
 ### 5. Recording on the server
 

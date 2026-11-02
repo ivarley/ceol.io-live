@@ -130,6 +130,19 @@ describe('Listen under the empty search box', () => {
     }
   })
 
+  it("on a night's logger, listens there instead of leaving (spec 061 stage 4)", async () => {
+    window.CEOL_LISTENS = true
+    try {
+      const onListen = vi.fn()
+      render(TuneSearch, { props: { config, variant: 'pane', offerListen: true, onListen, onAdd: vi.fn() } })
+      expect(listenLink().tagName).toBe('BUTTON')
+      await fireEvent.click(listenLink())
+      expect(onListen).toHaveBeenCalled()
+    } finally {
+      delete window.CEOL_LISTENS
+    }
+  })
+
   it('is not offered to anyone else, nor where the search did not ask for it', () => {
     render(TuneSearch, { props: { config, variant: 'pane', offerListen: true, onAdd: vi.fn() } })
     expect(listenLink()).toBeNull()

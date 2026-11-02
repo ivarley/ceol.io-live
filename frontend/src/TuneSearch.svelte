@@ -29,6 +29,7 @@
     notice = null, // optional snippet rendered between the header and the search field
     previewFooter = null, // optional snippet replacing TunePreview's action button (see TunePreview `footer`)
     offerListen = false, // an "Add a tune" search: Listen under the empty box, for those who may (spec 061)
+    onListen = null, // when given, Listen calls this rather than going to /listen (a night's logger listens itself)
     onRemember = () => {}, // record a used query into the shared history
     onAdd,
     onClose = () => {},
@@ -556,10 +557,12 @@
 {/if}
 {#if offerListen && canListen && !deepQuery.trim()}
   <!-- Spec 061 stage 3: name the tune by ear instead, as the iOS search offers. -->
-  <a class="deep-listen" href={listenHref(config, window.location.pathname + window.location.search)}>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" /><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" /></svg>
-    {t("Listen To What's Playing Now")}
-  </a>
+  {#snippet ear()}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" /><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" /></svg>{/snippet}
+  {#if onListen}
+    <button type="button" class="deep-listen" onclick={onListen}>{@render ear()}{t("Listen To What's Playing Now")}</button>
+  {:else}
+    <a class="deep-listen" href={listenHref(config, window.location.pathname + window.location.search)}>{@render ear()}{t("Listen To What's Playing Now")}</a>
+  {/if}
 {/if}
 <!-- A tune URL / id in the field: the only sensible action is to open THAT tune, so it
      replaces both the remote-search and log-as-is rows (a URL is not a tune name). A

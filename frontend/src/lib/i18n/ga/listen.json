@@ -396,5 +396,57 @@
   "Open this tune on thesession.org": {
     "ga": "Oscail an fonn seo ar thesession.org",
     "review": true
+  },
+  "Listen and log": {
+    "ga": "Éist agus logáil",
+    "review": true
+  },
+  "Listening, {what}. Show the meter.": {
+    "ga": "Ag éisteacht, {what}. Taispeáin an méadar.",
+    "review": true
+  },
+  "Logging tunes to {night}": {
+    "ga": "Ag logáil foinn chuig {night}",
+    "review": true
+  },
+  "Stop logging": {
+    "ga": "Stop ag logáil",
+    "review": true
+  },
+  "Stop logging these tunes to {night} and just show them instead?": {
+    "ga": "Stop ag logáil na bhfonn seo chuig {night} agus iad a thaispeáint amháin ina ionad?",
+    "review": true
+  },
+  "End the set": {
+    "ga": "Críochnaigh an tseit",
+    "review": true
+  },
+  "Logged to the night": {
+    "ga": "Logáilte don oíche",
+    "review": true
+  },
+  "Log automatically at 100%": {
+    "ga": "Logáil go huathoibríoch ag 100%",
+    "review": true
+  },
+  "Stop listening to this night?": {
+    "ga": "Stop ag éisteacht leis an oíche seo?",
+    "review": true
+  },
+  "Stop listening?": {
+    "ga": "Stop ag éisteacht?",
+    "review": true
+  },
+  "Stop Listening": {
+    "ga": "Stop ag éisteacht",
+    "review": true
+  },
+  "Log to this night": {
+    "ga": "Logáil chuig an oíche seo",
+    "review": true
+  },
+  "That wasn't logged. Try again.": {
+    "ga": "Níor logáladh é sin. Bain triail eile as.",
+    "review": true
   }
 }

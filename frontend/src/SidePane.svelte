@@ -16,6 +16,7 @@
     onAdd, // App gates this by mode (in read-only View it confirms the edit-mode switch)
     onAddSuggestion,
     onDismissSuggestion,
+    onListen = null, // "Listen To What's Playing Now" listens on the logger itself (spec 061)
   } = $props()
 
   let searchEl // the TuneSearch instance
@@ -51,5 +52,5 @@
       </div>
     </div>
   {/if}
-  <TuneSearch bind:this={searchEl} variant="pane" offerListen initialQuery="" {config} {preferType} {displayStatus} {history} {onRemember} {onAdd} />
+  <TuneSearch bind:this={searchEl} variant="pane" offerListen {onListen} initialQuery="" {config} {preferType} {displayStatus} {history} {onRemember} {onAdd} />
 </aside>
