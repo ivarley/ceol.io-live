@@ -61,7 +61,9 @@
 			</array>
 		</dict>
 		<!-- A night's recording, only when "Upload the recording to Ceol" is on or it is
-		     uploaded by hand (RecordingStore). Listening itself happens on the phone. -->
+		     uploaded by hand (RecordingStore); and the sound streamed while listening on Ceol's
+		     server, for those given that option (held until the service restarts). Otherwise
+		     listening happens on the phone. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeAudioData</string>
