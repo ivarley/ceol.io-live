@@ -3,8 +3,8 @@
 **Date:** 2026-10-29
 **Status:** Stage 1 BUILT (the right to listen on the server); stage 2 BUILT, its
 field test on an Android phone at a session still to do; stage 3 BUILT (the meter,
-Ad-hoc mode); stage 4 BUILT (Log mode), its two-phone test still to do; stages 5-6
-PLANNED.
+Ad-hoc mode); stage 4 BUILT (Log mode), its two-phone test still to do; stage 5 BUILT
+(recording on the server), its test with real storage still to do; stage 6 PLANNED.
 The decisions below were made by the product owner on 2026-10-29.
 
 ## Why
@@ -256,6 +256,53 @@ recording. The browser holds nothing.
 
 *Done when:* a night listened to from an Android phone with recording on appears in the
 segmenter like one uploaded from an iPhone.
+
+*Built (2026-11-02):* the service files the audio it already writes for every stream
+(`audio.flac`) as the night's recording (`listen/recording.py`), through the web app's
+own endpoints and as the person listening (the token they listen with), so the
+permission is the iPhone upload's: a system admin, or a session admin with the
+recordings bit (`can_manage_recordings`).
+
+- **The choice:** for those who may manage the night's recordings, "Listen and log"
+  first shows the start with **Record this night** (on, as on the iPhone; not kept).
+  Everyone else starts at once, as in stage 4. It is offered only in Log mode, and
+  carries on through "Stop logging", since it is the night's. While it records, the
+  sheet says "Recording this night on Ceol's server" and the strip "Recording"; if the
+  service won't record the night, the sheet says so and the listening goes on.
+- **The protocol:** the start message carries `record`, `started_at` (when the
+  microphone began, sample 0) and `title`; at the start the service asks the web app
+  (`GET /api/session-instances/<id>/recordings`) and its "ready" says `recording`
+  true, or false with `recording_error`.
+- **Filing** is `POST /api/recordings/upload-url`, a PUT of the FLAC to the bucket,
+  `POST /api/recordings` (label "{night} (Ceol website)", `started_at`, `duration_ms`),
+  then `PUT /api/recordings/<id>/listen-log` with the meter log in the iPhone's shape
+  (`{"at_ms", "dir", "msg"}`: states in, taps out). From there the web app's ingest
+  makes it a recording like any other, for the segmenter and "find the tunes". The
+  stream's folder is then deleted. A failure is tried again five times over about
+  fifteen minutes; a refusal (4xx) is not. Under ten seconds is not filed.
+- **When:** on stop; when the page goes (`pagehide` says stop, so a closed tab is
+  filed at once); when a stream nobody is sending to is swept, which for a recording
+  is after 30 minutes (`RECORD_IDLE_S`) rather than 5, so a phone that loses its
+  connection for a while comes back to the same recording; and when the service shuts
+  down (a deploy: uvicorn closes the sockets, then the lifespan files every open
+  recording, waiting up to 25 s, `SHUTDOWN_FILE_S`).
+- **Limits.** A deploy during a night splits it in two: the browser reconnects to the
+  new instance, which has none of the stream, and its recording starts there
+  (`started_at` moved on by the skip; audio before the first real sample is not kept).
+  The second recording is not the night's clock anchor and sits at offset 0, since
+  spec 050 has no way yet to place a second recording. A crash of the service (not a
+  shutdown) loses that night's recording. Render's shutdown delay must allow the 25 s.
+- **Checked** locally with the real service and the real web app, the bucket stood in
+  by a folder and the ingest stubbed: 150 s of night 137 streamed with `record` to
+  night 120 became recording 2 (FLAC, 150.0 s, the clock anchor, labelled
+  "… (Ceol website)", `started_at` the stream's), with its meter log (37 lines) beside
+  it, and the stream's folder gone; a stream open when the service got SIGTERM was
+  filed during the shutdown as recording 3. Tests:
+  `tests/unit/test_listen_recording_061.py` (a fake web app and bucket),
+  `frontend/tests/nightlisten.test.js`, `frontend/tests/listentest.test.js`.
+- **Still to do:** the spec's test, with real storage: a night recorded from an
+  Android phone, then opened in the segmenter. The browser's side has been run only
+  in tests, not in a browser.
 
 ### 6. Opening it up
 

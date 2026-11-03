@@ -448,5 +448,29 @@
   "That wasn't logged. Try again.": {
     "ga": "Níor logáladh é sin. Bain triail eile as.",
     "review": true
+  },
+  "now|Recording": {
+    "ga": "Ag taifeadadh",
+    "review": true
+  },
+  "Record this night": {
+    "ga": "Taifead an oíche seo",
+    "review": true
+  },
+  "Ceol's server keeps the sound and, when you stop, adds it to this night's recordings.": {
+    "ga": "Coinníonn Freastalaí Ceol an fhuaim agus, nuair a stadann tú, cuireann sé le taifeadtaí na hoíche seo í.",
+    "review": true
+  },
+  "Recording this night on Ceol's server": {
+    "ga": "Ag taifeadadh na hoíche seo ar Fhreastalaí Ceol",
+    "review": true
+  },
+  "This night isn't being recorded: Ceol's server couldn't add it to the night's recordings.": {
+    "ga": "Níl an oíche seo á taifeadadh: níorbh fhéidir le Freastalaí Ceol í a chur le taifeadtaí na hoíche.",
+    "review": true
+  },
+  "The recording so far is added to this night's recordings.": {
+    "ga": "Cuirtear an méid atá taifeadta go dtí seo le taifeadtaí na hoíche seo.",
+    "review": true
   }
 }

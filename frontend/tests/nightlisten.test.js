@@ -220,6 +220,68 @@ describe('NightListen', () => {
     await hear(st(4000, [tune(7, 0.996)]))
     expect(onLog).not.toHaveBeenCalled()
   })
+
+  // Stage 5: recording the night on the server.
+  async function beginRecording(props = {}) {
+    const r = render(NightListen, { props: { instanceId: 90, title: 'Mueller, Sun 1 Feb', ordered: [], onLog, onRemove, onEndSet, canRecord: true, ...props } })
+    await r.component.begin()
+    return r
+  }
+
+  it('without the right to record, starts at once and asks for no recording', async () => {
+    await begin()
+    expect(document.querySelector('#nl-record')).toBeNull()
+    expect(links[0].startFields).toEqual({})
+  })
+
+  it('someone who may record the night is asked first, with "Record this night" on', async () => {
+    await beginRecording()
+    expect(links.length).toBe(0)
+    const box = document.querySelector('#nl-record')
+    expect(box.checked).toBe(true)
+    await fireEvent.click(document.querySelector('#nl-start'))
+    await waitFor(() => expect(document.querySelector('#nl-strip')).toBeTruthy())
+    expect(links[0].startFields).toMatchObject({ record: true, title: 'Mueller, Sun 1 Feb' })
+    expect(new Date(links[0].startFields.started_at).getTime()).toBeGreaterThan(0)
+    expect(document.querySelector('#nl-recording')).toBeNull() // until the service says so
+    links[0].onReady({ type: 'ready', recording: true })
+    await waitFor(() => expect(document.querySelector('#nl-recording')).toBeTruthy())
+    expect(document.querySelector('#nl-strip').textContent).toContain('Recording')
+    await fireEvent.click(document.querySelector('#nl-stop'))
+    await waitFor(() => expect(document.body.textContent).toContain("The recording so far is added to this night's recordings."))
+  })
+
+  it('records nothing with the switch off', async () => {
+    await beginRecording()
+    await fireEvent.click(document.querySelector('#nl-record'))
+    await fireEvent.click(document.querySelector('#nl-start'))
+    await waitFor(() => expect(document.querySelector('#nl-strip')).toBeTruthy())
+    expect(links[0].startFields).toEqual({})
+  })
+
+  it('says so when the service will not record the night, and listens anyway', async () => {
+    await beginRecording()
+    await fireEvent.click(document.querySelector('#nl-start'))
+    await waitFor(() => expect(document.querySelector('#nl-strip')).toBeTruthy())
+    links[0].onReady({ type: 'ready', recording: false, recording_error: 'not yours' })
+    await waitFor(() => expect(document.querySelector('#nl-not-recording')).toBeTruthy())
+    expect(document.querySelector('#nl-strip').textContent).not.toContain('Recording')
+  })
+
+  it('offers no recording once the log is marked complete', async () => {
+    await beginRecording({ canLog: false })
+    expect(document.querySelector('#nl-record')).toBeNull()
+    await waitFor(() => expect(document.querySelector('#nl-strip')).toBeTruthy())
+    expect(links[0].startFields).toEqual({})
+  })
+
+  it('says stop when the page goes, so the service files the night at once', async () => {
+    await beginRecording()
+    await fireEvent.click(document.querySelector('#nl-start'))
+    await waitFor(() => expect(document.querySelector('#nl-strip')).toBeTruthy())
+    window.dispatchEvent(new Event('pagehide'))
+    await waitFor(() => expect(links[0].stopped).toBe(true))
+  })
 })
 
 // --- the logger -----------------------------------------------------------------

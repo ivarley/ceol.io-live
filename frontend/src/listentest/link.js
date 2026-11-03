@@ -33,8 +33,11 @@ export class ListenLink {
    * @param {() => Promise<{url: string, token: string}>} o.connect where to connect, and the token
    * @param {string} o.streamId the same id on every reconnect, so the service resumes the stream
    * @param {number} [o.instanceId] the night, so the service prefers its session's tunes
+   * @param {object} [o.startFields] more for the "start" message, on every connect
+   *   (stage 5: record, started_at, title)
    * @param {number} [o.keepSamples] most audio kept for resending (default ten minutes)
    * @param {(state: object) => void} [o.onState]
+   * @param {(ready: object) => void} [o.onReady] the service's "ready", on every connect
    * @param {(status: string, detail?: string) => void} [o.onStatus] connecting | live | reconnecting | refused | stopped
    * @param {(text: string) => void} [o.onEvent] a line for the page's log
    */
@@ -42,14 +45,16 @@ export class ListenLink {
     connect,
     streamId,
     instanceId = null,
+    startFields = {},
     keepSamples = 600 * SAMPLE_RATE,
     onState = () => {},
+    onReady = () => {},
     onStatus = () => {},
     onEvent = () => {},
     WebSocketImpl = globalThis.WebSocket,
     timers = globalThis,
   }) {
-    Object.assign(this, { connect, streamId, instanceId, keepSamples, onState, onStatus, onEvent })
+    Object.assign(this, { connect, streamId, instanceId, startFields, keepSamples, onState, onReady, onStatus, onEvent })
     this.WS = WebSocketImpl
     this.timers = timers
     this.queue = [] // [{offset, pcm}] not yet acknowledged, in offset order
@@ -171,7 +176,7 @@ export class ListenLink {
     this.ws = ws
     this.ready = false
     ws.onopen = () => {
-      const start = { type: 'start', stream_id: this.streamId, sample_rate: SAMPLE_RATE, token: conn.token }
+      const start = { ...this.startFields, type: 'start', stream_id: this.streamId, sample_rate: SAMPLE_RATE, token: conn.token }
       if (this.instanceId) start.instance_id = this.instanceId
       ws.send(JSON.stringify(start))
     }
@@ -223,6 +228,7 @@ export class ListenLink {
         this.sentEnd = this.acked
         this.onEvent(t('Connected. The server has {seconds}s of audio.', { seconds: (this.acked / SAMPLE_RATE).toFixed(1) }))
         this.setStatus('live')
+        this.onReady(m)
         this.flush()
         break
       case 'ack':

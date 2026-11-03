@@ -39,6 +39,15 @@ One WebSocket per stream, at /listen:
             detector's clock stays the recording's (the phone's own file is the
             complete recording)
 
+  client -> {"type": "start", ..., "instance_id", "record": true,
+             "started_at": <ISO 8601, when it began hearing>, "title": <the night>}
+            record the night here (spec 061 stage 5; a browser keeps no audio):
+            "ready" says "recording": true, or false with "recording_error".
+            The stream's audio is filed as the night's recording when the client
+            says stop, when the stream is swept (RECORD_IDLE_S), and when the
+            service shuts down (listen/recording.py); "done" says
+            "recording": "filing"
+
 Authentication: `Authorization: Bearer <token>` (or `?token=`), or, from a
 browser, which can set no header on a WebSocket and should not put a token in
 a URL that is logged, `"token"` in the "start" message (spec 061): a socket that
@@ -78,12 +87,15 @@ SR = 22050
 TOKEN = os.environ.get("LISTEN_TOKEN", "")
 STREAM_DIR = os.environ.get("LISTEN_STREAM_DIR") or os.path.join(tempfile.gettempdir(), "listen-streams")
 IDLE_S = 300            # a stream nobody has sent to for this long is closed
+RECORD_IDLE_S = 1800    # ... or, recording a night, this long: then it is filed
+SHUTDOWN_FILE_S = 25    # at shutdown, how long to wait for recordings to be filed
 KEEP_S = 120            # audio held in memory per stream
 START_S = 15            # a socket that came with no token must send its start within this
 
 NU_PARTLY = 0.5         # a popular tune's discount, as a fraction of an outside tune's (spec 053)
 state = {"models": None, "loading": True, "error": None, "started": time.time(), "load_s": None, "job": None}
 streams = {}            # stream_id -> Stream
+filing = set()          # recordings being filed (tasks)
 
 
 class Stream:
@@ -109,6 +121,8 @@ class Stream:
         self.socket = None
         self.last_seen = time.time()
         self.stepping = False
+        self.recording = None         # a NightRecording, when the night is recorded here
+        self.recording_error = None   # why it isn't, when it was asked for
 
     def take(self, offset, samples):
         if offset + len(samples) <= self.have:
@@ -116,6 +130,8 @@ class Stream:
         if offset > self.have:
             self.ahead[offset] = samples
             return
+        if self.recording is not None:
+            self.recording.took_audio(self.have)
         self._append(samples[self.have - offset:])
         while self.have in self.ahead:
             self._append(self.ahead.pop(self.have))
@@ -190,14 +206,48 @@ async def _take_heard(stream, m):
     await _send(stream.socket, {"type": "ack", "heard_t": stream.heard_t})
 
 
+def _file_recording(stream, retry_s=None):
+    """File a closed stream's recording, if it has one, in a worker thread."""
+    from listen.recording import RETRY_S
+
+    rec = getattr(stream, "recording", None)
+    if rec is None or rec.filed:
+        return None
+    task = asyncio.create_task(asyncio.to_thread(
+        rec.file, stream.dir, CEOL_API_URL, retry_s=RETRY_S if retry_s is None else retry_s))
+    filing.add(task)
+    task.add_done_callback(filing.discard)
+    return task
+
+
+def _close(stream):
+    """The stream is over: its listener closed, and its recording filed."""
+    stream.listener.close()
+    streams.pop(stream.id, None)
+    return _file_recording(stream)
+
+
 async def _sweep():
     while True:
         await asyncio.sleep(30)
         now = time.time()
         for sid, s in list(streams.items()):
-            if s.socket is None and now - s.last_seen > IDLE_S:
-                s.listener.close()
-                streams.pop(sid, None)
+            idle = RECORD_IDLE_S if getattr(s, "recording", None) is not None else IDLE_S
+            if s.socket is None and now - s.last_seen > idle:
+                _close(s)
+
+
+async def _file_all_at_shutdown():
+    """A deploy or restart: every recording open now is filed, once, without the
+    retries (the instance is going), within what the host allows a shutdown."""
+    for s in list(streams.values()):
+        if getattr(s, "recording", None) is not None:
+            s.listener.close()
+            streams.pop(s.id, None)
+            _file_recording(s, retry_s=())
+    if filing:
+        print(f"listen: filing {len(filing)} recording(s) before stopping", flush=True)
+        await asyncio.wait(list(filing), timeout=SHUTDOWN_FILE_S)
 
 
 def tune_name(name):
@@ -278,6 +328,7 @@ async def lifespan(app):
     yield
     for t in tasks:
         t.cancel()
+    await _file_all_at_shutdown()
 
 
 CEOL_API_URL = os.environ.get("CEOL_API_URL", "https://ceol.app")
@@ -304,6 +355,22 @@ def _app_token_allowed(token):
         allowed = False
     _app_tokens[token] = (allowed, time.time())
     return allowed
+
+
+async def _start_recording(stream, m, app_token):
+    """Record this night here, if its listener may (spec 061 stage 5). -> None,
+    or why not."""
+    from listen.recording import NightRecording, may_record
+
+    if not m.get("instance_id"):
+        return "no night to record"
+    if not app_token:
+        return "recording needs a Ceol sign-in"
+    why_not = await asyncio.to_thread(may_record, CEOL_API_URL, app_token, m["instance_id"])
+    if why_not:
+        return why_not
+    stream.recording = NightRecording(m["instance_id"], app_token, m.get("started_at"), m.get("title"))
+    return None
 
 
 def _given_token(scope_headers, query):
@@ -516,7 +583,7 @@ async def health(request):
     rss_gb = rss / 1e9 if os.uname().sysname == "Darwin" else rss / 1e6   # bytes on macOS, KB on Linux
     return JSONResponse({"ready": state["models"] is not None, "loading": state["loading"],
                          "error": state["error"], "load_s": state["load_s"],
-                         "streams": len(streams), "peak_memory_gb": round(rss_gb, 2),
+                         "streams": len(streams), "filing": len(filing), "peak_memory_gb": round(rss_gb, 2),
                          "threads": state.get("threads"), "cpu": state.get("cpu"), "job": state["job"],
                          "uptime_s": int(time.time() - state["started"])},
                         status_code=200 if state["models"] is not None else 503)
@@ -560,12 +627,16 @@ async def listen(ws: WebSocket):
             m = json.loads(msg.get("text") or "{}")
             kind = m.get("type")
             if kind == "start":
-                if not allowed:
-                    allowed, app_token = await _authorised(str(m.get("token") or ""))
-                    if not allowed:
+                # the start's token: to be let in, or (let in already, with no
+                # token, in local development) to act as the person for their
+                # night's tunes and its recording
+                if not allowed or (app_token is None and m.get("token")):
+                    ok, given = await _authorised(str(m.get("token") or ""))
+                    if not allowed and not ok:
                         await _send(ws, {"type": "error", "error": "not allowed"})
                         await ws.close(code=4401)
                         return
+                    allowed, app_token = True, given or app_token
                 if int(m.get("sample_rate", SR)) != SR:
                     await _send(ws, {"type": "error", "error": f"send {SR} Hz"})
                     continue
@@ -587,9 +658,15 @@ async def listen(ws: WebSocket):
                     streams[sid] = stream
                     if mode == "audio":
                         asyncio.create_task(_step_loop(stream))
+                    if m.get("record") and mode == "audio":
+                        stream.recording_error = await _start_recording(stream, m, app_token)
                 stream.socket = ws
-                await _send(ws, {"type": "ready", "stream_id": sid, "mode": mode, "have": stream.have,
-                                 "heard_t": stream.heard_t, "known_tunes": stream.known_tunes})
+                ready = {"type": "ready", "stream_id": sid, "mode": mode, "have": stream.have,
+                         "heard_t": stream.heard_t, "known_tunes": stream.known_tunes,
+                         "recording": getattr(stream, "recording", None) is not None}
+                if getattr(stream, "recording_error", None):
+                    ready["recording_error"] = stream.recording_error
+                await _send(ws, ready)
             elif kind == "heard" and stream is not None and stream.mode == "heard":
                 await _take_heard(stream, m)
             elif kind == "skip" and stream is not None:
@@ -598,9 +675,11 @@ async def listen(ws: WebSocket):
             elif kind == "tap" and stream is not None:
                 stream.listener.tap(m.get("action"), m.get("tune_id"), m.get("shown") or ())
             elif kind == "stop" and stream is not None:
-                await _send(ws, {"type": "done", "have": stream.have})
-                stream.listener.close()
-                streams.pop(stream.id, None)
+                done = {"type": "done", "have": stream.have}
+                if getattr(stream, "recording", None) is not None:
+                    done["recording"] = "filing"
+                await _send(ws, done)
+                _close(stream)
                 stream = None
     except WebSocketDisconnect:
         pass

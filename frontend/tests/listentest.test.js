@@ -197,6 +197,25 @@ describe('ListenLink', () => {
     expect(statuses).toContain('live')
   })
 
+  it('adds its start fields to every start, and passes on each "ready"', async () => {
+    const readies = []
+    link = new ListenLink({
+      connect: async () => ({ url: 'wss://listen.test/listen', token: 'tok' }),
+      streamId: 'stream-2',
+      startFields: { record: true, title: 'A night' },
+      onReady: (m) => readies.push(m),
+      WebSocketImpl: FakeSocket,
+    })
+    link.startFields.started_at = '2026-11-02T20:00:00.000Z'
+    link.start()
+    await flush()
+    const ws = FakeSocket.all[0]
+    ws.open()
+    expect(ws.sent[0]).toEqual({ type: 'start', stream_id: 'stream-2', sample_rate: 22050, token: 'tok', record: true, title: 'A night', started_at: '2026-11-02T20:00:00.000Z' })
+    ws.say({ type: 'ready', have: 0, recording: true })
+    expect(readies).toEqual([{ type: 'ready', have: 0, recording: true }])
+  })
+
   it('after a drop, resends from what the service has, on the same stream', async () => {
     vi.useFakeTimers()
     link.start()

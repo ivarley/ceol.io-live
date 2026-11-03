@@ -27,6 +27,13 @@ and this service's address from the web app's `GET /api/listen/connection`
 `LISTEN_TOKEN` set and `CEOL_API_URL=http://localhost:<the app's port>`, and the
 app with `LISTEN_SERVICE_URL=ws://localhost:8440/listen`.
 
+A browser can also ask the service to record the night (spec 061 stage 5,
+`listen/recording.py`): the stream's `audio.flac` is then filed as the night's
+recording, through the web app's recording endpoints as the person listening,
+when the browser stops, when the stream is swept (30 minutes idle), and when the
+service shuts down. Filing at shutdown waits up to 25 s, so the service's
+shutdown delay on Render must be at least that.
+
 This is the spike: one service, a shared token, no app page yet. It exists
 to measure a real instance before the native recorder is built.
 

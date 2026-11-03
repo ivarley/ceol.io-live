@@ -17,9 +17,15 @@
   // "Stop logging" goes on listening in Ad-hoc mode: the sure tune's place in your
   // list, nothing logged. While it listens, a strip in the logger's dock says so, and
   // opens the meter.
+  //
+  // Recording (stage 5): for those who manage the session's recordings, "Listen and
+  // log" first offers "Record this night" (on, as on the iPhone). With it on, Ceol's
+  // server keeps the sound it is sent and files it as the night's recording when the
+  // listening stops (listen/recording.py); the browser keeps none. It goes on through
+  // "Stop logging": it is the night's.
   import { onDestroy } from 'svelte'
   import { Dialog, Sheet } from '../lib/index.js'
-  import { t } from '../lib/i18n/index.js'
+  import { t, tc } from '../lib/i18n/index.js'
   import { latestSetEndsWith } from './meter.js'
   import { Listening, clock, openTune as openTuneSheet } from './listening.svelte.js'
   import MeterView from './MeterView.svelte'
@@ -31,6 +37,7 @@
     title = '', // the night, as "Logging tunes to {night}" names it
     ordered = [], // the night's rows in order, as the logger shows them
     canLog = true, // may log to this night now (signed in with the right, not marked complete)
+    canRecord = false, // may file a recording under this night (manages the session's recordings)
     onLog = () => null, // (tune) => {row} | {already: true} | null
     onRemove = () => {}, // (row) the row this page added
     onEndSet = () => {},
@@ -59,6 +66,7 @@
   let askStop = $state(false)
   let elsewhere = $state(null)
   let failed = $state('') // a log that didn't go
+  let recordNight = $state(true)
 
   const listening = new Listening({
     onSure: (pick) => {
@@ -89,11 +97,17 @@
     return () => window.removeEventListener('beforeunload', warn)
   })
 
-  /** "Listen and log": start listening to this night, or log again after "Stop logging". */
+  /** "Listen and log": start listening to this night, or log again after "Stop logging".
+   * Someone who may record it first sees the start, with "Record this night". */
   export async function begin() {
     open = true
     logging = canLog
-    if (listening.phase === 'idle') await listening.start({ instanceId })
+    if (listening.phase === 'idle' && !(canRecord && canLog)) await startListening()
+  }
+
+  async function startListening() {
+    logging = canLog
+    await listening.start({ instanceId, record: canRecord && canLog && recordNight, title })
     if (listening.phase === 'idle') logging = false // the microphone was refused
   }
 
@@ -177,7 +191,7 @@
       <span class="lp-dot" class:is-off={listening.status !== 'live'} aria-hidden="true"></span>
       <span class="nl-text">
         <span class="nl-headline">{view.headline}</span>
-        <span class="nl-sub lp-num">{clock(listening.clockS)} · {logging ? t('Logging') : listening.linkText}</span>
+        <span class="nl-sub lp-num">{clock(listening.clockS)} · {logging ? t('Logging') : listening.linkText}{listening.recording === 'on' ? ` · ${tc('now', 'Recording')}` : ''}</span>
       </span>
     </button>
     {#if view.canEndSet}
@@ -191,17 +205,33 @@
     {#if logging}
       <div class="nl-logging" id="nl-logging">
         <span>{t('Logging tunes to {night}', { night: title })}</span>
-        <button type="button" class="lp-link" id="nl-stop-logging" onclick={() => (askStopLogging = true)}>{t('Stop logging')}</button>
+        {#if running}
+          <button type="button" class="lp-link" id="nl-stop-logging" onclick={() => (askStopLogging = true)}>{t('Stop logging')}</button>
+        {/if}
       </div>
     {/if}
 
     {#if !running}
       {#if listening.error}<p class="lp-error" role="alert" id="nl-error">{listening.error}</p>{/if}
       <p class="lp-note">{t("Ceol's server does the listening. Keep this page open and the screen on.")}</p>
-      <button type="button" class="lp-start" id="nl-start" onclick={begin} disabled={listening.phase === 'starting'}>
+      {#if canRecord && canLog}
+        <label class="nl-option">
+          <input type="checkbox" id="nl-record" bind:checked={recordNight} />
+          {t('Record this night')}
+        </label>
+        {#if recordNight}
+          <p class="lp-note">{t("Ceol's server keeps the sound and, when you stop, adds it to this night's recordings.")}</p>
+        {/if}
+      {/if}
+      <button type="button" class="lp-start" id="nl-start" onclick={startListening} disabled={listening.phase === 'starting'}>
         {listening.phase === 'starting' ? t('Starting…') : t('Start Listening')}
       </button>
     {:else}
+      {#if listening.recording === 'on'}
+        <p class="nl-recording" id="nl-recording"><span class="nl-rec-dot" aria-hidden="true"></span>{t("Recording this night on Ceol's server")}</p>
+      {:else if listening.recording === 'refused'}
+        <p class="lp-error" id="nl-not-recording">{t("This night isn't being recorded: Ceol's server couldn't add it to the night's recordings.")}</p>
+      {/if}
       <MeterView {listening} night onTapThis={tapThis} onWrong={wrong}>
         {#snippet noTune()}
           {#if view.canEndSet}
@@ -252,6 +282,7 @@
 <Dialog
   bind:open={askStop}
   title={logging ? t('Stop listening to this night?') : t('Stop listening?')}
+  description={listening.recording === 'on' ? t("The recording so far is added to this night's recordings.") : ''}
   confirmLabel={t('Stop Listening')}
   onConfirm={stop} />
 
@@ -320,6 +351,20 @@
     color: var(--text-color, #e8e8e8);
     background: var(--header-bg, rgba(255, 255, 255, 0.05));
     border-radius: var(--r, 8px);
+  }
+  .nl-recording {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    color: var(--secondary-text, #888);
+  }
+  .nl-rec-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--danger, #d9534f);
   }
   .nl-logged {
     margin: 0 0 8px;

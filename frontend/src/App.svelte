@@ -4314,6 +4314,7 @@
         title={listenTitle}
         {ordered}
         canLog={!logComplete}
+        canRecord={canManageRecordings}
         onLog={listenLog}
         onRemove={listenRemove}
         onEndSet={endSet} />

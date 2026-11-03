@@ -29,6 +29,8 @@ export class Listening {
   backlogS = $state(0)
   lagS = $state(0)
   version = $state(0) // bumped whenever the meter changes
+  recording = $state('off') // stage 5, recording the night on the server: off | asked | on | refused
+  recordingError = $state('')
 
   /**
    * @param {object} o
@@ -43,20 +45,33 @@ export class Listening {
     this.capture = null
     this.tick = null
     this.onOnline = () => this.link && this.link.nudge()
+    // The page is going (closed, or left): say stop, so the service ends the
+    // stream now and files its recording, rather than waiting for it to go idle.
+    this.onPageHide = () => this.stop()
   }
 
   /** Starts the microphone and the stream. `instanceId`: the night whose session's
-   * tunes the listener should prefer. */
-  async start({ instanceId = null } = {}) {
+   * tunes the listener should prefer. `record`: keep the night's audio on the
+   * server and file it as the night's recording (stage 5); `title` labels it. */
+  async start({ instanceId = null, record = false, title = '' } = {}) {
     if (this.phase !== 'idle') return
     this.phase = 'starting'
     this.error = ''
     this.status = 'connecting'
+    record = !!(record && instanceId)
+    this.recording = record ? 'asked' : 'off'
+    this.recordingError = ''
     const link = new ListenLink({
       connect,
       streamId: crypto.randomUUID(),
       instanceId,
+      startFields: record ? { record: true, title } : {},
       onState: (s) => this.received(s),
+      onReady: (m) => {
+        if (!record) return
+        this.recording = m.recording ? 'on' : 'refused'
+        this.recordingError = m.recording ? '' : m.recording_error || ''
+      },
       onStatus: (s, detail) => {
         this.status = s
         if (s === 'refused') this.error = detail || t("You can't listen on Ceol's server.")
@@ -75,8 +90,11 @@ export class Listening {
       this.status = 'idle'
       return
     }
+    // the night's clock starts with the microphone (sample 0), not when it was asked for
+    if (record) link.startFields.started_at = new Date().toISOString()
     link.start()
     window.addEventListener('online', this.onOnline)
+    window.addEventListener('pagehide', this.onPageHide)
     this.tick = setInterval(() => {
       this.clockS = this.capture ? this.capture.captured() / SAMPLE_RATE : 0
       this.backlogS = this.link ? this.link.backlog() / SAMPLE_RATE : 0
@@ -89,6 +107,7 @@ export class Listening {
     this.phase = 'idle'
     clearInterval(this.tick)
     window.removeEventListener('online', this.onOnline)
+    window.removeEventListener('pagehide', this.onPageHide)
     if (this.link) this.link.stop()
     this.link = null
     const capture = this.capture
@@ -97,6 +116,7 @@ export class Listening {
     this.backlogS = 0
     this.meter = new Meter()
     this.status = 'idle'
+    this.recording = 'off'
     this.version++
     if (capture) await capture.stop()
   }
