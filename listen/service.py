@@ -332,6 +332,8 @@ async def lifespan(app):
 
 
 CEOL_API_URL = os.environ.get("CEOL_API_URL", "https://ceol.app")
+# Cloudflare, in front of ceol.app, refuses Python's own user agent (error 1010)
+USER_AGENT = "ceol-listen"
 _app_tokens = {}      # token -> (allowed, checked at)
 
 
@@ -346,7 +348,7 @@ def _app_token_allowed(token):
     allowed = False
     try:
         req = urllib.request.Request(f"{CEOL_API_URL}/api/me",
-                                     headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen"})
+                                     headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen", "User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=10) as r:
             user = json.loads(r.read()).get("user", {})
             # is_system_admin: a web app from before the right existed
@@ -396,7 +398,7 @@ def _known_tunes(instance_id, token):
 
     try:
         req = urllib.request.Request(f"{CEOL_API_URL}/api/session-instances/{int(instance_id)}/known-tunes",
-                                     headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen"})
+                                     headers={"Authorization": f"Bearer {token}", "X-Ceol-Client": "listen", "User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=15) as r:
             return [int(t) for t in json.loads(r.read()).get("tune_ids", [])]
     except Exception as e:
@@ -431,7 +433,7 @@ def _app(path, body):
 
     req = urllib.request.Request(f"{CEOL_API_URL}{path}", data=json.dumps(body).encode(), method="POST",
                                  headers={"Authorization": f"Bearer {JOB_TOKEN}", "Content-Type": "application/json",
-                                          "X-Ceol-Client": "listen"})
+                                          "X-Ceol-Client": "listen", "User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read())
 

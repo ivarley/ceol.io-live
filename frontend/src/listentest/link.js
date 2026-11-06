@@ -243,6 +243,14 @@ export class ListenLink {
         this.close()
         break
       case 'error':
+        // The service closes a refused start with 4401, but a proxy can lose the
+        // code (it arrives as 1005), so its "not allowed" is the refusal too.
+        if (m.error === 'not allowed') {
+          this.stopped = true
+          this.setStatus('refused')
+          this.onEvent(t("Ceol's server refused this sign-in."))
+          break
+        }
         this.onEvent(t('The server says: {error}', { error: m.error }))
         break
     }

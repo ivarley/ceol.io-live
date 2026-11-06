@@ -302,6 +302,19 @@ describe('ListenLink', () => {
     expect(statuses.at(-1)).toBe('refused')
   })
 
+  it('stops for good on "not allowed" even when the close code is lost', async () => {
+    vi.useFakeTimers()
+    link.start()
+    await vi.advanceTimersByTimeAsync(0)
+    const ws = FakeSocket.all[0]
+    ws.open()
+    ws.say({ type: 'error', error: 'not allowed' })
+    ws.drop(1005)
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(FakeSocket.all.length).toBe(1)
+    expect(statuses.at(-1)).toBe('refused')
+  })
+
   it('stops for good when Ceol says this person may not listen', async () => {
     const refused = Object.assign(new Error('no'), { refused: true })
     link.connect = async () => {

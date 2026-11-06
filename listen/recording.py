@@ -51,7 +51,8 @@ def _request(
     timeout=60,
 ):
     url = path if path.startswith("http") else f"{api_url}{path}"
-    headers = {"X-Ceol-Client": "listen"}
+    # Cloudflare, in front of ceol.app, refuses Python's own user agent (error 1010)
+    headers = {"X-Ceol-Client": "listen", "User-Agent": "ceol-listen"}
     if token and not path.startswith("http"):
         headers["Authorization"] = f"Bearer {token}"
     if body is not None:
