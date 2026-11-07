@@ -43,7 +43,10 @@ const payload = (over = {}) => ({
   sessions: [
     {
       session_name: 'Mueller Session',
-      location: 'Austin, TX, USA',
+      location: 'Austin',
+      location_name: 'Mueller Market',
+      place: { slug: 'austin', name: 'Austin' },
+      archived: false,
       role: 'Member',
       is_admin: false,
       relationship: 'member',
@@ -52,12 +55,27 @@ const payload = (over = {}) => ({
     },
     {
       session_name: 'B.D. Riley’s',
-      location: 'Austin, TX, USA',
+      location: 'Austin',
+      location_name: null,
+      place: { slug: 'austin', name: 'Austin' },
+      archived: false,
       role: 'Admin',
       is_admin: true,
       relationship: 'visitor',
       confirmed: true,
       session_path: 'austin/bdrileys',
+    },
+    {
+      session_name: 'Dublin Thursday',
+      location: '',
+      location_name: null,
+      place: null,
+      archived: true,
+      role: 'Visitor',
+      is_admin: false,
+      relationship: 'visitor',
+      confirmed: false,
+      session_path: 'dublin/thursday',
     },
   ],
   is_user_profile: true,
@@ -355,5 +373,86 @@ describe('person details page view (admin flavor)', () => {
       expect(call).toBeTruthy()
       expect(JSON.parse(call[1].body)).toEqual({ active: false })
     })
+  })
+
+  // The Sessions tab (admin flavour only): the sessions the person is associated
+  // with, the role at each, read-only, each row linking to the session and to its
+  // admin People tab where the role controls live.
+  it('has Profile and Sessions tabs, with the count, and opens on Profile', () => {
+    const { container } = renderAdmin()
+    const tabs = container.querySelector('#person-admin-tabs')
+    expect(tabs).toBeTruthy()
+    expect(container.querySelector('#profile-tab').textContent).toContain('Profile')
+    expect(container.querySelector('#sessions-tab').textContent).toContain('Sessions')
+    expect(container.querySelector('#sessions-tab .kit-tab-count').textContent).toBe('3')
+    expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
+    expect(container.querySelector('#sessions').classList.contains('active')).toBe(false)
+  })
+
+  it('the Sessions tab lists every session with its role, state and links', async () => {
+    const { container } = renderAdmin()
+    await fireEvent.click(container.querySelector('#sessions-tab'))
+    await waitFor(() => expect(container.querySelector('#sessions').classList.contains('active')).toBe(true))
+    const rows = [...container.querySelectorAll('.person-session-row')]
+    expect(rows.map((r) => r.dataset.sessionPath)).toEqual(['austin/mueller', 'austin/bdrileys', 'dublin/thursday'])
+    const [mueller, rileys, dublin] = rows
+    // The badge comes from the two flags, not the server's English role string.
+    expect(mueller.querySelector('.session-role-badge').textContent.trim()).toBe('Member')
+    expect(rileys.querySelector('.session-role-badge').textContent.trim()).toBe('Admin')
+    expect(dublin.querySelector('.session-role-badge').textContent.trim()).toBe('Visitor')
+    expect(mueller.querySelector('.kit-row-sub').textContent).toBe('Austin · Mueller Market')
+    expect(rileys.querySelector('.kit-row-sub').textContent).toBe('Austin')
+    expect(mueller.textContent).not.toContain('Unconfirmed')
+    expect(dublin.textContent).toContain('Unconfirmed')
+    expect(dublin.textContent).toContain('Archived')
+    expect(mueller.querySelector('.person-session-name').getAttribute('href')).toBe('/sessions/austin/mueller')
+    expect(mueller.querySelector('.person-session-manage').getAttribute('href')).toBe('/admin/sessions/austin/mueller/people')
+    // Read-only: none of the old controls.
+    expect(container.querySelector('.admin-toggle')).toBeNull()
+    expect(container.querySelector('.leave-session-btn')).toBeNull()
+    expect(container.querySelector('#add-to-session-link')).toBeNull()
+    // The breadcrumb nests the tab under the person, and ?tab= follows.
+    expect(container.querySelector('#breadcrumb-tab-name').textContent).toBe('Sessions')
+    expect(container.querySelector('#breadcrumb-person-name a')).toBeTruthy()
+    expect(new URL(window.location.href).searchParams.get('tab')).toBe('sessions')
+  })
+
+  it('the chips filter on relationship and admin independently; the active chip clears', async () => {
+    const { container } = renderAdmin()
+    await fireEvent.click(container.querySelector('#sessions-tab'))
+    const paths = () => [...container.querySelectorAll('.person-session-row')].map((r) => r.dataset.sessionPath)
+    await fireEvent.click(container.querySelector('[data-session-filter="visitor"]'))
+    // The admin of B.D. Riley's is a visitor underneath, so it shows under Visitor.
+    await waitFor(() => expect(paths()).toEqual(['austin/bdrileys', 'dublin/thursday']))
+    await fireEvent.click(container.querySelector('[data-session-filter="admin"]'))
+    await waitFor(() => expect(paths()).toEqual(['austin/bdrileys']))
+    await fireEvent.click(container.querySelector('[data-session-filter="member"]'))
+    await waitFor(() => expect(paths()).toEqual(['austin/mueller']))
+    await fireEvent.click(container.querySelector('[data-session-filter="member"]'))
+    await waitFor(() => expect(paths().length).toBe(3))
+  })
+
+  it('?tab=sessions opens on the Sessions tab, and the breadcrumb name goes back to the profile', async () => {
+    window.history.replaceState({}, '', '/admin/people/5?tab=sessions')
+    const { container } = renderAdmin()
+    expect(container.querySelector('#sessions').classList.contains('active')).toBe(true)
+    expect(container.querySelector('#breadcrumb-tab-name').textContent).toBe('Sessions')
+    await fireEvent.click(container.querySelector('#breadcrumb-person-name a'))
+    await waitFor(() => expect(container.querySelector('#profile').classList.contains('active')).toBe(true))
+    expect(new URL(window.location.href).searchParams.get('tab')).toBeNull()
+    expect(container.querySelector('#breadcrumb-tab-name').textContent).toBe('')
+  })
+
+  it('the empty state when the person has no sessions', async () => {
+    const { container } = renderAdmin(adminPayload({ sessions: [] }))
+    expect(container.querySelector('#sessions-tab .kit-tab-count').textContent).toBe('0')
+    await fireEvent.click(container.querySelector('#sessions-tab'))
+    await waitFor(() => expect(container.querySelector('#person-sessions').textContent).toContain('No sessions associated with this person.'))
+  })
+
+  it('/me has no tabs and no Sessions pane', () => {
+    const { container } = renderApp()
+    expect(container.querySelector('#person-admin-tabs')).toBeNull()
+    expect(container.querySelector('#sessions')).toBeNull()
   })
 })

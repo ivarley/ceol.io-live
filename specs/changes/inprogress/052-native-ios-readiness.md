@@ -385,6 +385,13 @@ done where they belong:
 Nothing was lost checking: granting somebody session-admin, the other control that
 section carried, already lives on `/admin/sessions/<path>/people/<id>`.
 
+The **admin flavour** (`/admin/people/<id>`) is a different page from `/me`: a system
+admin looking at somebody else has no `/sessions` of theirs to go to. So it has two tabs,
+Profile and Sessions (2026-11-06), the second a read-only list of every session the
+person is associated with, the role at each (admin / member / visitor), unconfirmed and
+archived marked, each row linking to the session and to its admin People tab where the
+role controls live. `/me` is unchanged.
+
 **Share left too.** It gives a link and a QR for the page you are looking at, so parking
 it on `/me` made it mean "share your profile" half the time. It is a header button now,
 present on every screen, opening a sheet with the QR first (that is how you hand a link

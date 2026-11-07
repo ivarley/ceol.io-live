@@ -7,6 +7,7 @@
   // class names/ids, so the look is unchanged. showMessage comes from base.html.
   import { untrack } from 'svelte'
   import ProfileTab from './ProfileTab.svelte'
+  import SessionsTab from './SessionsTab.svelte'
 
   let { pageData, ctx = {} } = $props()
 
@@ -15,13 +16,14 @@
   const isUserProfile = pageData.is_user_profile
   const isSystemAdmin = pageData.is_system_admin
   const personId = person.id
+  const sessions = pageData.sessions || []
 
-  import { toast, t, tc } from '../lib/index.js'
+  import { Tabs, toast, t, tc } from '../lib/index.js'
   import AccountSection from './AccountSection.svelte'
 
-  // Sections, and the tabs before them, are gone (spec 052 §B1). Four of the five
-  // were the same data with a different frame around it, and the fifth was not
-  // earning its place:
+  // On /me the sections, and the tabs before them, are gone (spec 052 §B1). Four of
+  // the five were the same data with a different frame around it, and the fifth was
+  // not earning its place:
   //   Sessions  -> duplicated /sessions; its one unique control, leaving a session,
   //                moved to that session's own role sheet
   //   Attended  -> the Logs tab's "Attended" filter, on the session it is about
@@ -29,6 +31,33 @@
   //   Logged    -> deleted; nobody used it
   // What is left is your profile and the account actions, which is what a Me screen
   // is for.
+  //
+  // The ADMIN flavour is a different page: a system admin looking at somebody else
+  // has no /sessions of theirs to go to, so it keeps a Sessions tab (read-only; the
+  // role controls stay on each session's admin People tab). It is a web-only admin
+  // page, like /admin/sessions/<path>, which is tabbed for the same reason.
+  const VALID_TABS = ['profile', 'sessions']
+  const initialTab = (() => {
+    if (isUserProfile) return 'profile'
+    const q = new URLSearchParams(window.location.search).get('tab')
+    return q && VALID_TABS.includes(q) ? q : 'profile'
+  })()
+  let activeTab = $state(initialTab)
+
+  const adminTabs = [
+    { id: 'profile', label: t('Profile'), domId: 'profile-tab' },
+    { id: 'sessions', label: t('Sessions'), count: sessions.length, domId: 'sessions-tab' },
+  ]
+
+  // Kit Tabs drives activeTab via bind:value; this keeps ?tab= in step so the
+  // Sessions tab can be linked to and survives a reload.
+  function onTabChange(id) {
+    activeTab = id
+    const url = new URL(window.location)
+    if (id === 'profile') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', id)
+    window.history.replaceState({}, '', url)
+  }
 
   $effect(() => {
     untrack(() => {
@@ -49,33 +78,53 @@
      Settings. The admin flavour keeps its breadcrumb, which is navigation rather
      than decoration. -->
 {#if !isUserProfile}
-  <!-- Admin Breadcrumb Navigation -->
+  <!-- Admin Breadcrumb Navigation. On the Sessions tab the person's name becomes
+       the way back and the tab's name ends the trail, as /admin/sessions does. -->
   <nav class="admin-breadcrumb" aria-label={t('breadcrumb')}>
     <a href="/admin" class="breadcrumb-item">{tc('area', 'Admin')}</a>
     <span class="breadcrumb-separator">{'>>'}</span>
     <a href="/admin/people" class="breadcrumb-item">{t('People')}</a>
     <span class="breadcrumb-separator">{'>>'}</span>
-    <!-- The trailing " >> <tab name>" is gone with the tabs: the page has one level
-         now, so the person's name is the end of the trail. The empty spans stay
-         because admin CSS and selectors still name them. -->
-    <span id="breadcrumb-person-name" class="breadcrumb-current">{person.name}</span>
-    <span id="breadcrumb-tab-separator" class="breadcrumb-separator" style="display: none;">{'>>'}</span>
-    <span id="breadcrumb-tab-name" class="breadcrumb-current" style="display: none;"></span>
+    {#if activeTab === 'sessions'}
+      <span id="breadcrumb-person-name"><a
+          href="?"
+          class="breadcrumb-item"
+          onclick={(e) => {
+            e.preventDefault()
+            onTabChange('profile')
+          }}>{person.name}</a></span>
+      <span id="breadcrumb-tab-separator" class="breadcrumb-separator">{'>>'}</span>
+      <span id="breadcrumb-tab-name" class="breadcrumb-current">{t('Sessions')}</span>
+    {:else}
+      <span id="breadcrumb-person-name" class="breadcrumb-current">{person.name}</span>
+      <span id="breadcrumb-tab-separator" class="breadcrumb-separator" style="display: none;">{'>>'}</span>
+      <span id="breadcrumb-tab-name" class="breadcrumb-current" style="display: none;"></span>
+    {/if}
+  </nav>
+
+  <nav class="person-admin-tabs-nav">
+    <Tabs
+      tabs={adminTabs}
+      value={activeTab}
+      onValueChange={onTabChange}
+      styled={false}
+      listId="person-admin-tabs"
+      listClass="nav nav-tabs"
+      tabClass="nav-link" />
   </nav>
 {/if}
 
 <!-- One idiom, not two (spec 052 §B3).
-     This page used to carry six tabs across the top AND a vertical Account list
+     /me used to carry six tabs across the top AND a vertical Account list
      underneath, so the same screen offered two different kinds of menu. It is a
      vertical list now: your details, then the places you can go from here, then the
      account actions — all the same shape of row. That is also the only form iOS has
      for this screen, where a six-tab strip has no counterpart.
 
-     The `?tab=` URLs are unchanged, so every existing link still lands where it did;
-     what was a tab switch is now a drill-down, and each section renders in full on
-     its own screen rather than being squeezed under a strip. -->
+     Both panes stay mounted and are shown or hidden, so the profile's edit state
+     survives a look at the Sessions tab. -->
 <div class="tab-content" id="profileTabContent">
-  <div class="tab-pane fade show active" id="profile" role="tabpanel">
+  <div class="tab-pane fade {activeTab === 'profile' ? 'show active' : ''}" id="profile" role="tabpanel">
     <ProfileTab
       {person}
       {user}
@@ -84,6 +133,11 @@
       timezoneOptions={pageData.timezone_options || []}
       canonicalInstruments={ctx.canonicalInstruments || []} />
   </div>
+  {#if !isUserProfile}
+    <div class="tab-pane fade {activeTab === 'sessions' ? 'show active' : ''}" id="sessions" role="tabpanel">
+      <SessionsTab {sessions} />
+    </div>
+  {/if}
 </div>
 
 {#if isUserProfile}

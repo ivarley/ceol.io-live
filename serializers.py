@@ -274,17 +274,25 @@ def admin_person_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         # which is the "email" key above (spec 027 / api_routes.py:492).
         "user_email": row["user_email"],
         "account_active": bool(row["account_active"]) if row["username"] else None,
-        "receive_update_emails": bool(row["receive_update_emails"]) if row["username"] else None,
+        "receive_update_emails": bool(row["receive_update_emails"])
+        if row["username"]
+        else None,
         # timestamps as naive-local ISO strings; date-only for latest_session_date
         "last_login": row["last_login"].isoformat() if row["last_login"] else None,
         "session_count": row["session_count"],
         "session_instance_count": row["session_instance_count"],
-        "latest_session_date": row["latest_date"].isoformat() if row["latest_date"] else None,
+        "latest_session_date": row["latest_date"].isoformat()
+        if row["latest_date"]
+        else None,
         "latest_session_name": row["session_name"],
         "tune_count": row["tune_count"],
-        "last_logged_tune": row["last_logged_tune"].isoformat() if row["last_logged_tune"] else None,
+        "last_logged_tune": row["last_logged_tune"].isoformat()
+        if row["last_logged_tune"]
+        else None,
         "last_tunebook_update": (
-            row["last_tunebook_update"].isoformat() if row["last_tunebook_update"] else None
+            row["last_tunebook_update"].isoformat()
+            if row["last_tunebook_update"]
+            else None
         ),
     }
 
@@ -387,11 +395,14 @@ def build_person_details_payload(
             "email_verified": urow["email_verified"],
             "is_system_admin": urow["is_system_admin"],
             "is_active": urow["is_active"],
-            "created_at": urow["created_date"].isoformat() if urow["created_date"] else None,
+            "created_at": urow["created_date"].isoformat()
+            if urow["created_date"]
+            else None,
             "last_login": last_login.isoformat() if last_login else None,
             "timezone": urow["timezone"],
             "timezone_display": get_timezone_display_name(urow["timezone"] or "UTC"),
-            "has_password": urow["hashed_password"] is not None and urow["hashed_password"] != "",
+            "has_password": urow["hashed_password"] is not None
+            and urow["hashed_password"] != "",
             "receive_update_emails": urow["receive_update_emails"],
             "language": urow["language"] or "en",  # spec 057
             # Spec 061: given the right to listen on the server (admins have it anyway).
@@ -399,17 +410,21 @@ def build_person_details_payload(
         }
 
     # Sessions this person is associated with (spec 034). `relationship` and `is_admin` are
-    # orthogonal axes, and the tab filters on each independently -- so ship both raw. `role`
-    # is display sugar only: Admin outranks the relationship in the badge, but an admin is
-    # still a member or a visitor underneath.
+    # orthogonal axes, and the admin page's Sessions tab filters on each independently -- so
+    # ship both raw. `role` is display sugar only: Admin outranks the relationship in the
+    # badge, but an admin is still a member or a visitor underneath. Geography is the town's
+    # (spec 055): `place` replaces the flat city/state/country, and `location` keeps the
+    # old key with the town's name.
     cur.execute(
         """
-        SELECT s.name AS session_name, s.city, s.state, s.country,
-               sp.relationship, sp.is_admin, sp.confirmed, s.path AS session_path
+        SELECT s.session_id, s.name AS session_name, s.location_name, s.path AS session_path,
+               sp.relationship, sp.is_admin, sp.confirmed, sp.archived,
+               p.slug AS place_slug, p.name AS place_name
         FROM session_person sp
         JOIN session s ON sp.session_id = s.session_id
+        LEFT JOIN place p ON p.place_id = s.place_id
         WHERE sp.person_id = %s
-        ORDER BY s.name
+        ORDER BY sp.is_admin DESC, sp.relationship, s.name
         """,
         (person_id,),
     )
@@ -421,15 +436,20 @@ def build_person_details_payload(
             role = "Visitor"
         else:
             role = "Member"
-        loc_parts = [p for p in (r["city"], r["state"], r["country"]) if p]
         sessions.append(
             {
+                "session_id": r["session_id"],
                 "session_name": r["session_name"],
-                "location": ", ".join(loc_parts) if loc_parts else "Unknown",
+                "location_name": r["location_name"],
+                "place": {"slug": r["place_slug"], "name": r["place_name"]}
+                if r["place_slug"]
+                else None,
+                "location": r["place_name"] or "",
                 "role": role,
                 "is_admin": r["is_admin"],
                 "relationship": r["relationship"],
                 "confirmed": r["confirmed"],
+                "archived": bool(r["archived"]),
                 "session_path": r["session_path"],
             }
         )
@@ -508,8 +528,12 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         "place": _session_place(conn, row["place_id"]),
         "comments": row["comments"],
         "unlisted_address": row["unlisted_address"],
-        "initiation_date": row["initiation_date"].isoformat() if row["initiation_date"] else None,
-        "termination_date": row["termination_date"].isoformat() if row["termination_date"] else None,
+        "initiation_date": row["initiation_date"].isoformat()
+        if row["initiation_date"]
+        else None,
+        "termination_date": row["termination_date"].isoformat()
+        if row["termination_date"]
+        else None,
         "recurrence": row["recurrence"],
         "timezone": row["timezone"],
         "timezone_display": get_timezone_display_name(row["timezone"] or "UTC"),
@@ -534,7 +558,6 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         # session is a year of a festival.
         "festival": _festival_block(conn, session["path"]),
     }
-
 
 
 def build_festival_payload(
@@ -569,7 +592,9 @@ def build_festival_payload(
     return {
         "success": True,
         "place": places.place_summary(cur, festival),
-        "years": [festivals.year_wire(y) for y in festivals.picker_order(years, now_utc)],
+        "years": [
+            festivals.year_wire(y) for y in festivals.picker_order(years, now_utc)
+        ],
         "current": {"path": current["path"]} if current else None,
         "latest": festivals.year_wire(latest) if latest else None,
         "permissions": {"can_add_year": can_add_year and latest is not None},
@@ -604,7 +629,11 @@ def build_admin_places_payload(conn) -> Dict[str, Any]:
                 "kind": r["kind"],
                 "area": r["area"],
                 "country": r["country"],
-                "parent": {"place_id": r["parent_place_id"], "slug": r["parent_slug"], "name": r["parent_name"]}
+                "parent": {
+                    "place_id": r["parent_place_id"],
+                    "slug": r["parent_slug"],
+                    "name": r["parent_name"],
+                }
                 if r["parent_place_id"]
                 else None,
                 "town_sessions": r["town_sessions"],
@@ -616,13 +645,17 @@ def build_admin_places_payload(conn) -> Dict[str, Any]:
     }
 
 
-def place_wire(all_places: Dict[int, Any], place_id: Optional[int]) -> Optional[Dict[str, Any]]:
+def place_wire(
+    all_places: Dict[int, Any], place_id: Optional[int]
+) -> Optional[Dict[str, Any]]:
     """The `place` object (spec 055 "API: the place object") from a preloaded
     {place_id: row} map: slug, name, kind, area, country, parent {slug, name}."""
     place = all_places.get(place_id) if place_id is not None else None
     if not place:
         return None
-    parent = all_places.get(place["parent_place_id"]) if place["parent_place_id"] else None
+    parent = (
+        all_places.get(place["parent_place_id"]) if place["parent_place_id"] else None
+    )
     return {
         "place_id": place["place_id"],
         "slug": place["slug"],
@@ -693,12 +726,21 @@ def instance_labels(
     """
     date_str = date.strftime("%Y-%m-%d") if date else None
     is_festival = (session_type or "regular") == "festival"
-    place = (location_override or session_location_name or "").strip() if is_festival else ""
+    place = (
+        (location_override or session_location_name or "").strip()
+        if is_festival
+        else ""
+    )
 
     parts = [p for p in (date_str, place or None) if p]
     instance_label = " - ".join(parts)
-    full_name = " - ".join([p for p in ([session_name] + parts) if p]) or (session_name or "")
-    return {"full_name": full_name, "instance_label": instance_label or (date_str or "")}
+    full_name = " - ".join([p for p in ([session_name] + parts) if p]) or (
+        session_name or ""
+    )
+    return {
+        "full_name": full_name,
+        "instance_label": instance_label or (date_str or ""),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -726,9 +768,13 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
     from timezone_utils import get_today_in_timezone
 
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT place_id, slug, name, kind, parent_place_id, area, country FROM place")
+    cur.execute(
+        "SELECT place_id, slug, name, kind, parent_place_id, area, country FROM place"
+    )
     all_places = {r["place_id"]: r for r in cur.fetchall()}
-    festivals_by_slug = {p["slug"]: p for p in all_places.values() if p["kind"] == "festival"}
+    festivals_by_slug = {
+        p["slug"]: p for p in all_places.values() if p["kind"] == "festival"
+    }
 
     def within(place_id, scope_id):
         seen = set()
@@ -756,7 +802,9 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
     )
     session_rows = cur.fetchall()
     if place is not None:
-        session_rows = [r for r in session_rows if within(r["place_id"], place["place_id"])]
+        session_rows = [
+            r for r in session_rows if within(r["place_id"], place["place_id"])
+        ]
 
     cur.execute(
         """
@@ -792,7 +840,9 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
             "kind": "session",
             "name": r["name"],
             "path": r["path"],
-            "termination_date": r["termination_date"].isoformat() if r["termination_date"] else None,
+            "termination_date": r["termination_date"].isoformat()
+            if r["termination_date"]
+            else None,
             "recurrence": r["recurrence"],
             "user_is_member": r["user_is_member"],
             "user_relationship": r["user_relationship"],
@@ -825,9 +875,14 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
                 # Active while any year is: one with no last day, or a future one.
                 "termination_date": None if None in ends else max(ends).isoformat(),
                 "user_is_member": any(r["user_is_member"] for r in years),
-                "user_relationship": "member" if "member" in relationships
-                else "visitor" if "visitor" in relationships else None,
-                "active_instances": [i for r in years for i in active_by_session.get(r["session_id"], [])],
+                "user_relationship": "member"
+                if "member" in relationships
+                else "visitor"
+                if "visitor" in relationships
+                else None,
+                "active_instances": [
+                    i for r in years for i in active_by_session.get(r["session_id"], [])
+                ],
                 "years": len(years),
             }
         )
@@ -852,7 +907,9 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC", place
     if place is not None:
         import places as _places
 
-        summary = _places.place_summary(conn.cursor(), _places.get_place(conn.cursor(), place["place_id"]))
+        summary = _places.place_summary(
+            conn.cursor(), _places.get_place(conn.cursor(), place["place_id"])
+        )
         summary["children"] = sorted(
             (
                 {"slug": p["slug"], "name": p["name"]}
@@ -944,7 +1001,9 @@ def session_person_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "is_admin": row["is_admin"],
         "attendance_count": row["attendance_count"],
         "recent_attendance_count": row["recent_attendance_count"],
-        "last_attended": row["last_attended"].isoformat() if row["last_attended"] else None,
+        "last_attended": row["last_attended"].isoformat()
+        if row["last_attended"]
+        else None,
         "attending": row["attending"],
     }
 
@@ -967,7 +1026,9 @@ def load_session_people(
     the picker and whoever's logging creates a duplicate person for her.
     """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(_SESSION_PEOPLE_SQL, {"session_id": session_id, "instance_id": instance_id})
+        cur.execute(
+            _SESSION_PEOPLE_SQL, {"session_id": session_id, "instance_id": instance_id}
+        )
         people = [session_person_to_dict(r) for r in cur.fetchall()]
     if not include_archived:
         people = [p for p in people if not p["archived"]]
@@ -1015,7 +1076,9 @@ def session_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _attach_session_attended_counts(cur, session_id: int, person_id: int, tunes: List[Dict[str, Any]]) -> None:
+def _attach_session_attended_counts(
+    cur, session_id: int, person_id: int, tunes: List[Dict[str, Any]]
+) -> None:
     """Attach attended_play_count (spec 033 R4, scoped to THIS session): distinct
     instances of this session the person attended (attendance='yes') where each
     tune was played. One batched query, bounded by the person's check-ins here."""
@@ -1121,8 +1184,12 @@ def build_session_detail_payload(
         "place": _session_place(conn, row["place_id"]),
         "comments": row["comments"],
         "unlisted_address": row["unlisted_address"],
-        "initiation_date": row["initiation_date"].isoformat() if row["initiation_date"] else None,
-        "termination_date": row["termination_date"].isoformat() if row["termination_date"] else None,
+        "initiation_date": row["initiation_date"].isoformat()
+        if row["initiation_date"]
+        else None,
+        "termination_date": row["termination_date"].isoformat()
+        if row["termination_date"]
+        else None,
         "recurrence": row["recurrence"],
         "session_type": row["session_type"] or "regular",
         "timezone": row["timezone"] or "UTC",
@@ -1173,7 +1240,9 @@ def build_session_detail_payload(
 
     # Today in the SESSION's timezone (drives the logs tab's add-instance default).
     try:
-        today_in_session_tz = datetime.datetime.now(ZoneInfo(session["timezone"])).date()
+        today_in_session_tz = datetime.datetime.now(
+            ZoneInfo(session["timezone"])
+        ).date()
     except Exception:
         today_in_session_tz = datetime.datetime.now(ZoneInfo("UTC")).date()
 
@@ -1234,7 +1303,10 @@ def build_session_detail_payload(
         for r in cur.fetchall()
     ]
 
-    cur.execute("SELECT COUNT(DISTINCT tune_id) AS n FROM session_tune WHERE session_id = %s", (session_id,))
+    cur.execute(
+        "SELECT COUNT(DISTINCT tune_id) AS n FROM session_tune WHERE session_id = %s",
+        (session_id,),
+    )
     total_tunes_count = cur.fetchone()["n"]
 
     # Counts for the tab labels (spec 052 §B8 Stage 2). The Logs and People tabs load
@@ -1355,14 +1427,18 @@ def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     if tune_id is not None:
         thesession_url = f"https://thesession.org/tunes/{tune_id}"
         if setting_id:
-            thesession_url = f"{thesession_url}?setting={setting_id}#setting{setting_id}"
+            thesession_url = (
+                f"{thesession_url}?setting={setting_id}#setting{setting_id}"
+            )
     return {
         "person_tune_id": row["person_tune_id"],
         "person_id": row["person_id"],
         "tune_id": tune_id,
         "learn_status": row["learn_status"],
         "heard_count": row["heard_count"],
-        "learned_date": row["learned_date"].isoformat() if row["learned_date"] else None,
+        "learned_date": row["learned_date"].isoformat()
+        if row["learned_date"]
+        else None,
         "notes": row["notes"],
         "setting_id": setting_id,
         "name_alias": row["name_alias"],
@@ -1370,8 +1446,12 @@ def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "key": row["key"],
         # Freeform per-person tags (spec 042). TEXT[] -> list; NULL-safe to [].
         "tags": row["tags"] or [],
-        "created_date": row["created_date"].isoformat() if row["created_date"] else None,
-        "last_modified_date": row["last_modified_date"].isoformat() if row["last_modified_date"] else None,
+        "created_date": row["created_date"].isoformat()
+        if row["created_date"]
+        else None,
+        "last_modified_date": row["last_modified_date"].isoformat()
+        if row["last_modified_date"]
+        else None,
         "tune_name": row["tune_name"],
         "tune_type": row["tune_type"],
         "tunebook_count": row["tunebook_count"],
@@ -1384,7 +1464,9 @@ def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _attach_instrument_overrides(cur, person_id: int, tunes: List[Dict[str, Any]]) -> None:
+def _attach_instrument_overrides(
+    cur, person_id: int, tunes: List[Dict[str, Any]]
+) -> None:
     """Attach sparse per-instrument status overrides to each dict, in ONE query.
 
     Only stored overrides appear; the client resolves the rest (auto instruments
@@ -1401,12 +1483,16 @@ def _attach_instrument_overrides(cur, person_id: int, tunes: List[Dict[str, Any]
             (person_id, tune_ids),
         )
         for r in cur.fetchall():
-            overrides_by_tune.setdefault(r["tune_id"], {})[r["instrument"]] = r["status"]
+            overrides_by_tune.setdefault(r["tune_id"], {})[r["instrument"]] = r[
+                "status"
+            ]
     for t in tunes:
         t["instrument_status"] = overrides_by_tune.get(t["tune_id"], {})
 
 
-def _attach_person_play_counts(cur, person_id: int, tunes: List[Dict[str, Any]]) -> None:
+def _attach_person_play_counts(
+    cur, person_id: int, tunes: List[Dict[str, Any]]
+) -> None:
     """Attach the spec 033 play-count lenses, batched in ONE query:
 
     member_play_count   — R3: distinct instances of sessions the person is a MEMBER of
@@ -1516,7 +1602,9 @@ def load_person_instruments(conn, person_id: int) -> List[Dict[str, Any]]:
         "SELECT instrument, is_auto FROM person_instrument WHERE person_id = %s ORDER BY instrument",
         (person_id,),
     )
-    return [{"instrument": r["instrument"], "is_auto": r["is_auto"]} for r in cur.fetchall()]
+    return [
+        {"instrument": r["instrument"], "is_auto": r["is_auto"]} for r in cur.fetchall()
+    ]
 
 
 def build_my_tunes_payload(
@@ -1545,7 +1633,9 @@ def build_my_tunes_payload(
     )
     total_pages = (total_count + per_page - 1) // per_page
     cur = conn.cursor()
-    cur.execute("SELECT thesession_user_id FROM person WHERE person_id = %s", (person_id,))
+    cur.execute(
+        "SELECT thesession_user_id FROM person WHERE person_id = %s", (person_id,)
+    )
     row = cur.fetchone()
     return {
         "success": True,
@@ -1571,11 +1661,15 @@ def build_my_tunes_payload(
     }
 
 
-def _load_person_tune_where(conn, where_sql: str, params: Tuple) -> Optional[Dict[str, Any]]:
+def _load_person_tune_where(
+    conn, where_sql: str, params: Tuple
+) -> Optional[Dict[str, Any]]:
     """Single-record core shared by the ptid- and (person, tune)-keyed loaders:
     same mapper and enrichments as the list."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute(f"SELECT {PERSON_TUNE_COLS} {PERSON_TUNE_FROM} WHERE {where_sql}", params)
+    cur.execute(
+        f"SELECT {PERSON_TUNE_COLS} {PERSON_TUNE_FROM} WHERE {where_sql}", params
+    )
     row = cur.fetchone()
     if not row:
         return None
@@ -1590,11 +1684,15 @@ def load_person_tune(conn, person_tune_id: int) -> Optional[Dict[str, Any]]:
     return _load_person_tune_where(conn, "pt.person_tune_id = %s", (person_tune_id,))
 
 
-def load_person_tune_by_tune(conn, person_id: int, tune_id: int) -> Optional[Dict[str, Any]]:
+def load_person_tune_by_tune(
+    conn, person_id: int, tune_id: int
+) -> Optional[Dict[str, Any]]:
     """Single-record loader keyed by (person, tune) — the tune-detail drawer's
     person_tune_status block uses this so it carries the SAME core shape as
     /api/my-tunes rows (no parallel queries to drift)."""
-    return _load_person_tune_where(conn, "pt.person_id = %s AND pt.tune_id = %s", (person_id, tune_id))
+    return _load_person_tune_where(
+        conn, "pt.person_id = %s AND pt.tune_id = %s", (person_id, tune_id)
+    )
 
 
 def attach_person_tune_detail(conn, d: Dict[str, Any]) -> Dict[str, Any]:
@@ -1637,7 +1735,9 @@ def attach_person_tune_detail(conn, d: Dict[str, Any]) -> Dict[str, Any]:
     )
     d["global_play_count"] = cur.fetchone()["n"]
 
-    cur.execute("SELECT COUNT(*) AS n FROM person_tune WHERE tune_id = %s", (d["tune_id"],))
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM person_tune WHERE tune_id = %s", (d["tune_id"],)
+    )
     d["person_list_count"] = cur.fetchone()["n"]
     return d
 
@@ -1648,6 +1748,7 @@ def build_person_tune_detail(conn, person_tune_id: int) -> Optional[Dict[str, An
     if d is not None:
         attach_person_tune_detail(conn, d)
     return d
+
 
 # ---------------------------------------------------------------------------
 # The tune-detail drawer payload (GET /api/tunes/<id>/detail — THE drawer feed)
@@ -1681,7 +1782,9 @@ def _find_session_instance_id(cur, session_id: int, date_or_id: str) -> Optional
     numeric instance id (verified to belong to the session)."""
     import re as _re
 
-    if _re.match(r"^\d+$", str(date_or_id)) and not _re.match(r"^\d{4}-\d{2}-\d{2}$", str(date_or_id)):
+    if _re.match(r"^\d+$", str(date_or_id)) and not _re.match(
+        r"^\d{4}-\d{2}-\d{2}$", str(date_or_id)
+    ):
         cur.execute(
             "SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s AND session_id = %s",
             (int(date_or_id), session_id),
@@ -1697,10 +1800,15 @@ def _find_session_instance_id(cur, session_id: int, date_or_id: str) -> Optional
     return row["session_instance_id"] if row else None
 
 
-def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optional[str]) -> Dict[str, Any]:
+def _load_session_scope(
+    conn, tune_id: int, session_path: str, date_or_id: Optional[str]
+) -> Dict[str, Any]:
     """The session (and optional instance) scope block for the drawer payload."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT session_id, name, track_attendance FROM session WHERE path = %s", (session_path,))
+    cur.execute(
+        "SELECT session_id, name, track_attendance FROM session WHERE path = %s",
+        (session_path,),
+    )
     srow = cur.fetchone()
     if not srow:
         raise SessionNotFound(session_path)
@@ -1734,7 +1842,12 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
     st = cur.fetchone()
     if st:
         scope.update(
-            {"alias": st["alias"], "setting_id": st["setting_id"], "key": st["key"], "in_repertoire": True}
+            {
+                "alias": st["alias"],
+                "setting_id": st["setting_id"],
+                "key": st["key"],
+                "in_repertoire": True,
+            }
         )
 
     cur.execute(
@@ -1836,7 +1949,9 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
     return scope
 
 
-def _load_setting_notation(conn, tune_id: int, setting_id: Optional[int]) -> Dict[str, Any]:
+def _load_setting_notation(
+    conn, tune_id: int, setting_id: Optional[int]
+) -> Dict[str, Any]:
     """Notation for a specific setting, falling back to the tune's first setting.
     setting_id in the result is the setting actually resolved. A setting of another
     tune is never drawn: setting ids are numbered across all of thesession.org."""
@@ -1858,7 +1973,14 @@ def _load_setting_notation(conn, tune_id: int, setting_id: Optional[int]) -> Dic
         )
         row = cur.fetchone()
     if not row:
-        return {"setting_id": None, "abc": None, "incipit_abc": None, "image": None, "incipit_image": None, "setting_key": None}
+        return {
+            "setting_id": None,
+            "abc": None,
+            "incipit_abc": None,
+            "image": None,
+            "incipit_image": None,
+            "setting_key": None,
+        }
     return {
         "setting_id": row["setting_id"],
         "abc": row["abc"],
@@ -1893,7 +2015,11 @@ def build_tune_detail_payload(
     if not t:
         return None
 
-    scope = _load_session_scope(conn, tune_id, session_path, date_or_id) if session_path else None
+    scope = (
+        _load_session_scope(conn, tune_id, session_path, date_or_id)
+        if session_path
+        else None
+    )
 
     # The viewer's own relationship to the tune — full core shape when on-list.
     person_tune_status = None
@@ -1935,7 +2061,11 @@ def build_tune_detail_payload(
     effective_setting_id = None
     if scope:
         effective_setting_id = scope["setting_override"] or scope["setting_id"]
-    if not effective_setting_id and person_tune_status and person_tune_status.get("setting_id"):
+    if (
+        not effective_setting_id
+        and person_tune_status
+        and person_tune_status.get("setting_id")
+    ):
         effective_setting_id = person_tune_status["setting_id"]
     notation = _load_setting_notation(conn, tune_id, effective_setting_id)
 
@@ -1946,7 +2076,10 @@ def build_tune_detail_payload(
     global_play_count = cur.fetchone()["n"]
     cur.execute("SELECT COUNT(*) AS n FROM person_tune WHERE tune_id = %s", (tune_id,))
     person_list_count = cur.fetchone()["n"]
-    cur.execute("SELECT COUNT(DISTINCT session_id) AS n FROM session_tune WHERE tune_id = %s", (tune_id,))
+    cur.execute(
+        "SELECT COUNT(DISTINCT session_id) AS n FROM session_tune WHERE tune_id = %s",
+        (tune_id,),
+    )
     session_count = cur.fetchone()["n"]
 
     # The viewer's spec 033 lenses: R3 (member sessions) / R4 (attended nights).
@@ -1985,7 +2118,9 @@ def build_tune_detail_payload(
         "incipit_image": notation["incipit_image"],
         "tunebook_count": t["tunebook_count_cached"],
         "tunebook_count_cached_date": (
-            t["tunebook_count_cached_date"].isoformat() if t["tunebook_count_cached_date"] else None
+            t["tunebook_count_cached_date"].isoformat()
+            if t["tunebook_count_cached_date"]
+            else None
         ),
         "times_played": scope["times_played"] if scope else 0,
         "global_play_count": global_play_count,
@@ -1993,7 +2128,10 @@ def build_tune_detail_payload(
         "session_count": session_count,
         "person_tune_status": person_tune_status,
         **(
-            {"member_play_count": member_play_count, "attended_play_count": attended_play_count}
+            {
+                "member_play_count": member_play_count,
+                "attended_play_count": attended_play_count,
+            }
             if member_play_count is not None
             else {}
         ),
@@ -2016,7 +2154,8 @@ def build_tune_detail_payload(
                 "can_edit_instance": is_session_member,
                 # Un-enrolling only ever means "a tune that was never actually
                 # played here"; with plays present the link doesn't render at all.
-                "can_remove_from_session": is_session_admin and scope["times_played"] == 0,
+                "can_remove_from_session": is_session_admin
+                and scope["times_played"] == 0,
             }
             if scope
             else None
@@ -2082,7 +2221,9 @@ def _segment_row_to_dict(row) -> Dict[str, Any]:
     }
 
 
-def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> List[Dict[str, Any]]:
+def _load_instance_tune_log(
+    conn, session_instance_id: int, session_id: int
+) -> List[Dict[str, Any]]:
     """The instance's played tunes in order, with set numbers.
 
     Set membership comes from the interleaved record_type='break' marker rows
@@ -2147,7 +2288,9 @@ def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> 
     return tunes
 
 
-def load_recording_tunes(conn, recording_id: int, session_instance_id: int, session_id: int) -> List[Dict[str, Any]]:
+def load_recording_tunes(
+    conn, recording_id: int, session_instance_id: int, session_id: int
+) -> List[Dict[str, Any]]:
     """The night's tune log with this recording's placements attached — the
     segmenter's `tunes` list. Shared by the page payload and by the writes that
     reshape the log (logging a tune from the tool inserts a row and can renumber
@@ -2163,7 +2306,9 @@ def load_recording_tunes(conn, recording_id: int, session_instance_id: int, sess
         """,
         (recording_id,),
     )
-    by_tune = {r["session_instance_tune_id"]: _segment_row_to_dict(r) for r in cur.fetchall()}
+    by_tune = {
+        r["session_instance_tune_id"]: _segment_row_to_dict(r) for r in cur.fetchall()
+    }
     for tune in tunes:
         tune["segment"] = by_tune.get(tune["session_instance_tune_id"])
     return tunes
@@ -2220,7 +2365,9 @@ def build_recording_segmenter_payload(
                         "label": "low",
                         "url": generate_presigned_url(row["stream_key"]),
                         "mime_type": row["stream_mime_type"] or "audio/mp4",
-                        "size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+                        "size_bytes": int(row["stream_size_bytes"])
+                        if row["stream_size_bytes"]
+                        else None,
                     }
                 )
             audio_sources.append(
@@ -2229,14 +2376,18 @@ def build_recording_segmenter_payload(
                     "label": "full",
                     "url": generate_presigned_url(row["storage_key"]),
                     "mime_type": row["mime_type"],
-                    "size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+                    "size_bytes": int(row["file_size_bytes"])
+                    if row["file_size_bytes"]
+                    else None,
                 }
             )
         except Exception as exc:  # object store misconfigured — the page says so
             audio_sources = []
             audio_error = str(exc)
 
-    tunes = load_recording_tunes(conn, recording_id, row["session_instance_id"], row["session_id"])
+    tunes = load_recording_tunes(
+        conn, recording_id, row["session_instance_id"], row["session_id"]
+    )
 
     cur.execute(
         """
@@ -2275,7 +2426,9 @@ def build_recording_segmenter_payload(
             "label": row["label"],
             "mime_type": row["mime_type"],
             "duration_ms": int(row["duration_ms"]),
-            "file_size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+            "file_size_bytes": int(row["file_size_bytes"])
+            if row["file_size_bytes"]
+            else None,
             "sample_rate": row["sample_rate"],
             "channels": row["channels"],
             "is_clock_anchor": row["is_clock_anchor"],
@@ -2462,7 +2615,9 @@ def build_admin_recordings_payload(conn) -> Dict[str, Any]:
         "groups": [g for g in groups if g["recordings"]],
         # What the operator is actually being asked to do, for the summary line.
         # A night with audio and no log is work too, now that the tool logs.
-        "outstanding": sum(1 for r in recordings if r["group"] in ("failed", "todo", "blocked")),
+        "outstanding": sum(
+            1 for r in recordings if r["group"] in ("failed", "todo", "blocked")
+        ),
     }
 
 
@@ -2495,7 +2650,9 @@ def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[st
             "clock_offset_ms": int(r["clock_offset_ms"]),
             "started_at": r["started_at"].isoformat() if r["started_at"] else None,
             "mime_type": r["mime_type"],
-            "file_size_bytes": int(r["file_size_bytes"]) if r["file_size_bytes"] else None,
+            "file_size_bytes": int(r["file_size_bytes"])
+            if r["file_size_bytes"]
+            else None,
             "segment_count": r["segment_count"],
             # Ingest state (schema/052): the in-log Recordings modal shows a
             # freshly uploaded row while it is still being processed, so it needs
@@ -2593,7 +2750,9 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
                     "id": "proxy",
                     "url": generate_presigned_url(row["stream_key"]),
                     "mime_type": row["stream_mime_type"] or "audio/mp4",
-                    "size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+                    "size_bytes": int(row["stream_size_bytes"])
+                    if row["stream_size_bytes"]
+                    else None,
                 }
             )
         # Always present: the HD option when a proxy exists, and the only thing
@@ -2604,7 +2763,9 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
                 "id": "master",
                 "url": generate_presigned_url(row["storage_key"]),
                 "mime_type": row["mime_type"] or "audio/mp4",
-                "size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+                "size_bytes": int(row["file_size_bytes"])
+                if row["file_size_bytes"]
+                else None,
             }
         )
     except Exception as exc:  # object store misconfigured — the page says so
@@ -2655,6 +2816,7 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
 # screen renders, for the signed-in viewer. The Jinja home renders exactly this
 # dict; GET /api/home returns exactly this dict.
 # ---------------------------------------------------------------------------
+
 
 def _load_home_learning_counts(cur, person_id: int) -> Dict[str, int]:
     cur.execute(
@@ -2707,7 +2869,9 @@ def _load_home_suggested_tune(cur, person_id: int) -> Optional[Dict[str, Any]]:
     }
 
 
-def _load_home_upcoming_sessions(cur, person_id: int, monday, sunday) -> List[Dict[str, Any]]:
+def _load_home_upcoming_sessions(
+    cur, person_id: int, monday, sunday
+) -> List[Dict[str, Any]]:
     """This week's instances at the sessions the viewer belongs to.
 
     Carries what the Today card needs (spec 052 §B2): where it is, whether it is
@@ -2814,7 +2978,9 @@ def _load_home_in_progress_logs(cur, user_id: int) -> List[Dict[str, Any]]:
     ]
 
 
-def _load_home_in_progress_recordings(cur, user_id: int, person_id: int, is_admin: bool) -> List[Dict[str, Any]]:
+def _load_home_in_progress_recordings(
+    cur, user_id: int, person_id: int, is_admin: bool
+) -> List[Dict[str, Any]]:
     # In-progress timestamping (spec 050): recordings this user has placed tunes on
     # in the last 30 days that still have tunes left to place. Two ways to be
     # finished: every logged tune placed, or recording.segmenting_complete
@@ -2891,7 +3057,9 @@ def build_home_payload(conn, user) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"success": True}
         payload.update(_load_home_learning_counts(cur, user.person_id))
         payload["suggested_tune"] = _load_home_suggested_tune(cur, user.person_id)
-        payload["upcoming_sessions"] = _load_home_upcoming_sessions(cur, user.person_id, monday, sunday)
+        payload["upcoming_sessions"] = _load_home_upcoming_sessions(
+            cur, user.person_id, monday, sunday
+        )
         payload["in_progress_logs"] = _load_home_in_progress_logs(cur, user.user_id)
         payload["in_progress_recordings"] = _load_home_in_progress_recordings(
             cur, user.user_id, user.person_id, user.is_system_admin

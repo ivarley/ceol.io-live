@@ -1766,5 +1766,13 @@
   "Couldn't save that. Check your connection and try again.": {
     "ga": "Níorbh fhéidir é sin a shábháil. Seiceáil do cheangal agus bain triail eile as.",
     "review": true
+  },
+  "No sessions associated with this person.": {
+    "ga": "Níl aon seisiún ceangailte leis an duine seo.",
+    "review": true
+  },
+  "Filter sessions": {
+    "ga": "Scag na seisiúin",
+    "review": true
   }
 }
