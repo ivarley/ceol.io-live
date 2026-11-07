@@ -38,6 +38,12 @@ from fractional_indexing import generate_append_position, generate_position_betw
 from services import person_scope
 
 
+def _current_user_is_system_admin():
+    """The signed-in account's flag, from the user record Flask-Login loaded. Nothing
+    writes it to the cookie session, so reading it there found no admin at all."""
+    return bool(getattr(current_user, "is_system_admin", False))
+
+
 def can_view_session_people(cur, session_id, person_id):
     """May this person see the session's PEOPLE? (spec 034)
 
@@ -53,9 +59,7 @@ def can_view_session_people(cur, session_id, person_id):
 
     System admins bypass this, as everywhere.
     """
-    from flask import session as flask_session
-
-    if flask_session.get("is_system_admin", False):
+    if _current_user_is_system_admin():
         return True
     if not person_id:
         return False
@@ -73,9 +77,7 @@ def can_view_session_people(cur, session_id, person_id):
 def is_session_admin_for(cur, session_id, person_id):
     """Session admin (or system admin) — the gate on confirming, archiving, and managing
     other people's relationship to the session."""
-    from flask import session as flask_session
-
-    if flask_session.get("is_system_admin", False):
+    if _current_user_is_system_admin():
         return True
     if not person_id:
         return False
@@ -91,9 +93,7 @@ def is_session_member_for(cur, session_id, person_id):
     drawer's Session tab needs (spec 037). A member may say what was played on a
     night they were in the room; only an admin may say what the session plays in
     general."""
-    from flask import session as flask_session
-
-    if flask_session.get("is_system_admin", False):
+    if _current_user_is_system_admin():
         return True
     if not person_id:
         return False

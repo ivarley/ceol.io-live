@@ -131,6 +131,17 @@ def test_a_plain_member_may_not(client, committed, source):
     assert _row(committed, "probefest/2027") is None
 
 
+def test_a_system_admin_may(client, committed, source):
+    """Site admins copy any year (spec 056 "Permission"). The flag comes from the
+    signed-in user: no login path writes it to the cookie session."""
+    with logged_in(client, person_id=2, is_system_admin=True):
+        with client.session_transaction() as sess:
+            sess.pop("is_system_admin", None)
+        resp = client.post("/api/sessions/probefest/2026/copy-year", json=PAYLOAD)
+    assert resp.status_code == 201, resp.get_json()
+    assert _row(committed, "probefest/2027") is not None
+
+
 @pytest.mark.parametrize(
     "over",
     [
