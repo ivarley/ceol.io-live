@@ -1055,6 +1055,38 @@ def my_tunes_op():
                         jsonify({"success": False, "error": _("invalid learn_status")}),
                         400,
                     )
+                # A tune we don't hold yet (Listen names tunes from thesession.org's
+                # whole catalogue, not only ours) is imported first, as POST
+                # /api/my-tunes does; without it the insert breaks the tune FK.
+                if rrow is None:
+                    from api_routes import TuneImportError
+                    from live_logging_routes import _import_tune_for_live
+
+                    if (
+                        isinstance(tune_id, bool)
+                        or not isinstance(tune_id, int)
+                        or tune_id <= 0
+                    ):
+                        return (
+                            jsonify({"success": False, "error": _("Tune not found")}),
+                            404,
+                        )
+                    try:
+                        _import_tune_for_live(cur, tune_id, user_id)
+                    except TuneImportError as e:
+                        conn.rollback()
+                        return (
+                            jsonify(
+                                {
+                                    "success": False,
+                                    "error": _(
+                                        "Could not import tune from thesession.org: %(error)s",
+                                        error=e.message,
+                                    ),
+                                }
+                            ),
+                            e.status,
+                        )
                 # Same starting heard_count the POST path gives a new row — an add is
                 # itself a hearing (PersonTune.DEFAULT_HEARD_COUNT). What you call it
                 # and the key you play it in ride along when the add form gave them.

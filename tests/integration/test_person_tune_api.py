@@ -716,6 +716,68 @@ class TestPersonTuneAPI:
         )
         assert db_cursor.fetchall() == [(tune_a, 1), (tune_b, 1)]
 
+    def test_add_op_imports_a_tune_we_do_not_hold(
+        self, client, authenticated_user, db_conn, db_cursor, monkeypatch
+    ):
+        """Listen names tunes from thesession.org's whole catalogue. Adding one we
+        don't hold imports it first, rather than breaking the tune foreign key; one
+        thesession.org can't give us is a plain message, not a database error."""
+        import live_logging_routes
+        from api_routes import TuneImportError
+
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 80000
+        person_id = 2
+        db_cursor.execute(
+            """
+            INSERT INTO person (person_id, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id) DO NOTHING
+        """,
+            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+        )
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE tune_id IN (%s, %s)", (tune_id, tune_id + 1)
+        )
+        db_cursor.execute(
+            "DELETE FROM tune_setting WHERE tune_id IN (%s, %s)", (tune_id, tune_id + 1)
+        )
+        db_cursor.execute(
+            "DELETE FROM tune WHERE tune_id IN (%s, %s)", (tune_id, tune_id + 1)
+        )
+        db_conn.commit()
+
+        monkeypatch.setattr(
+            live_logging_routes,
+            "_fetch_thesession_tune",
+            lambda tid: {"name": "Tim's", "type": "mazurka", "tunebooks": 3},
+        )
+        with authenticated_user:
+            op = client.post(
+                "/api/my-tunes/ops",
+                json={"type": "add", "tune_id": tune_id, "learn_status": "learning"},
+            )
+        assert op.status_code == 200, op.get_json()
+
+        db_cursor.execute(
+            """SELECT t.name, t.tune_type, pt.learn_status
+               FROM person_tune pt JOIN tune t USING (tune_id)
+               WHERE pt.person_id = %s AND pt.tune_id = %s""",
+            (person_id, tune_id),
+        )
+        assert db_cursor.fetchone() == ("Tim's", "Mazurka", "learning")
+
+        def _gone(tid):
+            raise TuneImportError("Tune not found on thesession.org", 404)
+
+        monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _gone)
+        with authenticated_user:
+            op = client.post(
+                "/api/my-tunes/ops", json={"type": "add", "tune_id": tune_id + 1}
+            )
+        assert op.status_code == 404
+        assert "foreign key" not in op.get_json()["error"]
+
     def test_both_add_paths_keep_the_alias_and_key(
         self, client, authenticated_user, db_conn, db_cursor
     ):
