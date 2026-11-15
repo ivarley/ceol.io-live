@@ -44,10 +44,10 @@ class TestCriticalPageLoads:
         assert response.status_code == 200
         assert b"login" in response.data.lower()
 
-        # Register page
+        # The retired register page lands on the login page
         response = client.get("/register")
-        assert response.status_code == 200
-        assert b"register" in response.data.lower()
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
 
         # Forgot password page
         response = client.get("/forgot-password")
@@ -74,100 +74,6 @@ class TestCriticalPageLoads:
         response = client.get("/nonexistent-page-12345")
         assert response.status_code == 404
         assert b"not found" in response.data.lower()
-
-
-@pytest.mark.functional
-class TestUserRegistrationJourney:
-    """Test complete user registration and verification journey."""
-
-    @patch("web_routes.send_verification_email")
-    def test_complete_registration_flow(self, mock_send_email, client):
-        """Test complete user registration workflow."""
-        mock_send_email.return_value = True
-        unique_id = str(uuid.uuid4())[:8]
-
-        # Step 1: Access registration page
-        response = client.get("/register")
-        assert response.status_code == 200
-
-        # Step 2: Submit registration form with unique data
-        registration_data = {
-            "username": f"smoketest_user_{unique_id}",
-            "password": "securepassword123",
-            "confirm_password": "securepassword123",
-            "first_name": "Smoke",
-            "last_name": "Test",
-            "email": f"smoketest{unique_id}@example.com",
-            "time_zone": "America/New_York",
-        }
-
-        response = client.post("/register", data=registration_data)
-
-        # Should redirect to login on success or show error on failure
-        if response.status_code == 302:
-            assert "/login" in response.headers["Location"]
-        elif response.status_code == 200:
-            # If 200, check if registration failed due to validation issues
-            response_data = response.data.decode()
-            # If registration succeeded but didn't redirect, that's still success
-            assert (
-                "error" not in response_data.lower()
-                or "success" in response_data.lower()
-            )
-        else:
-            # Any other status code is unexpected
-            assert False, f"Unexpected status code: {response.status_code}"
-
-        # Step 3: Verify login page shows success message
-        response = client.get("/login")
-        # Note: Flash messages might not persist in test client
-        assert response.status_code == 200
-
-        # Step 4: Verify email sending was attempted
-        mock_send_email.assert_called_once()
-
-    def test_registration_validation_errors(self, client):
-        """Test registration form validation."""
-        # Test missing required fields
-        response = client.post(
-            "/register",
-            data={
-                "username": "testuser"
-                # Missing other required fields
-            },
-        )
-        assert response.status_code == 200
-        assert b"required" in response.data.lower()
-
-        # Test password mismatch
-        response = client.post(
-            "/register",
-            data={
-                "username": "testuser",
-                "password": "password123",
-                "confirm_password": "different123",
-                "first_name": "Test",
-                "last_name": "User",
-                "email": "test@example.com",
-            },
-        )
-        assert response.status_code == 200
-        assert b"match" in response.data.lower()
-
-        # Test short password
-        response = client.post(
-            "/register",
-            data={
-                "username": "testuser",
-                "password": "short",
-                "confirm_password": "short",
-                "first_name": "Test",
-                "last_name": "User",
-                "email": "test@example.com",
-            },
-        )
-        assert response.status_code == 200
-        assert b"8 characters" in response.data.lower()
 
 
 @pytest.mark.functional
@@ -512,7 +418,7 @@ class TestSecurityBasics:
     def test_csrf_protection_enabled(self, client):
         """Test that CSRF protection is enabled for forms."""
         # This is a basic test - actual CSRF testing would need proper token handling
-        response = client.get("/register")
+        response = client.get("/login")
         assert response.status_code == 200
         # Many CSRF implementations add hidden fields or meta tags
         # This is just checking the page loads properly

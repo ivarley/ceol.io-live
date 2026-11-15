@@ -107,7 +107,7 @@ def test_the_email_body_is_the_post_with_absolute_links(client):
             blog.post("welcome"), "en", "https://ceol.app"
         )
     assert body_html.startswith("<h1>Welcome to the Ceol blog</h1>")
-    assert 'href="https://ceol.app/register"' in body_html
+    assert 'href="https://ceol.app/login"' in body_html
     assert 'href="/' not in body_html
     assert "https://ceol.app/blog/welcome" in body_html
     assert "<" not in body_text

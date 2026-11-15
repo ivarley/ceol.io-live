@@ -74,7 +74,7 @@ def test_the_feed(client):
     assert "Howdy! Fáilte!" in body
     # Links are absolute for feed readers.
     assert 'href="/' not in body
-    assert re.search(r'href="https?://[^/]+/register"', body)
+    assert re.search(r'href="https?://[^/]+/login"', body)
 
 
 def test_the_feed_takes_its_language_from_the_query(client):

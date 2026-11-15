@@ -55,13 +55,13 @@ address has a pending registration, it is refreshed and its link resent. Unknown
 addresses get the generic "if an unverified account exists" answer and nothing is
 created.
 
-**Legacy form registration** (`/register`, `web_routes.register`): username,
-password and name up front. It still creates the person and an unverified
-`user_account` immediately, and the account's own `verification_token` is
-consumed by the same `/verify-email/<token>` route. Password login refuses these
-accounts until verified. Links emailed by the login page before migration 056
-(when it still created the account up front) also take this path.
-- Links to existing person if email matches, creates new person otherwise
+**The old registration form** (`/register`) was retired in November 2026: by
+then only spam bots filled it in (typed usernames, invented addresses, never
+verified). The route stays bound and redirects to `/login`, so old links, the
+welcome blog post as emailed and printed QR codes still land on the sign-up door.
+Accounts it made that are still unverified keep their own `verification_token`,
+consumed by the same `/verify-email/<token>` route; password login refuses them
+until verified.
 - Referrer tracking via `?referrer=<person_id>` URL parameter (stored in the Flask
   session by `app.py`, copied to the pending registration or the new account)
 

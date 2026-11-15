@@ -19,21 +19,16 @@ from flask import url_for
 class TestNewUserCompleteJourney:
     """Test complete journey of a new user discovering and using the site."""
 
-    @patch("web_routes.send_verification_email")
-    def test_new_user_discovers_registers_and_explores(
-        self, mock_send_email, client, db_conn, db_cursor
-    ):
-        """Complete new-user journey: discover the site, browse, then register.
+    def test_new_user_discovers_and_reaches_the_sign_up_door(self, client):
+        """Complete new-user journey: discover the site, browse, then sign up.
 
         Runs against the real seeded DB. The home dashboard and the sessions
         directory load their lists client-side (covered by the API tests), so the
         browse phases assert the page shells and the server-rendered session
-        detail. Registration runs for real against the DB (the verification email
-        send is mocked) and the created account is cleaned up. Email verification
-        itself is covered separately by the auth-flow integration tests.
+        detail. Sign-up is the email link on the login page (spec 056), covered
+        by the pending-registration integration tests; the retired /register
+        form redirects there.
         """
-        mock_send_email.return_value = True
-
         # Phase 1: Discovery - the home page loads.
         assert client.get("/").status_code == 200
 
@@ -48,42 +43,12 @@ class TestNewUserCompleteJourney:
         assert response.status_code == 200
         assert b"Mueller Session" in response.data
 
-        # Phase 4: Decision to Join - register a brand-new account.
-        unique_id = str(uuid.uuid4())[:8]
-        username = f"newfan_{unique_id}"
-        email = f"{username}@example.com"
-        try:
-            response = client.post(
-                "/register",
-                data={
-                    "username": username,
-                    "password": "mypassword123",
-                    "confirm_password": "mypassword123",
-                    "first_name": "Music",
-                    "last_name": "Fan",
-                    "email": email,
-                    "time_zone": "America/Chicago",
-                },
-            )
-
-            # Successful registration redirects to the login page.
-            assert response.status_code == 302
-            assert "/login" in response.headers["Location"]
-            # ...and the verification email was triggered.
-            mock_send_email.assert_called_once()
-
-            # The account was actually created (unverified).
-            db_cursor.execute(
-                "SELECT email_verified FROM user_account WHERE username = %s",
-                (username,),
-            )
-            row = db_cursor.fetchone()
-            assert row is not None
-            assert row[0] is False
-        finally:
-            db_cursor.execute("DELETE FROM user_account WHERE username = %s", (username,))
-            db_cursor.execute("DELETE FROM person WHERE email = %s", (email,))
-            db_conn.commit()
+        # Phase 4: Decision to Join - the old register link lands on the login page.
+        response = client.get("/register")
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
+        response = client.get("/login")
+        assert response.status_code == 200
 
     @patch("web_routes.User.get_by_username")
     @patch("web_routes.create_session")

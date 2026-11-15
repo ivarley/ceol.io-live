@@ -12825,12 +12825,9 @@ def generate_qr_code(session_id=None):
                 separator = "&" if "?" in qr_url else "?"
                 qr_url = f"{qr_url}{separator}referrer={referrer}"
         else:
-            # Backwards compatibility: use session_id logic
+            # Backwards compatibility: the sign-up door is the login page
             base_url = request.host_url.rstrip("/")
-            if session_id and session_id != 0:
-                qr_url = f"{base_url}/register?session_id={session_id}"
-            else:
-                qr_url = f"{base_url}/register"
+            qr_url = f"{base_url}/login"
 
         # Generate QR code
         qr = qrcode.QRCode(

@@ -208,106 +208,17 @@ class TestSessionRoutes:
 class TestAuthenticationRoutes:
     """Test authentication-related routes."""
 
-    def test_register_get(self, client):
-        """Test register page GET request."""
+    def test_register_redirects_to_the_login_page(self, client):
+        """The registration form is retired; its address lands on the login
+        page, which is where sign-up (the email link) lives."""
         response = client.get("/register")
 
-        assert response.status_code == 200
-        assert b"register" in response.data.lower()
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
 
-    @patch("web_routes.User.get_by_username")
-    @patch("web_routes.get_db_connection")
-    def test_register_post_success(
-        self, mock_get_conn, mock_get_user, client, mock_sendgrid
-    ):
-        """Test successful user registration."""
-        mock_get_user.return_value = None  # Username not taken
-
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
-
-        # Mock database responses
-        mock_cursor.fetchone.side_effect = [
-            None,  # Email not already registered
-            (1,),  # Person ID from INSERT
-            (1,),  # User ID from INSERT
-        ]
-
-        response = client.post(
-            "/register",
-            data={
-                "username": "newuser",
-                "password": "password123",
-                "confirm_password": "password123",
-                "first_name": "New",
-                "last_name": "User",
-                "email": "new@example.com",
-                "time_zone": "UTC",
-            },
-        )
-
-        assert response.status_code == 302  # Redirect to login
-
-        # Verify database calls
-        assert mock_cursor.execute.call_count >= 2
-        mock_conn.commit.assert_called()
-
-        # Verify SendGrid was called (but don't check specific parameters due to SDK changes)
-        assert mock_sendgrid.called
-
-    def test_register_post_missing_fields(self, client):
-        """Test registration with missing required fields."""
-        response = client.post(
-            "/register",
-            data={
-                "username": "newuser",
-                # Missing password and other fields
-            },
-        )
-
-        assert response.status_code == 200
-        assert b"required" in response.data.lower()
-
-    def test_register_post_password_mismatch(self, client):
-        """Test registration with password confirmation mismatch."""
-        response = client.post(
-            "/register",
-            data={
-                "username": "newuser",
-                "password": "password123",
-                "confirm_password": "different123",
-                "first_name": "New",
-                "last_name": "User",
-                "email": "new@example.com",
-            },
-        )
-
-        assert response.status_code == 200
-        assert b"do not match" in response.data.lower()
-
-    @patch("web_routes.User.get_by_username")
-    def test_register_post_username_taken(
-        self, mock_get_user, client, sample_user_data
-    ):
-        """Test registration with existing username."""
-        mock_get_user.return_value = MagicMock()  # Username exists
-
-        response = client.post(
-            "/register",
-            data={
-                "username": "existinguser",
-                "password": "password123",
-                "confirm_password": "password123",
-                "first_name": "New",
-                "last_name": "User",
-                "email": "new@example.com",
-            },
-        )
-
-        assert response.status_code == 200
-        assert b"already exists" in response.data.lower()
+        response = client.post("/register", data={"username": "bot"})
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
 
     def test_login_get(self, client):
         """Test login page GET request."""

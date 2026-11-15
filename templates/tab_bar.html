@@ -86,7 +86,7 @@
      what this place is. Tunes has no signed-out destination at all — /my-tunes and
      /my-tunes/add both redirect to login, and "find a tune" was never a page, only an
      overlay — so it is not offered rather than offered and refused. #}
-  <a href="/about" class="tab-bar-item{% if p.startswith('/about') or p.startswith('/help') or p.startswith('/login') or p.startswith('/register') %} active{% endif %}"
+  <a href="/about" class="tab-bar-item{% if p.startswith('/about') or p.startswith('/help') or p.startswith('/login') %} active{% endif %}"
      {% if p.startswith('/about') %}aria-current="page"{% endif %} data-tab="about">
     <span class="tab-bar-glyph" aria-hidden="true">
       {{ nav_icon('about') }}

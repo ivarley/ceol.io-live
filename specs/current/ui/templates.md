@@ -62,7 +62,7 @@ CSS into the bundles (as `my_tunes.html` already does) is a known follow-up.
 
 ## Full Jinja pages (deliberately not migrated)
 
-- **Auth**: `auth/login.html`, `auth/register.html`, `auth/reset_password.html`, …
+- **Auth**: `auth/login.html`, `auth/reset_password.html`, …
 - **Help**: `help.html`, `help_*.html`
 - **Blog**: `blog_base.html` (the frame), `blog_index.html`, `blog_post.html`, `blog_rss.xml` (the feed); each post is a body fragment at `blog/<slug>.html` with its Irish twin at `ga/blog/<slug>.html`, listed with its titles and date in `blog.py`; a system admin sees a bar on the post to email it to the update subscribers once (`blog_send`)
 - **Plain admin tables**: `admin_tabs.html`, `admin_sessions_list.html`, `admin_tunes.html`, … (`admin_people.html` is a thin Svelte shell now, see above)

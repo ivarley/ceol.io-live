@@ -11,7 +11,7 @@ from flask import (
     current_app,
     abort,
 )
-from i18n import LANGUAGES, get_locale, localized, request_language
+from i18n import LANGUAGES, get_locale, localized
 import blog
 from flask_babel import format_date, gettext as _
 import random
@@ -27,7 +27,7 @@ import markdown
 from urllib.parse import urlencode
 
 # Import from local modules
-from database import get_db_connection, save_to_history, get_current_user_id
+from database import get_db_connection, save_to_history
 from instruments import CANONICAL_INSTRUMENTS, normalize_instruments
 from api_routes import segment_records_into_sets
 from timezone_utils import (
@@ -47,8 +47,6 @@ from auth import (
     start_pending_registration,
     has_pending_registration,
     complete_pending_registration,
-    referrer_display_name,
-    notify_new_account,
 )
 from email_utils import (
     send_password_reset_email,
@@ -1160,242 +1158,11 @@ def ian_page():
 
 
 def register():
-    # Get session_id from query parameter if present
-    session_id_param = request.args.get("session_id")
-
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
-        first_name = request.form.get("first_name", "").strip()
-        last_name = request.form.get("last_name", "").strip()
-        email = request.form.get("email", "").strip()
-        timezone = request.form.get("time_zone", "UTC")
-        # Migrate legacy timezone values to IANA identifiers
-        from timezone_utils import migrate_legacy_timezone
-
-        timezone = migrate_legacy_timezone(timezone)
-
-        # Validation
-        if not username or not password or not first_name or not last_name or not email:
-            flash(
-                _("Username, password, first name, last name, and email are required."),
-                "error",
-            )
-            return render_template("auth/register.html")
-
-        if password != confirm_password:
-            flash(_("Passwords do not match."), "error")
-            return render_template("auth/register.html")
-
-        if len(password) < 8:
-            flash(_("Password must be at least 8 characters long."), "error")
-            return render_template("auth/register.html")
-
-        # Check if username already exists
-        existing_user = User.get_by_username(username)
-        if existing_user:
-            flash(_("Username already exists. Please choose a different one."), "error")
-            return render_template("auth/register.html")
-
-        # Check if an account already uses this email. user_account.user_email is
-        # the authoritative account address; the person.email lookup below only
-        # links an accountless person, and person.email is nulled once linked, so
-        # this guard (not the person.email match) is what blocks duplicate accounts.
-        if User.get_by_email(email):
-            flash(
-                _(
-                    "Email address already registered with a user account. Please try logging in or use password reset if needed."
-                ),
-                "error",
-            )
-            return render_template("auth/register.html")
-
-        # Check if email already exists and whether it has a user account
-        existing_person_id = None
-        existing_person = None
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            # Get person details if email exists
-            cur.execute(
-                "SELECT person_id, first_name, last_name FROM person WHERE email = %s",
-                (email,),
-            )
-            person_result = cur.fetchone()
-
-            if person_result:
-                (
-                    existing_person_id,
-                    existing_first_name,
-                    existing_last_name,
-                ) = person_result
-                existing_person = {
-                    "person_id": existing_person_id,
-                    "first_name": existing_first_name,
-                    "last_name": existing_last_name,
-                }
-
-                # Check if this person already has a user account
-                cur.execute(
-                    "SELECT user_id FROM user_account WHERE person_id = %s",
-                    (existing_person_id,),
-                )
-                if cur.fetchone():
-                    flash(
-                        _(
-                            "Email address already registered with a user account. Please try logging in or use password reset if needed."
-                        ),
-                        "error",
-                    )
-                    return render_template("auth/register.html")
-                # If we get here, person exists but has no user account - we'll link to it
-        finally:
-            conn.close()
-
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-
-            # Create or update person record
-            if existing_person_id:
-                # Use existing person and update their name if different
-                person_id = existing_person_id
-                if (
-                    first_name != existing_person["first_name"]
-                    or last_name != existing_person["last_name"]
-                ):
-                    # Update person's name to match registration (no user logged in yet)
-                    save_to_history(
-                        cur,
-                        "person",
-                        "UPDATE",
-                        person_id,
-                        user_id=None,
-                    )
-                    cur.execute(
-                        """
-                        UPDATE person
-                        SET first_name = %s, last_name = %s, last_modified_date = %s, last_modified_user_id = NULL
-                        WHERE person_id = %s
-                        """,
-                        (first_name, last_name, now_utc(), person_id),
-                    )
-            else:
-                # Create new person record (no user yet during registration)
-                cur.execute(
-                    """
-                    INSERT INTO person (first_name, last_name, email, created_by_user_id)
-                    VALUES (%s, %s, %s, NULL)
-                    RETURNING person_id
-                """,
-                    (first_name, last_name, email),
-                )
-                result = cur.fetchone()
-                if not result:
-                    flash(_("Failed to create person record"), "error")
-                    return redirect(url_for("register"))
-                person_id = result[0]
-
-            # Create user record (unverified, no user yet during registration)
-            hashed_password = bcrypt.hashpw(
-                password.encode("utf-8"), bcrypt.gensalt()
-            ).decode("utf-8")
-            verification_token = generate_verification_token()
-            verification_expires = now_utc() + timedelta(hours=24)
-
-            # Get referrer from session if present
-            referred_by_person_id = session.get("referred_by_person_id")
-
-            cur.execute(
-                """
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone,
-                                        email_verified, verification_token, verification_token_expires, referred_by_person_id, created_by_user_id, language)
-                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s, %s, NULL, %s)
-                RETURNING user_id
-            """,
-                (
-                    person_id,
-                    username,
-                    email,
-                    hashed_password,
-                    timezone,
-                    verification_token,
-                    verification_expires,
-                    referred_by_person_id,
-                    request_language(),
-                ),
-            )
-            result = cur.fetchone()
-            if not result:
-                flash(_("Failed to create user account"), "error")
-                return redirect(url_for("register"))
-            user_id = result[0]
-
-            # Log history entry for linking existing person to new user account
-            if existing_person_id:
-                save_to_history(
-                    cur,
-                    "user_account",
-                    "INSERT",
-                    user_id,
-                    user_id=get_current_user_id(),
-                )
-
-            # Now connected: user_account.user_email holds this address; retire the
-            # person-level email (its only role was matching this person pre-account).
-            cur.execute(
-                "UPDATE person SET email = NULL WHERE person_id = %s", (person_id,)
-            )
-
-            referrer_name = referrer_display_name(cur, referred_by_person_id)
-            conn.commit()
-            notify_new_account(
-                user_id,
-                person_id,
-                email,
-                username,
-                "the registration form",
-                language=request_language(),
-                referrer_name=referrer_name,
-                verified=False,
-            )
-
-            # Send verification email
-            user = User(
-                user_id,
-                person_id,
-                username,
-                email=email,
-                first_name=first_name,
-                last_name=last_name,
-            )
-            if send_verification_email(user, verification_token):
-                flash(
-                    _(
-                        "Registration successful! Please check your email to verify your account before logging in."
-                    ),
-                    "success",
-                )
-            else:
-                flash(
-                    _(
-                        "Registration successful, but failed to send verification email. Please contact support."
-                    ),
-                    "warning",
-                )
-
-            return redirect(url_for("login"))
-
-        except Exception as e:
-            conn.rollback()
-            print(f"Registration error: {str(e)}")
-            flash(_("Registration failed. Please try again."), "error")
-            return render_template("auth/register.html")
-        finally:
-            conn.close()
-
-    return render_template("auth/register.html", session_id=session_id_param)
+    """The registration form is gone. By 2026-11 the only people filling it in
+    were spam bots (typed usernames, invented addresses, never verified); real
+    sign-ups all come through the email link on the login page. Old links,
+    the welcome blog post as emailed, and printed QR codes land there."""
+    return redirect(url_for("login"))
 
 
 def login():
