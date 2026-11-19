@@ -67,6 +67,9 @@ final class NightRecorder {
     /// The screen's title: the night being logged, else just listening.
     var title: String { logsTo?.title ?? tr("Listening") }
     var isLogging: Bool { logsTo != nil }
+    /// Whether this account may upload a recording to the night being logged
+    /// (RecordingStore.mayUpload). False: the upload option isn't offered. Nil: not known.
+    private(set) var uploadAllowed: Bool?
     let startedAt = Date()
     private(set) var elapsed: TimeInterval = 0
     /// 0...1, the microphone's level, for the bar's dot.
@@ -206,6 +209,16 @@ final class NightRecorder {
         streamLink = ListenLink(url: listenURL, token: token, streamID: streamID, instanceID: nil, source: capture)
         streamLink = makeLink(streamID: streamID)
         if recording { setRecording(true) }
+        askUploadRight()
+    }
+
+    /// Ask whether this account may upload to the night being logged, for the option.
+    private func askUploadRight() {
+        guard let app, let instanceID = logsTo?.instanceID else { return }
+        Task { [weak self] in
+            let allowed = await app.recordings.mayUpload(instanceID)
+            if self?.logsTo?.instanceID == instanceID { self?.uploadAllowed = allowed }
+        }
     }
 
     /// Keep the audio as a recording from here on, or stop and discard what there is.
@@ -239,6 +252,7 @@ final class NightRecorder {
             night = app.openNight(instanceID)
             app.recordings.retitle(recordingID, instanceID: instanceID, title: title)
         }
+        askUploadRight()
         meterLog.write("app", ListenWire.event("start_logging", ["instance_id": instanceID, "t_ms": state?.tMs ?? 0]))
         restartLink(why: "logging")
     }
@@ -250,6 +264,7 @@ final class NightRecorder {
         if let night { app?.closeNight(night) }
         night = nil
         logsTo = nil
+        uploadAllowed = nil
         logged = nil
         loggedRow = nil
         app?.recordings.retitle(recordingID, instanceID: nil, title: title)

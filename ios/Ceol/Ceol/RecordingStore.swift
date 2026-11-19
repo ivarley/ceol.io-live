@@ -57,6 +57,10 @@ struct LocalRecording: Codable, Identifiable, Equatable {
     /// nothing uploads it by itself (Upload in the list still can). Nil: from before the
     /// option, uploaded as then.
     var keepOnPhone: Bool?
+    /// Whether this account may upload to the recording's night: the server takes a
+    /// recording only from a system admin, or a session admin given its recordings.
+    /// False: no Upload is offered and nothing tries. Nil: not asked yet.
+    var uploadAllowed: Bool?
 }
 
 @Observable
@@ -73,6 +77,8 @@ final class RecordingStore {
     /// Each recording's encode while it runs, so a cancel can stop it.
     @ObservationIgnored private var encoding: [String: Task<URL, any Error>] = [:]
     static let retryEvery: TimeInterval = 600
+    /// The tests' answer to "may this account upload to the night?", in place of the server's.
+    @ObservationIgnored var askRight: ((Int) async -> Bool?)?
 
     init() {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -119,6 +125,7 @@ final class RecordingStore {
     /// The night a recording in progress is for changed (logging began, or stopped).
     func retitle(_ id: String, instanceID: Int?, title: String) {
         guard var r = items.first(where: { $0.id == id }), r.phase == .recording else { return }
+        if r.instanceID != instanceID { r.uploadAllowed = nil }
         r.instanceID = instanceID
         r.title = title
         save(r)
@@ -134,7 +141,71 @@ final class RecordingStore {
         r.title = title
         r.phase = .ready
         r.error = nil
+        r.uploadAllowed = nil
         if r.keepOnPhone == nil { r.keepOnPhone = true }
+        save(r)
+        Task { await checkRight(id) }
+    }
+
+    // MARK: - The right to upload
+
+    /// Whether this account may upload to the night, asked of the server (the night's
+    /// recordings are listed only for whoever manages them). Nil: couldn't ask.
+    func mayUpload(_ instanceID: Int) async -> Bool? {
+        if let askRight { return await askRight(instanceID) }
+        guard let app, !app.simulatedOffline else { return nil }
+        var request = app.authorized(URLRequest(url: app.webURL("/api/session-instances/\(instanceID)/recordings")))
+        request.timeoutInterval = 10
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return nil }
+        switch (response as? HTTPURLResponse)?.statusCode {
+        case 200: return true
+        case 403: return false
+        default: return nil
+        }
+    }
+
+    /// Ask for one recording waiting on the phone, and keep the answer: Upload is
+    /// offered only to whoever may (the recordings list).
+    func checkRight(_ id: String) async {
+        guard let r = items.first(where: { $0.id == id }), let instanceID = r.instanceID,
+            let allowed = await mayUpload(instanceID)
+        else { return }
+        settle(id, instanceID: instanceID, allowed: allowed)
+    }
+
+    /// The same for every recording with a night that hasn't gone up, each night asked
+    /// once: a right given since brings Upload back, one taken away removes it.
+    func refreshRights() async {
+        var answers: [Int: Bool?] = [:]
+        for r in items where [.ready, .failed].contains(r.phase) {
+            guard let instanceID = r.instanceID else { continue }
+            if answers[instanceID] == nil { answers[instanceID] = .some(await mayUpload(instanceID)) }
+            if let allowed = answers[instanceID] ?? nil { settle(r.id, instanceID: instanceID, allowed: allowed) }
+        }
+    }
+
+    private func settle(_ id: String, instanceID: Int, allowed: Bool) {
+        // asked a moment ago: the recording may have moved on meanwhile
+        guard var r = items.first(where: { $0.id == id }), r.instanceID == instanceID, [.ready, .failed].contains(r.phase)
+        else { return }
+        if !allowed { return refuse(id) }
+        guard r.uploadAllowed != true else { return }
+        r.uploadAllowed = true
+        save(r)
+    }
+
+    /// Not this account's to upload: kept on the phone, with nothing to retry and no
+    /// failure to show.
+    private func refuse(_ id: String) {
+        guard var r = items.first(where: { $0.id == id }) else { return }
+        if let e = encoded(r) { try? FileManager.default.removeItem(at: e) }
+        r.uploadAllowed = false
+        r.phase = .ready
+        r.keepOnPhone = true
+        r.error = nil
+        r.storageKey = nil
+        r.uploadName = nil
+        progress[id] = nil
         save(r)
     }
 
@@ -223,6 +294,15 @@ final class RecordingStore {
         r.error = nil
         r.phase = .converting
         save(r)
+        // 0. the right, before hours of audio are encoded for a server that won't take it
+        if r.uploadAllowed != true, let allowed = await mayUpload(instanceID) {
+            // cancelled, or given another night, meanwhile
+            guard let now = items.first(where: { $0.id == id }), now.phase == .converting, now.instanceID == instanceID else { return }
+            if !allowed { return refuse(id) }
+            r.uploadAllowed = true
+            save(r)
+        }
+        guard items.first(where: { $0.id == id })?.phase == .converting else { return }
         // 1. FLAC (or WAV), off the main thread
         let source = caf(r)
         let dir = self.dir
@@ -252,6 +332,7 @@ final class RecordingStore {
             let key = body["storage_key"]?.stringValue, let type = body["content_type"]?.stringValue
         else {
             guard items.first(where: { $0.id == id })?.phase == .converting else { return }
+            if status == 403 { return refuse(id) }
             return fail(id, body["error"]?.stringValue ?? (status == 0 ? tr("Offline — try again later") : tr("The server refused the upload (\(status))")))
         }
         // cancelled while the upload was being signed
@@ -310,6 +391,7 @@ final class RecordingStore {
                 // the object isn't there after all: upload again
                 return await upload(id)
             }
+            if status == 403 { return refuse(id) }
             return fail(id, reply["error"]?.stringValue ?? (status == 0 ? tr("Offline — will finish later") : tr("The server said \(status)")))
         }
         r.recordingID = recordingID

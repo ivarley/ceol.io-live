@@ -85,6 +85,56 @@ struct KeepOnPhoneTests {
     }
 }
 
+/// A night whose recordings aren't this account's to manage: the server would refuse
+/// the upload, so none is offered or tried, and the recording is kept on the phone.
+@MainActor
+struct UploadRightTests {
+    @Test func aRecordingThisAccountCannotUploadIsKeptWithNoFailure() async throws {
+        let app = AppModel(server: URL(string: "http://127.0.0.1:9")!, store: MemoryTokenStore())
+        let store = app.recordings
+        store.resume(app: app)
+        var asked = 0
+        var answer: Bool? = false
+        store.askRight = { _ in
+            asked += 1
+            return answer
+        }
+        let id = "test-right-\(UUID().uuidString)"
+        store.begin(id: id, instanceID: 1, title: "A night")
+        store.finish(id: id, keepOnPhone: false)
+        defer { if let r = store.items.first(where: { $0.id == id }) { store.delete(r) } }
+
+        // asked before anything is encoded: there is no file here to encode at all
+        await store.upload(id)
+        var r = try #require(store.items.first { $0.id == id })
+        #expect(asked == 1)
+        #expect(r.phase == .ready)
+        #expect(r.uploadAllowed == false)
+        #expect(r.keepOnPhone == true)
+        #expect(r.error == nil)
+        #expect(r.statusText == "Kept on this phone. You can't upload to this session.")
+
+        // the right is given later: opening the list finds out, and Upload is back
+        answer = true
+        await store.refreshRights()
+        r = try #require(store.items.first { $0.id == id })
+        #expect(r.uploadAllowed == true)
+        #expect(r.keepOnPhone == true)
+        #expect(r.statusText == "Kept on this phone")
+
+        // no answer (offline): what was known stands
+        answer = nil
+        await store.refreshRights()
+        #expect(store.items.first { $0.id == id }?.uploadAllowed == true)
+
+        // another night: not known again until asked
+        answer = false
+        store.attach(id, instanceID: 2, title: "Another night")
+        await store.checkRight(id)
+        #expect(store.items.first { $0.id == id }?.uploadAllowed == false)
+    }
+}
+
 /// An upload stopped part-way (the bar's ×, or Cancel upload in the list): the
 /// recording is kept on the phone, nothing retries it, and the file being prepared
 /// for the server is gone.

@@ -5200,6 +5200,16 @@
         }
       }
     },
+    "Kept on this phone. You can't upload to this session.": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Á choinneáil ar an bhfón seo. Ní féidir leat uaslódáil chuig an seisiún seo."
+          }
+        }
+      }
+    },
     "Key": {
       "localizations": {
         "ga": {

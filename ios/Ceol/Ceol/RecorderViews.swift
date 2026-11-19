@@ -355,14 +355,15 @@ struct ListenMeterView: View {
     }
 
     /// The options, folded away until opened: logging by itself at 100% (a night only),
-    /// keeping a recording, and uploading it (a night's only). The first and last are
+    /// keeping a recording, and uploading it (a night's only, and only for whoever may
+    /// upload to it). The first and last are
     /// kept for the next night.
     private var options: some View {
         DisclosureGroup(isExpanded: $showingOptions) {
             VStack(spacing: 12) {
                 selfConfirmSwitch
                 recordingSwitch
-                if recorder.recording && recorder.isLogging { uploadSwitch }
+                if recorder.recording && recorder.isLogging && recorder.uploadAllowed != false { uploadSwitch }
             }
             .padding(.top, 8)
         } label: {
@@ -666,7 +667,9 @@ extension LocalRecording {
     var statusText: String {
         switch phase {
         case .recording: tr("Recording")
-        case .ready: keepOnPhone == true ? tr("Kept on this phone") : tr("Not uploaded yet")
+        case .ready:
+            uploadAllowed == false ? tr("Kept on this phone. You can't upload to this session.")
+                : keepOnPhone == true ? tr("Kept on this phone") : tr("Not uploaded yet")
         case .converting: tr("Preparing the file…")
         case .uploading: tr("Uploading…")
         case .confirming: tr("Finishing the upload…")
@@ -786,8 +789,9 @@ struct RecordingsView: View {
                         }
                         HStack(spacing: 16) {
                             // one made just listening has no night for the server to file it
-                            // under: give it one first
-                            if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id, r.instanceID != nil {
+                            // under: give it one first. No Upload for a night whose
+                            // recordings aren't this account's to manage.
+                            if [.ready, .failed].contains(r.phase), app.recorder?.recordingID != r.id, r.instanceID != nil, r.uploadAllowed != false {
                                 Button(r.phase == .failed ? tr("Retry upload") : tr("Upload")) { Task { await store.upload(r.id) } }
                                     .accessibilityIdentifier("recordings.upload")
                             }
@@ -843,6 +847,7 @@ struct RecordingsView: View {
             .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
         }
         .preferredColorScheme(.dark)
+        .task { await store.refreshRights() }
         .onDisappear { player.stop() }
     }
 
