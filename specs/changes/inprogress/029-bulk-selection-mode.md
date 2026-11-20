@@ -104,10 +104,16 @@ which always exists — defaults to `end`):
 
 ### Interaction
 - Grab bar on the right edge of every tune row (~44px touch zone, ⠿ glyph), rendered
-  only in edit-mode selection mode with no filter active. `touch-action:none` on the
-  handle only — handle drags immediately (no long-press); rest of the row scrolls.
+  only in edit-mode selection mode with no filter active.
+- **Press and hold to lift** (changed 2026-11-19; it was "the handle drags immediately",
+  and scrolling a log with a thumb on the right edge kept moving tunes). A finger must
+  rest on the handle 250 ms, moving under 10px, before the tune lifts (a tap of
+  haptic feedback); a finger that moves first scrolls the list, from the handle as from
+  anywhere (`touch-action: pan-y`; once lifted, a non-passive `touchmove` listener stops
+  the scroll). A mouse still drags at once, after ~6px of slop. The same on the iPhone
+  (`holdToDrag`, `DragScroll` in `NightEditing.swift`).
 - Pointer events (down → setPointerCapture → move → up), NOT HTML5 DnD (unusable on
-  mobile). ~6px slop before lift.
+  mobile).
 - **What drags**: (1) grabbed row selected + in a contiguous run of selected tunes →
   the whole run (contiguity is over the tune sequence; intervening BREAKS don't
   interrupt a run and travel with it). (2) grabbed row selected but run is just
@@ -116,10 +122,18 @@ which always exists — defaults to `end`):
 - Ghost follows the pointer: single row shows the name; multi shows "6 tunes · 2 sets".
   Source rows dim in place.
 - **Drop zones** = existing seams; nearest eligible seam to pointer-y lights up and
-  **thickens** (2px → ~6px accent-yellow bar, ~120ms ease). Other eligible seams show
+  shows a ~6px accent-yellow bar. Other eligible seams show
   faint dashes during the drag. Ineligible (no-op) = seams interior to or immediately
   bounding the dragged block. Hit-testing by y-interval, not elementFromPoint.
-- Autoscroll within ~48px of list top/bottom edges, speed proportional to proximity.
+- Autoscroll within 56px of the list's top and bottom edges (changed 2026-11-19;
+  `frontend/src/dragscroll.js`, the iPhone's `DragScroll`): 60px/s at the band's inner
+  edge rising (squared) to 540px/s at the list's edge, and no faster however far past
+  the edge the finger is; by the clock, not per frame. A drag that begins inside a
+  band doesn't scroll until the finger has left it once. It used to be distance/4 px
+  per frame with no cap, so a finger past the edge, or a 120 Hz screen, sent the list
+  flying. Nothing shifts under the finger during a drag: the lit seam keeps its
+  height, and the list scrolls by the height of the "new set" zone that appears at
+  the top.
 - Cancel: pointercancel / Esc / release with no eligible seam → settle back, no op.
 - Drop: optimistic local reorder via fracindex `generateBetween` (same exclude-the-
   block pred/succ rule as the server), then ONE `move_tunes` op. The landing seam

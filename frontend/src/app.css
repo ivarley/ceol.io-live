@@ -1789,9 +1789,12 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   font-size: 15px;
   letter-spacing: -1px;
   cursor: grab;
-  touch-action: none;
+  /* a finger scrolls the list from here too; it lifts the tune only after a hold
+     (startDrag), and from then holdsTouch stops the scroll */
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .grab:active { color: var(--accent); cursor: grabbing; }
 
@@ -1828,9 +1831,9 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
   background-position: center;
   transition: height 0.12s ease;
 }
+/* the same height as at rest: nothing shifts under the finger as the target changes */
 .seam.drop-active,
 .drop-extreme.drop-active {
-  height: 22px;
   background-image: none;
   background-color: rgba(245, 197, 24, 0.16);
   border-radius: 6px;

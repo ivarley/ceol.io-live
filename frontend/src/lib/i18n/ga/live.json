@@ -1622,5 +1622,9 @@
   "The listener logged this tune. Nobody has checked it yet.": {
     "ga": "Logáil an t-éisteoir an fonn seo. Níor sheiceáil aon duine fós é.",
     "review": true
+  },
+  "Press and hold, then drag to move": {
+    "ga": "Brúigh agus coinnigh, ansin tarraing chun bogadh",
+    "review": true
   }
 }

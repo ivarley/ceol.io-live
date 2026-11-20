@@ -1022,7 +1022,7 @@ final class CeolUITests: XCTestCase {
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let from = grab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let to = origin.withOffset(CGVector(dx: grab.frame.midX, dy: gap))
-        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: 300, thenHoldForDuration: 0.4)
+        from.press(forDuration: 0.5, thenDragTo: to, withVelocity: 300, thenHoldForDuration: 0.4)
         try await waitFor("Charlie between Alpha and Bravo") { ours($0) == [a, c, b] }
         snapshot("moved")
 
@@ -1707,7 +1707,7 @@ final class CeolUITests: XCTestCase {
         let banish = app.staticTexts["Banish Misfortune"].frame
         let origin = app.coordinate(withNormalizedOffset: .zero)
         grab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: grab.frame.midX, dy: (top.maxY + banish.minY) / 2)),
+            .press(forDuration: 0.5, thenDragTo: origin.withOffset(CGVector(dx: grab.frame.midX, dy: (top.maxY + banish.minY) / 2)),
                    withVelocity: 300, thenHoldForDuration: 0.4)
         try await waitFor("Cooley's second") { rs in rs.compactMap { $0["name"] as? String }.prefix(3) == ["Drowsy Maggie", "Cooley's", "Banish Misfortune"] }
         XCTAssertTrue(cooley.exists)

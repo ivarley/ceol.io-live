@@ -15,6 +15,8 @@
 //
 // The native additions: swipe a tune left to remove it, and in select mode, press and
 // hold a tune to drag it.
+// Dragging always starts with a hold (DragScroll.hold): on the grab bar anywhere, or on
+// the whole row in select mode. A finger that moves first scrolls the log.
 
 import CeolDesign
 import CeolLogic
@@ -43,6 +45,54 @@ struct LogDrag: Equatable {
     var activeKey: String?
 }
 
+/// Dragging a tune: when a press on the grab bar becomes a drag, and how fast the log
+/// scrolls while a drag is held near its top or bottom. The web's figures
+/// (frontend/src/dragscroll.js).
+enum DragScroll {
+    /// A finger must rest on the grab bar this long before the tune lifts; one that
+    /// moves first is scrolling the log.
+    static let hold: TimeInterval = 0.25
+    static let holdSlop: CGFloat = 10
+    /// The band inside the visible log's top and bottom where a held drag scrolls it.
+    static let zone: CGFloat = 56
+    /// Points per second at the band's inner edge, and the most it ever is.
+    static let minSpeed: CGFloat = 60
+    static let maxSpeed: CGFloat = 540
+
+    enum Edge { case top, bottom }
+
+    /// Where the finger is against the visible log's edges, and how far into the band
+    /// (0...1; 1 at the edge and anywhere beyond it).
+    static func edge(_ y: CGFloat, visible: ClosedRange<CGFloat>) -> (edge: Edge, depth: CGFloat)? {
+        let z = min(zone, (visible.upperBound - visible.lowerBound) / 3)
+        guard z > 0 else { return nil }
+        if y < visible.lowerBound + z { return (.top, min(1, (visible.lowerBound + z - y) / z)) }
+        if y > visible.upperBound - z { return (.bottom, min(1, (y - (visible.upperBound - z)) / z)) }
+        return nil
+    }
+
+    /// Points per second at that depth: slow at first, never over the most.
+    static func speed(_ depth: CGFloat) -> CGFloat {
+        let d = max(0, min(1, depth))
+        return minSpeed + (maxSpeed - minSpeed) * d * d
+    }
+}
+
+/// The grab bar's gesture: press and hold, then drag. A finger that moves before the
+/// hold is up scrolls the log instead.
+extension View {
+    func holdToDrag(_ drag: @escaping (EditableLog.DragPhase) -> Void) -> some View {
+        gesture(
+            LongPressGesture(minimumDuration: DragScroll.hold, maximumDistance: DragScroll.holdSlop)
+                .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(nightScrollSpace)))
+                .onChanged { value in
+                    guard case .second(true, let d) = value else { return }
+                    if let d { drag(.changed(d.location)) } else { drag(.lifted) }
+                }
+                .onEnded { _ in drag(.ended) })
+    }
+}
+
 /// Each seam's frame in the scroll view, by its drop key.
 struct SeamFrames: PreferenceKey {
     static let defaultValue: [String: CGRect] = [:]
@@ -69,6 +119,10 @@ struct EditableLog: View {
     @State private var openTray: RecordID?
     @State private var pickingStarterFor: [LogRecord]?
     @State private var ticker: Task<Void, Never>?
+    /// Counts the holds that lifted a tune: a tap of feedback for each.
+    @State private var lifts = 0
+    /// The edge a drag began beside: no scrolling there until the finger has left it.
+    @State private var latch: DragScroll.Edge?
 
     var body: some View {
         let segments = LogState.segmentByBreaks(log.ordered)
@@ -132,6 +186,7 @@ struct EditableLog: View {
         }
         .onPreferenceChange(SeamFrames.self) { frames = $0 }
         .sensoryFeedback(.selection, trigger: model.drag?.activeKey)
+        .sensoryFeedback(.impact(weight: .medium), trigger: lifts)
         .sheet(item: Binding(get: { pickingStarterFor.map(StarterChoice.init) }, set: { pickingStarterFor = $0?.tunes })) { choice in
             PersonPicker(model: model, mode: .starter(tunes: choice.tunes, current: setStarter(choice.tunes)))
                 .onDisappear { openTray = nil }
@@ -229,10 +284,13 @@ struct EditableLog: View {
 
     // MARK: - Dragging
 
-    enum DragPhase { case changed(CGPoint), ended }
+    /// `lifted`: the hold on the grab bar is up (the finger hasn't moved yet).
+    enum DragPhase { case lifted, changed(CGPoint), ended }
 
     private func dragChanged(_ id: RecordID, _ phase: DragPhase, segments: [LogSegment], endIsOpen: Bool) {
         switch phase {
+        case .lifted:
+            lifts += 1
         case .changed(let p):
             if model.drag == nil {
                 guard let block = Selection.dragBlock(log.ordered, selected: model.picked, grabbed: id) else { return }
@@ -242,11 +300,12 @@ struct EditableLog: View {
                     ? (log.records.first { $0.recordID == id }?["name"]?.stringValue ?? liveTunes(1))
                     : block.setCount > 1
                         ? tr("\(liveTunes(block.tuneIDs.count)) in \(liveSets(block.setCount))") : liveTunes(block.tuneIDs.count)
-                model.drag = LogDrag(block: block, targets: targets, label: label, start: p, location: p)
+                // held first (holdToDrag, or the row's own long press): lifted at once
+                model.drag = LogDrag(block: block, targets: targets, label: label, start: p, location: p, started: true)
+                latch = DragScroll.edge(p.y, visible: visible)?.edge
                 startTicker()
             }
             model.drag?.location = p
-            if let d = model.drag, !d.started, hypot(p.x - d.start.x, p.y - d.start.y) >= 6 { model.drag?.started = true }
             hitTest()
         case .ended:
             ticker?.cancel()
@@ -271,22 +330,24 @@ struct EditableLog: View {
         if model.drag?.activeKey != best?.0 { model.drag?.activeKey = best?.0 }
     }
 
-    /// While a drag is held near the top or bottom, scroll, faster the closer it is.
+    /// While a drag is held near the top or bottom, scroll: gently at the band's inner
+    /// edge, faster toward the log's edge, never over DragScroll.maxSpeed, and by the
+    /// clock, not the tick. A drag that began beside an edge doesn't scroll until the
+    /// finger has left that band once.
     private func startTicker() {
         ticker?.cancel()
         ticker = Task { @MainActor in
+            var last = Date()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(16))
+                let now = Date()
+                let dt = min(0.05, now.timeIntervalSince(last))
+                last = now
                 guard let d = model.drag, d.started else { continue }
-                let edge: CGFloat = 70
-                let y = d.location.y
-                if y < visible.lowerBound + edge {
-                    autoScroll(-max(2, (visible.lowerBound + edge - y) / 5))
-                } else if y > visible.upperBound - edge {
-                    autoScroll(max(2, (y - (visible.upperBound - edge)) / 5))
-                } else {
-                    continue
-                }
+                let at = DragScroll.edge(d.location.y, visible: visible)
+                if at?.edge != latch { latch = nil }
+                guard let at, latch == nil else { continue }
+                autoScroll((at.edge == .top ? -1 : 1) * DragScroll.speed(at.depth) * dt)
                 hitTest()
             }
         }
@@ -422,10 +483,7 @@ struct SelectRow: View {
                 Text("⠿").font(.system(size: 22)).foregroundStyle(CeolTokens.textMuted)
                     .frame(width: 36, height: 40)
                     .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0, coordinateSpace: .named(nightScrollSpace))
-                            .onChanged { drag(.changed($0.location)) }
-                            .onEnded { _ in drag(.ended) })
+                    .holdToDrag(drag)
                     .accessibilityLabel("Drag to move")
                     .accessibilityIdentifier("row.grab")
             }
@@ -442,7 +500,8 @@ struct SelectRow: View {
             LongPressGesture(minimumDuration: 0.35)
                 .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(nightScrollSpace)))
                 .onChanged { value in
-                    if case .second(true, let d?) = value { drag(.changed(d.location)) }
+                    guard case .second(true, let d) = value else { return }
+                    if let d { drag(.changed(d.location)) } else { drag(.lifted) }
                 }
                 .onEnded { _ in drag(.ended) })
         .accessibilityElement(children: .contain)
@@ -775,10 +834,7 @@ struct EditableRow: View {
                     Text("⠿").font(.system(size: 22)).foregroundStyle(CeolTokens.textMuted)
                         .frame(width: 30, height: 34)
                         .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0, coordinateSpace: .named(nightScrollSpace))
-                                .onChanged { drag(.changed($0.location)) }
-                                .onEnded { _ in drag(.ended) })
+                        .holdToDrag(drag)
                         .accessibilityLabel("Drag to move")
                         .accessibilityIdentifier("row.grab")
                 }

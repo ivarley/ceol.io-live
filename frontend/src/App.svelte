@@ -26,6 +26,7 @@
     rememberInHistory, historyStep, nextTs, recordChanges, metaChanges, isProvisional,
   } from './logstate.js'
   import { latestSetRow, PROVISIONAL_CONFIDENCE } from './listenpage/meter.js'
+  import { DRAG_HOLD_MS, DRAG_HOLD_SLOP, edgeZone, scrollSpeed } from './dragscroll.js'
   import {
     dragBlock, dropTargets, optimisticMove,
     serializeClipboard, parseClipboard, rangeBetween, selectableIds,
@@ -1943,43 +1944,114 @@
   }
 
   // --- drag-to-move (§F): pointer events on the grab bar, seams as drop zones ---
+  // A finger must press and hold the grab bar (DRAG_HOLD_MS, without moving) before the
+  // tune lifts: a finger that moves first is scrolling the list, which the grab bar no
+  // longer blocks. A mouse drags at once (after a few pixels), as it can't scroll by
+  // dragging.
   let drag = $state(null) // {block, targets, keys, activeKey, x, y, startX, startY, started, name}
   let dragRAF = null
   let dragPointerY = 0
+  let dragHold = null // a finger down on a grab bar, not yet held long enough: {timer, x, y}
+  let dragLatch = null // the edge ('top' | 'bottom') the drag began beside: no autoscroll there until the pointer leaves it
+  let dragLastT = 0
+  let dragPad = 0 // how far the list was scrolled to keep its rows still when the top drop zone appeared
   const dragKeys = $derived(drag?.started ? drag.keys : null)
   function startDrag(e, r) {
     if (viewing || searchMode) return
-    const block = dragBlock(ordered, selected, r.session_instance_tune_id)
-    if (!block) return
-    e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const targets = dropTargets(ordered, displaySegments, endIsOpen, block.recordIds)
-    drag = {
-      block, targets, keys: new Set(targets.map((t) => t.key)), activeKey: null,
-      x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, started: false,
-      name: r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)'),
+    cancelHold()
+    if (e.pointerType === 'mouse') {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      beginDrag(r, e.clientX, e.clientY, false)
+      return
+    }
+    const el = e.currentTarget
+    const pointerId = e.pointerId
+    const x = e.clientX
+    const y = e.clientY
+    dragHold = {
+      x, y,
+      timer: setTimeout(() => {
+        dragHold = null
+        if (!beginDrag(r, x, y, true)) return
+        try { el.setPointerCapture(pointerId) } catch {}
+        try { navigator.vibrate?.(10) } catch {}
+      }, DRAG_HOLD_MS),
     }
   }
+  function cancelHold() {
+    if (dragHold) clearTimeout(dragHold.timer)
+    dragHold = null
+  }
+  // `lifted`: the hold is done, so the drag is on at once (no slop to cross).
+  function beginDrag(r, x, y, lifted) {
+    const block = dragBlock(ordered, selected, r.session_instance_tune_id)
+    if (!block) return false
+    const targets = dropTargets(ordered, displaySegments, endIsOpen, block.recordIds)
+    dragPointerY = y
+    drag = {
+      block, targets, keys: new Set(targets.map((t) => t.key)), activeKey: null,
+      x, y, startX: x, startY: y, started: false,
+      name: r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)'),
+    }
+    if (lifted) liftDrag()
+    return true
+  }
+  function liftDrag() {
+    drag = { ...drag, started: true }
+    dragLatch = setsEl ? edgeZone(dragPointerY, setsEl.getBoundingClientRect()).edge : null
+    dragLastT = 0
+    // The drop zone that appears above the first set pushes the rows down: scroll by
+    // its height so they stay under the finger.
+    const before = setsEl ? setsEl.scrollTop : 0
+    tick().then(() => {
+      const zone = setsEl?.querySelector('[data-seam="top-new"]')
+      if (!drag || !zone || before <= 0) return
+      const cs = getComputedStyle(zone)
+      dragPad = zone.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom)
+      setsEl.scrollTop = before + dragPad
+    })
+    if (!dragRAF) dragRAF = requestAnimationFrame(autoScrollTick)
+  }
   function dragMove(e) {
+    if (dragHold) {
+      // moved before the hold was up: a scroll, not a drag
+      if (Math.hypot(e.clientX - dragHold.x, e.clientY - dragHold.y) > DRAG_HOLD_SLOP) cancelHold()
+      return
+    }
     if (!drag) return
     dragPointerY = e.clientY
     if (!drag.started) {
       if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 6) return // slop
-      drag = { ...drag, started: true }
-      if (!dragRAF) dragRAF = requestAnimationFrame(autoScrollTick)
+      liftDrag()
     }
     drag = { ...drag, x: e.clientX, y: e.clientY }
     hitTestDrop()
   }
   function dragEnd() {
+    cancelHold()
     if (!drag) return
     const t = drag.started && drag.activeKey ? drag.targets.find((x) => x.key === drag.activeKey) : null
     if (t) performMove(t)
     cancelDrag()
   }
   function cancelDrag() {
+    cancelHold()
     drag = null
     if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null }
+    if (dragPad && setsEl) {
+      const pad = dragPad
+      dragPad = 0
+      tick().then(() => { if (setsEl) setsEl.scrollTop = Math.max(0, setsEl.scrollTop - pad) })
+    }
+  }
+  // Once a finger has lifted a tune, its moves drag: the browser must not scroll with
+  // them. (Not passive, so it can say so; Svelte's own ontouchmove is passive.)
+  function holdsTouch(node) {
+    const stop = (e) => { if (drag && e.cancelable) e.preventDefault() }
+    node.addEventListener('touchmove', stop, { passive: false })
+    return { destroy: () => node.removeEventListener('touchmove', stop) }
   }
   // Nearest eligible seam to the pointer's y (fat fingers: interval distance, capped).
   function hitTestDrop() {
@@ -1996,16 +2068,22 @@
     const activeKey = bestD < 90 ? best : null
     if (activeKey !== drag.activeKey) drag = { ...drag, activeKey }
   }
-  // Autoscroll near the list edges, speed proportional to proximity (§F).
-  function autoScrollTick() {
+  // Autoscroll near the list edges (§F): gentle at the zone's inner edge, faster toward
+  // the list's edge, never over the cap (dragscroll.js), and by the clock, not the
+  // frame. A drag that begins beside an edge doesn't scroll until the pointer has left
+  // that zone once.
+  function autoScrollTick(now) {
     dragRAF = null
     if (!drag?.started || !setsEl) return
-    const rect = setsEl.getBoundingClientRect()
-    const M = 48
-    let dy = 0
-    if (dragPointerY < rect.top + M) dy = -Math.ceil((rect.top + M - dragPointerY) / 4)
-    else if (dragPointerY > rect.bottom - M) dy = Math.ceil((dragPointerY - (rect.bottom - M)) / 4)
-    if (dy) { setsEl.scrollTop += dy; hitTestDrop() }
+    const dt = dragLastT ? Math.min(50, now - dragLastT) : 0
+    dragLastT = now
+    const z = edgeZone(dragPointerY, setsEl.getBoundingClientRect())
+    if (z.edge !== dragLatch) dragLatch = null
+    if (z.edge && !dragLatch && dt) {
+      const before = setsEl.scrollTop
+      setsEl.scrollTop = before + (z.edge === 'top' ? -1 : 1) * scrollSpeed(z.depth) * (dt / 1000)
+      if (setsEl.scrollTop !== before) hitTestDrop()
+    }
     dragRAF = requestAnimationFrame(autoScrollTick)
   }
   // Drop: optimistic local reorder (same exclude-the-block key rule as the server,
@@ -4213,13 +4291,16 @@
                  one tune shouldn't take a mode switch. In select mode it lifts the
                  selected run it belongs to. -->
             {#if canEdit && !r._temp && !r._removing}
-                <!-- grab bar (spec 029 §F): touch-action:none here ONLY, so the handle
-                     drags immediately while the rest of the row still scrolls the list -->
+                <!-- grab bar (spec 029 §F): a finger presses and holds it to lift the tune;
+                     a finger that moves first scrolls the list, here as anywhere -->
                 <span
                   class="grab"
                   role="button"
                   tabindex="-1"
                   aria-label={t('Drag to move')}
+                  title={t('Press and hold, then drag to move')}
+                  use:holdsTouch
+                  oncontextmenu={(e) => e.preventDefault()}
                   onpointerdown={(e) => startDrag(e, r)}
                   onpointermove={dragMove}
                   onpointerup={dragEnd}
