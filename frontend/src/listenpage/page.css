@@ -296,8 +296,46 @@
   flex: 1;
 }
 
+.lp-sure-taps button {
+  display: flex;
+  justify-content: center;
+  min-height: 48px;
+}
+
+.lp-sure-taps svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 #lp-wrong {
   color: var(--danger, #e05a4c);
+}
+
+#lp-right {
+  color: var(--success, #65b464);
+}
+
+#lp-right.is-on {
+  border-color: var(--success, #65b464);
+  background: color-mix(in srgb, var(--success, #65b464) 18%, transparent);
+}
+
+#lp-right.is-on svg {
+  fill: currentColor;
+}
+
+.lp-sure-open {
+  padding: 0;
+  font-family: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
 .lp-tunebook {

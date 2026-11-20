@@ -8,6 +8,11 @@
 // of to a night; the meter keeps the bookkeeping the iPhone keeps for that: the tune it
 // logged last (sure again, it isn't logged twice), when each was logged (no tune again
 // within ten minutes), and how long nothing has been a tune (a set break).
+//
+// A tune it logs by itself is provisional: logged, but no person has said it is right
+// (the row's confidence is under 100, PROVISIONAL_CONFIDENCE). Under the sure tune are
+// three taps: wrong tune, right tune (a person's check: the row is confirmed), and
+// next tune (it was right or not, but it has ended: listen afresh).
 
 /** What the meter shows as 100%: sure by itself at this belief. */
 export const SURE_AT = 0.995
@@ -22,6 +27,9 @@ export const RELOG_AFTER_MS = 600 * 1000
 /** "Not a tune" this many states running (4 s each) before the set can end (the
  * iPhone's figure, from night 143: 3 steps caught 27 of 28 set breaks). */
 export const END_SET_AFTER_STEPS = 3
+/** The confidence a tune logged by the meter itself is given: under 100, which is a
+ * person's word (Confirm, or the meter's "right tune"). */
+export const PROVISIONAL_CONFIDENCE = 99
 
 /** More sure that nothing is being played as a tune than that anything is. */
 export function notATune(s) {
@@ -59,6 +67,8 @@ export class Meter {
     this.notATuneSteps = 0 // states running that said "not a tune"
     this.logged = null // Log mode: the tune last logged (or found logged) from here
     this.loggedRow = null // its row in the night, when this page added it
+    this.loggedAuto = false // it logged that row by itself: provisional until a person checks
+    this.approved = null // the tune a person said is right (tapped it, or "right tune")
     this.loggedAt = new Map() // tune_id -> when it was logged from here (ms)
   }
 
@@ -115,10 +125,12 @@ export class Meter {
   }
 
   /** Log mode: the tune was logged (row: the row this page added, or null when someone
-   * else had logged it already). */
-  markLogged(tuneId, row = null, now = Date.now()) {
+   * else had logged it already; auto: the meter logged it by itself, so it is
+   * provisional). */
+  markLogged(tuneId, row = null, now = Date.now(), auto = false) {
     this.logged = tuneId
     this.loggedRow = row
+    this.loggedAuto = auto && row != null
     this.loggedAt.set(tuneId, now)
   }
 
@@ -126,6 +138,7 @@ export class Meter {
   forgetLogged() {
     this.logged = null
     this.loggedRow = null
+    this.loggedAuto = false
   }
 
   /** The night's open set can end: no tune for long enough, and the log's last row a
@@ -142,6 +155,7 @@ export class Meter {
     this.confirmedType = c.type || null
     this.confirmedAfterMs = this.state ? this.state.t_ms || 0 : 0
     this.changedFrom = null
+    if (this.approved !== c.tune_id) this.approved = null
   }
 
   /** A person taps a candidate: this is it. Returns the tap to send. */
@@ -149,7 +163,20 @@ export class Meter {
     const top = (this.state && this.state.top) || []
     const c = top.find((x) => x.tune_id === tuneId) || { tune_id: tuneId }
     this.sure(c)
+    this.approved = tuneId
     return { type: 'tap', action: 'this', tune_id: tuneId, shown: top.map((x) => x.tune_id) }
+  }
+
+  /** "Right tune": a person says the sure tune is what is playing. Returns the tap to
+   * send (the listener holds on to it, as for a tapped candidate). In Log mode the
+   * page confirms the row it logged, or logs the tune if it hasn't been. */
+  rightTune() {
+    const c = this.confirmed
+    if (c == null) return null
+    this.approved = c
+    this.loggedAuto = false
+    const top = (this.state && this.state.top) || []
+    return { type: 'tap', action: 'this', tune_id: c, shown: top.map((x) => x.tune_id) }
   }
 
   /** "None of these": rule out every candidate shown. */
@@ -166,6 +193,7 @@ export class Meter {
     if (c == null) return null
     this.wrong.add(c)
     this.confirmed = null
+    if (this.approved === c) this.approved = null
     if (this.logged === c) {
       this.forgetLogged()
       this.loggedAt.delete(c)
@@ -173,7 +201,8 @@ export class Meter {
     return { type: 'tap', action: 'none', shown: [c], why: 'wrong' }
   }
 
-  /** "Tune changed": it was right and has ended; the listener lets go of it at once. */
+  /** "Next tune": the sure tune has ended and another is playing; the listener lets go
+   * of it at once and listens afresh. It stays logged, checked or not. */
   tuneChanged() {
     const c = this.confirmed
     if (c == null) return null
@@ -189,6 +218,11 @@ export class Meter {
  * it already. `ordered` is the night's rows in order (`record_type` 'tune' | 'break').
  */
 export function latestSetEndsWith(tuneId, ordered) {
+  return latestSetRow(tuneId, ordered) != null
+}
+
+/** That row (see latestSetEndsWith), or null. */
+export function latestSetRow(tuneId, ordered) {
   const latest = []
   for (let i = ordered.length - 1; i >= 0; i--) {
     const r = ordered[i]
@@ -198,7 +232,7 @@ export function latestSetEndsWith(tuneId, ordered) {
     }
     latest.push(r)
   }
-  return latest.slice(0, 2).some((r) => r.tune_id === tuneId)
+  return latest.slice(0, 2).find((r) => r.tune_id === tuneId) || null
 }
 
 // --- Recent Tunes Heard: kept in this browser --------------------------------

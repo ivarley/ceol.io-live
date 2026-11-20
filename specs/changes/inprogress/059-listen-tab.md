@@ -53,6 +53,29 @@ Made by the product owner, 2026-10-11.
   plays any recording on the phone (▶, a slider), and an uploaded one has "Open in
   the segmenter" (the web, signed in): uploading it took the same right the segmenter
   asks, a system admin's or a session admin's with recordings.
+- **Provisional tunes** (2026-11-19, web and iPhone). A tune the meter logs by itself
+  is logged, but no person has approved it. The row says so with what it already
+  carries: `source='listen'` and `confidence=99` (under 100, which is a person's word;
+  no new column). In the log it is marked "not checked" and offers Confirm. A second
+  phone's meter logging the same tune merges into the row without approving it; a
+  person logging it by hand does approve it.
+- **Three buttons under the sure tune** (2026-11-19), in either mode, also when the
+  meter has logged the tune by itself. They replace the tap on the tune that asked
+  "Wrong tune" or "Tune changed":
+  - **thumbs down**, left: wrong tune. As before: its row comes back out of the night
+    (only the row this meter added), the listener rules it out, and the meter won't be
+    sure of it by itself again;
+  - **thumbs up**, middle: right tune, a person's check. The row is confirmed
+    (`set_confidence` to 100): this meter's own, or whoever's row in the latest set has
+    the tune. A sure tune not logged yet (the switch off, or logged lately) is logged
+    as the person's own. The listener is told, as for a tapped name. Tapping a name
+    while it is figuring counts as the same check. With nothing being logged it only
+    tells the listener and the meter log;
+  - **next**, right: the tune has ended and another is playing; the listener lets go
+    of it and listens afresh. The row stays as it is, checked or not.
+
+  Tapping the tune's name opens the tune (its sheet). Under the buttons, a logged tune
+  says "Logged to the night", or "Logged to the night, not checked yet".
 - **"Log automatically at 100%"** is off and disabled when nothing is being logged. The
   meter still goes to its "sure" state at 100% in either mode: the switch is about
   logging, not about saying so.

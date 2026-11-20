@@ -335,7 +335,10 @@ def retry_listen_job(job_id):
 def undo_find_tunes(recording_id):
     """Take back what the listener logged: its tunes nobody has confirmed or
     corrected (source 'listen', confidence under 100), with their placements,
-    as the segmenter's remove does. What a person settled stays."""
+    as the segmenter's remove does. What a person settled stays. So do the
+    tunes a meter logged live that night (spec 059's provisional tunes): they
+    are 'listen' rows under 100 too, but carry no confidence_model, which a
+    job's rows always do."""
     from live_logging_routes import OpRejected, apply_live_op
     from recording_routes import _tunes_response
     from database import save_to_history
@@ -352,7 +355,8 @@ def undo_find_tunes(recording_id):
         instance_id, session_id = facts[0], facts[1]
         cur.execute(
             "SELECT session_instance_tune_id FROM session_instance_tune WHERE session_instance_id = %s "
-            "AND source = 'listen' AND confidence < 100 AND deleted = FALSE AND record_type = 'tune'",
+            "AND source = 'listen' AND confidence < 100 AND confidence_model IS NOT NULL "
+            "AND deleted = FALSE AND record_type = 'tune'",
             (instance_id,),
         )
         ids = [r[0] for r in cur.fetchall()]
@@ -405,7 +409,9 @@ def list_jobs(conn, limit=200):
     cur = conn.cursor()
     _requeue_stale(cur)
     conn.commit()
-    cur.execute(f"SELECT {_COLS} {_FROM} ORDER BY j.listen_job_id DESC LIMIT %s", (limit,))
+    cur.execute(
+        f"SELECT {_COLS} {_FROM} ORDER BY j.listen_job_id DESC LIMIT %s", (limit,)
+    )
     rows = cur.fetchall()
     waiting = sorted(r[0] for r in rows if r[3] in ACTIVE)
     return [_job(r, waiting.index(r[0]) if r[3] == "queued" else None) for r in rows]

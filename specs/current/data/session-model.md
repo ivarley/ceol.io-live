@@ -115,8 +115,13 @@ Individual tunes played during a session instance.
   tool), or 'listen' (a machine logged what it heard, spec 053)
 - `confidence` - SMALLINT 0..100; NULL = definite human entry. A machine's row carries the
   chance in whole percent (0-99) that the name is right; Confirm, or a person correcting the
-  tune, makes it 100. Under 100 = needs a person's check (the segmenter's filter, the logger's
-  amber row at 70 or below)
+  tune, makes it 100. Under 100 = **provisional**: a machine logged it and no person has
+  checked it (the segmenter's filter; the logger's "not checked" mark and Confirm, with an
+  amber name at 70 or below). The listen meter logs a tune it is sure of by itself as
+  `source='listen'`, `confidence=99`; its thumbs up, like Confirm, is the `set_confidence` op
+  to 100. A machine's duplicate add (a second phone's meter) corroborates without verifying;
+  a person's does verify. Clients read it as `isProvisional` (`frontend/src/logstate.js`,
+  `LogState.swift`)
 - `confidence_model` - which calibration model made `confidence` (`schema/060_log_confidence_model.sql`,
   spec 053; the model is `lab/configs/confidence.json`); NULL once a person has set it. The
   history table keeps the machine's guess, its confidence and model beside the correction

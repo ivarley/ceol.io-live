@@ -122,6 +122,11 @@ final class NightRecorder {
     /// The row that logging added (nil when it merged into a row already there), so
     /// "Wrong tune" can take it back out.
     @ObservationIgnored private var loggedRow: RecordID?
+    /// Whether the meter logged that row by itself: provisional (its confidence under
+    /// 100) until a person checks it.
+    @ObservationIgnored private var loggedAuto = false
+    /// The tune a person said is right: they tapped it, or "right tune" under it.
+    private(set) var approved: Int?
     /// Tunes a person said were wrong tonight: the meter never logs them by itself again.
     @ObservationIgnored private var wrongTunes: Set<Int> = []
     /// When each tune was last logged from here: not logged by itself again for a while,
@@ -152,6 +157,9 @@ final class NightRecorder {
     }
     /// How sure the meter must be to log a tune by itself: what it shows as 100%.
     nonisolated static let selfConfirmAt = 0.995
+    /// The confidence a tune the meter logs by itself is given: under 100, which is a
+    /// person's word (Confirm, or "right tune" here).
+    nonisolated static let provisionalConfidence = 99
     nonisolated static let relogAfter: TimeInterval = 600
     /// Under this, a confirmed tune is no longer claimed: the meter is figuring it out
     /// again (the listener's "may have changed" doubts at the same level).
@@ -267,6 +275,7 @@ final class NightRecorder {
         uploadAllowed = nil
         logged = nil
         loggedRow = nil
+        loggedAuto = false
         app?.recordings.retitle(recordingID, instanceID: nil, title: title)
         meterLog.write("app", ListenWire.event("stop_logging", ["t_ms": state?.tMs ?? 0]))
     }
@@ -322,6 +331,7 @@ final class NightRecorder {
         streamLink.stop()
         state = nil
         confirmed = nil
+        approved = nil
         changedFrom = nil
         let streamID = UUID().uuidString
         capture.resetOutbox()
@@ -431,11 +441,13 @@ final class NightRecorder {
 
     func tapThis(_ tuneID: Int, auto: Bool = false) {
         confirmed = tuneID
+        approved = auto ? nil : tuneID
         confirmedAfterMs = state?.tMs ?? 0
         changedFrom = nil
         send(ListenWire.tapThis(tuneID: tuneID, shown: state?.top.map(\.tuneID) ?? [], auto: auto))
         remember(tuneID)
-        logToNight(tuneID, auto: auto)
+        // a person's tap on the tune the meter already logged is its check
+        if !auto, logged == tuneID { checkLogged(tuneID) } else { logToNight(tuneID, auto: auto) }
     }
 
     /// The meter is sure (100%): it says "this is it" itself, as a person would, and the
@@ -450,6 +462,7 @@ final class NightRecorder {
             tapThis(pick.tune, auto: true)
         } else {
             confirmed = pick.tune
+            if approved != pick.tune { approved = nil }
             confirmedAfterMs = s.tMs
             changedFrom = nil
             remember(pick.tune)
@@ -483,17 +496,54 @@ final class NightRecorder {
         if logged == c {
             logged = nil
             loggedRow = nil
+            loggedAuto = false
             loggedAt[c] = nil
         }
         wrongTunes.insert(c)
         confirmed = nil
+        if approved == c { approved = nil }
         send(ListenWire.tapNone(shown: [c], why: "wrong"))
         meterLog.write("app", ListenWire.event("wrong_tune", ["tune_id": c, "t_ms": state?.tMs ?? 0]))
     }
 
-    /// "Tune changed": the confirmed tune was right and has ended. It stays logged; the
-    /// listener lets go of it at once (ruled out for a while, a wider search) instead of
-    /// waiting for its belief to fade, and the meter says so meanwhile.
+    /// "Right tune": a person says the confirmed tune is what's playing. The listener
+    /// holds on to it, as for a tapped name. In Log mode the row the meter logged is
+    /// confirmed (its own, or whoever's row in the latest set has the tune); a sure tune
+    /// not logged yet is logged, as the person's own.
+    func rightTune() {
+        guard let c = confirmed else { return }
+        approved = c
+        send(ListenWire.tapThis(tuneID: c, shown: state?.top.map(\.tuneID) ?? []))
+        meterLog.write("app", ListenWire.event("right_tune", ["tune_id": c, "t_ms": state?.tMs ?? 0]))
+        guard logsTo != nil else { return }
+        if logged == c { checkLogged(c) } else { logToNight(c) }
+    }
+
+    /// A person's check of the tune's row in the night.
+    private func checkLogged(_ tuneID: Int) {
+        guard let night else { return }
+        if let row = loggedRow {
+            if loggedAuto { night.confirmLogged(row) }
+            loggedAuto = false
+        } else if let log = night.log, let r = Self.latestSetRow(tuneID, log.ordered), r.isProvisional,
+            let id = r.recordID
+        {
+            night.confirmLogged(id)
+        }
+    }
+
+    /// The tune is logged to the night and no person has said it is right: logged by
+    /// the meter itself, here or on someone else's phone.
+    var loggedUnchecked: Bool {
+        guard let c = logged, approved != c else { return false }
+        if loggedRow != nil { return loggedAuto }
+        return night?.log.flatMap { Self.latestSetRow(c, $0.ordered) }?.isProvisional ?? false
+    }
+
+    /// "Next tune": the confirmed tune has ended and another is playing. It stays
+    /// logged, checked or not; the listener lets go of it at once (ruled out for a
+    /// while, a wider search) instead of waiting for its belief to fade, and the meter
+    /// says so meanwhile.
     func tuneChanged() {
         guard let c = confirmed else { return }
         let name = state?.top.first { $0.tuneID == c }?.name
@@ -528,7 +578,8 @@ final class NightRecorder {
     /// Add the tapped tune to the end of the night's log, by its thesession.org id, as the
     /// composer logs a pasted thesession link: the server links a tune Ceol has and imports
     /// one it hasn't. Only the id is sent; the name (as the meter shows it) is the row's
-    /// label until the server answers.
+    /// label until the server answers. `auto`: the meter logged it by itself, so the row
+    /// is provisional (source 'listen', confidence under 100) until a person checks it.
     private func logToNight(_ tuneID: Int, auto: Bool = false) {
         guard logged != tuneID, let night, let log = night.log else { return }
         let c = state?.top.first { $0.tuneID == tuneID }
@@ -537,15 +588,24 @@ final class NightRecorder {
         if Self.latestSetEndsWith(tuneID, log.ordered) {
             logged = tuneID
             loggedRow = nil  // not ours: "Wrong tune" leaves it for whoever logged it
+            loggedAuto = false
             loggedAt[tuneID] = Date()
             meterLog.write("app", ListenWire.event("already_logged", ["tune_id": tuneID, "auto": auto]))
+            // a person's tap on a tune someone's meter logged is the check it waited for
+            if !auto { checkLogged(tuneID) }
             return
         }
         let name: JSONValue = c?.name.map(JSONValue.string) ?? .null
+        var payload: [String: JSONValue] = ["thesession_id": JSONValue(tuneID), "name": name]
+        if auto {
+            payload["source"] = "listen"
+            payload["confidence"] = .number(Double(Self.provisionalConfidence))
+        }
         // by thesession.org id always: the listener names tunes from the whole of
         // thesession.org, and one of its popular picks may not be in Ceol's catalogue yet
         // (the server imports it; one it has is simply linked)
-        loggedRow = night.logTune(["thesession_id": JSONValue(tuneID), "name": name], at: .end)
+        loggedRow = night.logTune(payload, at: .end)
+        loggedAuto = auto && loggedRow != nil
         logged = tuneID
         loggedAt[tuneID] = Date()
         meterLog.write("app", ListenWire.event("logged", ["tune_id": tuneID, "outside": c?.outside == true, "auto": auto]))
@@ -555,6 +615,11 @@ final class NightRecorder {
     /// tune as its last or second-to-last tune. Rows still on their way from this phone
     /// carry no tune_id yet; `logged` covers those.
     nonisolated static func latestSetEndsWith(_ tuneID: Int, _ ordered: [LogRecord]) -> Bool {
+        latestSetRow(tuneID, ordered) != nil
+    }
+
+    /// That row (see latestSetEndsWith), if there is one.
+    nonisolated static func latestSetRow(_ tuneID: Int, _ ordered: [LogRecord]) -> LogRecord? {
         var latest: [LogRecord] = []
         for r in ordered.reversed() {
             if r.isBreak {
@@ -563,11 +628,12 @@ final class NightRecorder {
             }
             if r["record_type"] == .string("tune") { latest.append(r) }
         }
-        return latest.prefix(2).contains { $0["tune_id"]?.intValue == tuneID }
+        return latest.prefix(2).first { $0["tune_id"]?.intValue == tuneID }
     }
 
     func tapNone() {
         confirmed = nil
+        approved = nil
         send(ListenWire.tapNone(shown: state?.top.map(\.tuneID) ?? []))
     }
 

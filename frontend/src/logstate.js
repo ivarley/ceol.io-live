@@ -167,6 +167,14 @@ export function normName(s) {
 // notation index); re-exported here so the logger's own imports keep working unchanged.
 export { normAbc } from './shared/abcquery.js'
 
+// A provisional row: a machine logged it (the listener's meter at 100%, or the server
+// finding a night's tunes) and no person has checked it. Carried by `confidence`: a
+// machine's is under 100, a person's Confirm or correction makes it 100, and a
+// person's own entry has none.
+export function isProvisional(r) {
+  return !!r && r.confidence != null && r.confidence < 100
+}
+
 // The existing tune a PURE APPEND would collapse into, mirroring the server merge rule
 // (_find_corroboration_target §H30): same tune already live in the OPEN set (after the
 // last break) — by tune_id when linked, else by identical normalized name when unlinked.

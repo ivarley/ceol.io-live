@@ -728,6 +728,8 @@ struct EditableRow: View {
     var body: some View {
         let unlinked = !record["tune_id"].isTruthy
         let low = !record["_temp"].isTruthy && (record["confidence"]?.intValue).map { $0 <= 70 } ?? false
+        // a machine logged it and nobody has checked it (confidence under 100)
+        let unchecked = !record["_temp"].isTruthy && record.isProvisional
         let name = record["name"]?.stringValue ?? record["tune_id"]?.intValue.map { "#\($0)" } ?? tr("(unnamed)")
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
@@ -746,6 +748,9 @@ struct EditableRow: View {
                         .accessibilityIdentifier("row.offline")
                 } else if unlinked && !record["_temp"].isTruthy {
                     Text("⚠ unlinked").font(.ceol(size: 12, weight: .semibold)).foregroundStyle(CeolTokens.attention)
+                } else if unchecked {
+                    Text("not checked").font(.ceol(size: 12, weight: .medium)).foregroundStyle(CeolTokens.attention)
+                        .accessibilityIdentifier("row.unchecked")
                 }
                 if let play { TunePlayButton(playing: play.playing, paused: play.paused, action: play.action) }
                 // The tune's details in one tap (the web's ⓘ), in its logger's colour. Its
@@ -804,7 +809,7 @@ struct EditableRow: View {
             if selected {
                 HStack(spacing: 6) {
                     if record["tune_id"].isTruthy { action("ⓘ Info", id: "info", onInfo) }
-                    if low { action("✓ Confirm", id: "confirm", onConfirm) }
+                    if unchecked { action("✓ Confirm", id: "confirm", onConfirm) }
                     action("✎ Edit", id: "edit", onEdit)
                     action("🗑 Remove", id: "remove", onRemove, danger: true)
                 }

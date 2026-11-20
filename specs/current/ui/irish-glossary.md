@@ -262,9 +262,11 @@ which. Added 2026-10-10, not yet reviewed.
 | No tune playing | Níl fonn á sheinm | The meter's state when it hears talk, tuning or silence. |
 | Figuring out the tune… | Ag oibriú amach an fhoinn… | The meter's state while a tune plays and it isn't yet sure which. |
 | The tune may have changed (was …). | B'fhéidir gur athraigh an fonn (… a bhí ann). | |
-| Wrong tune | Fonn mícheart | A choice after tapping a tune the meter confirmed: it wasn't that tune. |
-| Tune changed | D'athraigh an fonn | The other choice: it was that tune, and it has ended. |
-| Tap the tune if it's wrong or has changed. | Tapáil an fonn má tá sé mícheart nó má d'athraigh sé. | Under a confirmed tune. |
+| Wrong tune | Fonn mícheart | The thumbs down under a tune the meter is sure of: it wasn't that tune. |
+| Right tune | Fonn ceart | The thumbs up under a tune the meter is sure of: a person's check. Added 2026-11-19, not yet reviewed. |
+| Next tune | An chéad fhonn eile | The "next track" button: the tune has ended, listen afresh. Replaced "Tune changed" (D'athraigh an fonn), 2026-11-19. Not yet reviewed. |
+| not checked | gan seiceáil | A tune the meter logged by itself that no person has confirmed (a provisional row). "Logáilte don oíche, gan seiceáil fós". Added 2026-11-19, not yet reviewed. |
+| thumbs up / thumbs down | ordóg suas / ordóg síos | Help page only: the buttons are icons. Added 2026-11-19, not yet reviewed. |
 | the decider (the part that names the tune) | an cinnteoir | Only in a server error: "Níorbh fhéidir sonraí an chinnteora a léamh" (the decider data could not be read). Developer-facing; a plainer word is welcome. |
 | format (of a file) | formáid | "Ní mór don fhormáid a bheith ina slánuimhir" (format must be a whole number). Developer-facing. |
 

@@ -335,5 +335,6 @@
   "%@ reinstated this session": "Chuir %@ an seisiún seo ar ais",
   "Cancelled": "Curtha ar ceal",
   "You're offline — cancelling needs a connection.": "Tá tú as líne — teastaíonn ceangal chun é a chur ar ceal.",
-  "Logging status": "Stádas logála"
+  "Logging status": "Stádas logála",
+  "not checked": "gan seiceáil"
 }

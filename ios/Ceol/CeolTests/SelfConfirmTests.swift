@@ -89,3 +89,27 @@ struct AlreadyLoggedTests {
         #expect(!NightRecorder.latestSetEndsWith(452, log))
     }
 }
+
+// A tune the meter logs by itself is provisional until a person checks it: its row's
+// confidence is under 100 (LogRecord.isProvisional), and "right tune" finds the row in
+// the latest set to confirm (NightRecorder.latestSetRow).
+struct ProvisionalTests {
+    func tune(_ id: Int, _ pos: String, confidence: Int? = nil) -> LogRecord {
+        .object(["session_instance_tune_id": .string("r\(pos)"), "record_type": "tune", "order_position": .string(pos),
+                 "tune_id": JSONValue(id), "deleted": false,
+                 "confidence": confidence.map { JSONValue($0) } ?? .null])
+    }
+
+    @Test func aMachinesRowIsProvisionalUntilAPersonsWord() {
+        #expect(tune(452, "a", confidence: NightRecorder.provisionalConfidence).isProvisional)
+        #expect(!tune(452, "a", confidence: 100).isProvisional)   // confirmed
+        #expect(!tune(452, "a").isProvisional)                     // a person's own entry
+    }
+
+    @Test func theLatestSetsRowForATune() {
+        let brk: LogRecord = .object(["session_instance_tune_id": "b", "record_type": "break", "order_position": "b"])
+        let log = [tune(748, "a"), brk, tune(452, "c", confidence: 99), tune(11, "d")]
+        #expect(NightRecorder.latestSetRow(452, log)?.isProvisional == true)
+        #expect(NightRecorder.latestSetRow(748, log) == nil)
+    }
+}

@@ -869,6 +869,7 @@ main.wide .hx-drawer {
 }
 .tune-row .name { display: inline; }
 .tune-row.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
+.row-unchecked { font-weight: 500; opacity: 0.85; } /* provisional: a machine logged it, nobody has checked it (confidence under 100) */
 /* pending/queued (offline) rows: dimmed with a dashed outline + a status label */
 .tune-row.pending { opacity: 0.72; border: 1px dashed var(--border); }
 .tune-row.queued { border-color: var(--attention); }

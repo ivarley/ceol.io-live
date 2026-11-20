@@ -5681,6 +5681,16 @@
         }
       }
     },
+    "Logged to the night, not checked yet": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Logáilte don oíche, gan seiceáil fós"
+          }
+        }
+      }
+    },
     "Logging": {
       "localizations": {
         "ga": {
@@ -8247,6 +8257,16 @@
         }
       }
     },
+    "Right tune": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Fonn ceart"
+          }
+        }
+      }
+    },
     "S3 refused the upload (%lld)": {
       "localizations": {
         "ga": {
@@ -9521,6 +9541,7 @@
       }
     },
     "Tap the tune if it's wrong or has changed.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -10105,6 +10126,7 @@
       }
     },
     "Tune changed": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11557,6 +11579,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "níor taifeadadh aon sonra"
+          }
+        }
+      }
+    },
+    "not checked": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gan seiceáil"
           }
         }
       }

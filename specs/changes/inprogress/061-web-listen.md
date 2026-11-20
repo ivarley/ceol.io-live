@@ -172,8 +172,9 @@ It streams through stage 2's capture and link (`frontend/src/listentest/`).
   status and, while To Learn, its heard count (My Tunes ops). "Open the tune" opens
   the app-wide tune sheet, or thesession.org for a tune Ceol doesn't hold yet: the
   listener knows every thesession.org tune, and Ceol imports one only when someone
-  adds it. Wrong tune and Tune changed are buttons under the sure tune, not behind a
-  tap on it.
+  adds it. Under the sure tune are three buttons (2026-11-19, spec 059 "Three buttons
+  under the sure tune"): thumbs down (wrong tune), thumbs up (right tune) and next
+  (the tune has changed). The tune's name opens the tune; "Open the tune" is gone.
 - **Recent Tunes Heard**, at the bottom: the last 50 tunes it was sure of, the same
   tune again within ten minutes counting once, kept in the browser (`localStorage`).
   A row opens the tune.
@@ -227,7 +228,11 @@ logger's own ops, offline queue and live updates.
   is logged by itself twice within ten minutes. Before logging, the night's latest set
   is checked (`latestSetEndsWith`), and also the logger's own merge rule for the open
   set (`openSetMergeTarget`): a tune already there is treated as logged, with no row.
-  "Wrong tune" takes back the row this page added (cancelled if still queued). Three
+  "Wrong tune" takes back the row this page added (cancelled if still queued). A tune
+  logged by itself is provisional (spec 059 "Provisional tunes": `onLog`'s `auto`, the
+  add carries `source: 'listen', confidence: 99`), and the thumbs up confirms it
+  (`onConfirm`, the logger's `listenConfirm`; a row still queued offline goes as the
+  person's own entry instead). Three
   states of no tune with the log ending in a tune offer "End the set", and end it by
   themselves with the switch on.
 - **The rows** are `add_tune` ops at the very end of the log whatever the cursor

@@ -19,6 +19,11 @@ extension JSONValue {
     public var recordID: RecordID? { RecordID(self["session_instance_tune_id"]) }
     var orderPosition: String? { self["order_position"]?.stringValue }
     public var isBreak: Bool { self["record_type"] == .string("break") }
+    /// A provisional row: a machine logged it (the meter at 100%, or the server finding
+    /// a night's tunes) and no person has checked it. Carried by `confidence`: a
+    /// machine's is under 100, a person's Confirm or correction makes it 100, and a
+    /// person's own entry has none. (The web's isProvisional, logstate.js.)
+    public var isProvisional: Bool { self["confidence"]?.intValue.map { $0 < 100 } ?? false }
 }
 
 /// Where the insertion cursor stands (the JS `insertAfterId`): the end of the log,

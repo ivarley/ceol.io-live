@@ -9,6 +9,8 @@ Fixtures are committed in the 952xx block, since the HTTP calls open their own
 connections; teardown deletes them.
 """
 
+import uuid
+
 import pytest
 
 SESSION = 95200
@@ -362,6 +364,20 @@ def test_the_admin_page_lists_jobs_and_the_undo_takes_back_only_whats_unchecked(
             "session_instance_tune_id"
         ]
         client.post(f"/api/recordings/{REC}/segments/{confirmed}/confirm")
+        # a tune a live meter logged by itself (spec 059: provisional, no model) is
+        # not the job's to take back
+        live = client.post(
+            f"/api/live/instances/{NIGHT}/ops",
+            json={
+                "op_id": str(uuid.uuid4()),
+                "op_type": "add_tune",
+                "tune_id": OTHER,
+                "source": "listen",
+                "confidence": 99,
+                "no_merge": True,
+            },
+        ).get_json()
+        assert live["record"]["confidence"] == 99
         undone = client.post(f"/api/recordings/{REC}/find-tunes/undo").get_json()
         assert undone["removed"] == 1
-        assert [t["tune_id"] for t in undone["tunes"]] == [KNOWN]
+        assert [t["tune_id"] for t in undone["tunes"]] == [KNOWN, OTHER]

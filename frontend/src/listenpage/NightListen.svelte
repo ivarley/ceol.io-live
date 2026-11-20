@@ -11,7 +11,11 @@
   //     tune (last or second-to-last), someone else logged it, and no row is added;
   //   - the tune logged last, sure again, is not logged twice, and no tune is logged by
   //     itself twice within ten minutes;
-  //   - "Wrong tune" takes back the row this page added (not someone else's);
+  //   - a tune it logs by itself is provisional: logged, but no person has checked it
+  //     (onLog's `auto`; the row's confidence is under 100). Under the sure tune are
+  //     three taps: wrong tune takes back the row this page added (not someone
+  //     else's); right tune is a person's check (onConfirm: the row is confirmed, or
+  //     the tune is logged if it wasn't); next tune says it has ended;
   //   - a long enough stretch of no tune ends the set (by itself with the switch on,
   //     or with "End the set").
   // "Stop logging" goes on listening in Ad-hoc mode: the sure tune's place in your
@@ -26,7 +30,8 @@
   import { onDestroy } from 'svelte'
   import { Dialog, Sheet } from '../lib/index.js'
   import { t, tc } from '../lib/i18n/index.js'
-  import { latestSetEndsWith } from './meter.js'
+  import { isProvisional } from '../logstate.js'
+  import { latestSetEndsWith, latestSetRow } from './meter.js'
   import { Listening, clock, openTune as openTuneSheet } from './listening.svelte.js'
   import MeterView from './MeterView.svelte'
   import TunebookBox from './TunebookBox.svelte'
@@ -38,8 +43,9 @@
     ordered = [], // the night's rows in order, as the logger shows them
     canLog = true, // may log to this night now (signed in with the right, not marked complete)
     canRecord = false, // may file a recording under this night (manages the session's recordings)
-    onLog = () => null, // (tune) => {row} | {already: true} | null
+    onLog = () => null, // (tune, {auto}) => {row} | {already: true} | null; auto: the meter's own, provisional
     onRemove = () => {}, // (row) the row this page added
+    onConfirm = () => {}, // (row | null, tuneId) a person's check: the row this page added, or whoever's row has the tune
     onEndSet = () => {},
     running = $bindable(false), // the microphone is on
     logging = $bindable(false), // Log mode
@@ -70,7 +76,7 @@
 
   const listening = new Listening({
     onSure: (pick) => {
-      if (pick.log && logsAt100 && logging) logTune(pick.tune)
+      if (pick.log && logsAt100 && logging) logTune(pick.tune, true)
     },
     onState: () => {
       if (logsAt100 && logging && listening.meter.canEndSet(ordered)) onEndSet()
@@ -116,26 +122,37 @@
     open = true
   }
 
-  function logTune(c) {
+  /** Log the tune to the night. `auto`: the meter did it by itself, so the row is
+   * provisional; a person's tap logs it as theirs. */
+  function logTune(c, auto = false) {
     const meter = listening.meter
     if (!logging || meter.logged === c.tune_id) return
     failed = ''
     if (latestSetEndsWith(c.tune_id, ordered)) {
       meter.markLogged(c.tune_id, null)
+      // a person's tap on a tune someone's meter logged is the check it was waiting for
+      if (!auto) onConfirm(null, c.tune_id)
     } else {
-      const r = onLog({ tune_id: c.tune_id, name: c.name || null, type: c.type || null })
+      const r = onLog({ tune_id: c.tune_id, name: c.name || null, type: c.type || null }, { auto })
       if (!r) {
         failed = t("That wasn't logged. Try again.")
         return
       }
-      meter.markLogged(c.tune_id, r.already ? null : r.row)
+      meter.markLogged(c.tune_id, r.already ? null : r.row, Date.now(), auto)
     }
     listening.version++
   }
 
   function tapThis(c) {
-    listening.send(listening.meter.tapThis(c.tune_id))
-    logTune(c)
+    const meter = listening.meter
+    const row = meter.loggedRow
+    const wasLogged = meter.logged === c.tune_id
+    listening.send(meter.tapThis(c.tune_id))
+    // a person's tap on the tune the meter already logged is its check
+    if (wasLogged && logging) {
+      meter.loggedAuto = false
+      onConfirm(row, c.tune_id)
+    } else logTune(c)
   }
 
   function wrong() {
@@ -143,6 +160,21 @@
     const row = meter.confirmed != null && meter.confirmed === meter.logged ? meter.loggedRow : null
     listening.send(meter.wrongTune())
     if (row) onRemove(row)
+  }
+
+  /** "Right tune": a person's check. The row it logged is confirmed (or whoever's row
+   * has the tune); a sure tune not logged yet is logged, as theirs. */
+  function right() {
+    const meter = listening.meter
+    const c = meter.confirmed
+    if (c == null) return
+    const tune = { tune_id: c, name: meter.confirmedName, type: meter.confirmedType }
+    const row = meter.loggedRow
+    const wasLogged = meter.logged === c
+    listening.send(meter.rightTune())
+    if (!logging) return
+    if (wasLogged) onConfirm(row, c)
+    else logTune(tune)
   }
 
   function stopLogging() {
@@ -180,6 +212,12 @@
       headline,
       sureId: meter.confirmed,
       logged: meter.logged,
+      // logged, and no person has said it is right: by this page itself, or by
+      // someone else's meter
+      unchecked:
+        meter.logged != null &&
+        meter.approved !== meter.logged &&
+        (meter.loggedRow != null ? meter.loggedAuto : isProvisional(latestSetRow(meter.logged, ordered))),
       canEndSet: logging && meter.canEndSet(ordered),
     }
   })
@@ -232,7 +270,7 @@
       {:else if listening.recording === 'refused'}
         <p class="lp-error" id="nl-not-recording">{t("This night isn't being recorded: Ceol's server couldn't add it to the night's recordings.")}</p>
       {/if}
-      <MeterView {listening} night onTapThis={tapThis} onWrong={wrong}>
+      <MeterView {listening} night onTapThis={tapThis} onWrong={wrong} onRight={right} onOpen={openTune}>
         {#snippet noTune()}
           {#if view.canEndSet}
             <button type="button" class="lp-action" id="nl-endset-big" onclick={onEndSet}>{t('End the set')}</button>
@@ -241,7 +279,11 @@
         {#snippet sure(tune)}
           {#if logging}
             {#if view.logged === tune.id}
-              <p class="nl-logged" id="nl-logged">✓ {t('Logged to the night')}</p>
+              {#if view.unchecked}
+                <p class="nl-logged is-unchecked" id="nl-logged">{t('Logged to the night, not checked yet')}</p>
+              {:else}
+                <p class="nl-logged" id="nl-logged">✓ {t('Logged to the night')}</p>
+              {/if}
             {:else}
               <button type="button" class="lp-action" id="nl-log" onclick={() => logTune({ tune_id: tune.id, name: tune.name, type: tune.type })}>{t('Log This Tune')}</button>
             {/if}
@@ -250,7 +292,6 @@
             {#key tune.id}
               <TunebookBox tuneId={tune.id} />
             {/key}
-            <button type="button" class="lp-link" id="nl-open-tune" onclick={() => openTune(tune.id)}>{t('Open the tune')}</button>
             {#if elsewhere}
               <p class="lp-note"><a href={elsewhere} target="_blank" rel="noopener">{t('Open this tune on thesession.org')}</a></p>
             {/if}
@@ -370,6 +411,9 @@
     margin: 0 0 8px;
     font-weight: 600;
     color: var(--success, #65b464);
+  }
+  .nl-logged.is-unchecked {
+    color: var(--attention, #e0b341);
   }
   .nl-option {
     display: flex;

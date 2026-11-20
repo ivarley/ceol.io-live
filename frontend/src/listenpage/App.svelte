@@ -138,7 +138,7 @@
       {phase === 'starting' ? t('Starting…') : t('Start Listening')}
     </button>
   {:else}
-    <MeterView {listening} night={!!context && context.kind === 'night'} onTapThis={tapThis}>
+    <MeterView {listening} night={!!context && context.kind === 'night'} onTapThis={tapThis} onOpen={openTune}>
       {#snippet sure(tune)}
         {#key tune.id}
           <TunebookBox tuneId={tune.id} />
@@ -154,7 +154,6 @@
           </button>
           {#if actionError}<p class="lp-error" role="alert">{actionError}</p>{/if}
         {/if}
-        <button type="button" class="lp-link" id="lp-open" onclick={() => openTune(tune.id)}>{t('Open the tune')}</button>
       {/snippet}
     </MeterView>
   {/if}

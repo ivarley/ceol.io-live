@@ -3,7 +3,9 @@
   // The certainty meter as the iPhone shows it (spec 061), for the Listen page and a
   // night's logger alike: the clock and the link, then one main state: starting up,
   // no tune playing, figuring out the tune (the candidates, any of which can be
-  // tapped, and "None of these"), or sure of it, with "Wrong tune" and "Tune changed".
+  // tapped, and "None of these"), or sure of it. Under the sure tune are three taps:
+  // wrong tune (thumbs down), right tune (thumbs up: a person's check) and next tune
+  // (it has ended, listen afresh). Its name opens the tune.
   // What a tap leads to is the page's: it passes the handlers, and `sure` (what goes
   // under the sure tune) and `noTune` (under "No tune playing").
   import { t, formatNumber, tuneTypeName } from '../lib/i18n/index.js'
@@ -16,7 +18,9 @@
     onTapThis = (c) => listening.send(listening.meter.tapThis(c.tune_id)),
     onTapNone = () => listening.send(listening.meter.tapNone()),
     onWrong = () => listening.send(listening.meter.wrongTune()),
+    onRight = () => listening.send(listening.meter.rightTune()),
     onChanged = () => listening.send(listening.meter.tuneChanged()),
+    onOpen = null, // (tuneId) the sure tune's name was tapped
     sure = null,
     noTune = null,
   } = $props()
@@ -39,6 +43,7 @@
       sureName: meter.confirmedName || (sureId != null ? t('Tune {id}', { id: sureId }) : ''),
       sureType: meter.confirmedType,
       sureNew: !!(mine && mine.outside && night),
+      approved: sureId != null && meter.approved === sureId,
     }
   })
 
@@ -88,15 +93,26 @@
     <div class="lp-sure" id="lp-sure">
       <svg class="lp-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M7.5 12.5l3 3 6-6.5" /></svg>
       <span class="lp-sure-text">
-        <span class="lp-sure-name" id="lp-sure-name">{view.sureName}</span>
+        {#if onOpen}
+          <button type="button" class="lp-sure-name lp-sure-open" id="lp-sure-name" onclick={() => onOpen(view.sureId)}>{view.sureName}</button>
+        {:else}
+          <span class="lp-sure-name" id="lp-sure-name">{view.sureName}</span>
+        {/if}
         {#if view.sureType || view.sureNew}
           <span class="lp-row-meta">{[tuneTypeName(view.sureType), view.sureNew ? t('new to this session') : null].filter(Boolean).join(' · ')}</span>
         {/if}
       </span>
     </div>
     <div class="lp-sure-taps">
-      <button type="button" id="lp-wrong" onclick={onWrong}>{t('Wrong tune')}</button>
-      <button type="button" id="lp-changed" onclick={onChanged}>{t('Tune changed')}</button>
+      <button type="button" id="lp-wrong" title={t('Wrong tune')} aria-label={t('Wrong tune')} onclick={onWrong}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3H8.3a2 2 0 0 0-1.9 1.4l-2.3 7A2 2 0 0 0 6 14h4.5l-.8 3.6a2 2 0 0 0 2 2.4L17 14zM17 3h3v11h-3" /></svg>
+      </button>
+      <button type="button" id="lp-right" class:is-on={view.approved} title={t('Right tune')} aria-label={t('Right tune')} aria-pressed={view.approved} onclick={onRight}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11h8.7a2 2 0 0 0 1.9-1.4l2.3-7A2 2 0 0 0 18 10h-4.5l.8-3.6a2 2 0 0 0-2-2.4L7 10zM7 21H4V10h3" /></svg>
+      </button>
+      <button type="button" id="lp-changed" title={t('Next tune')} aria-label={t('Next tune')} onclick={onChanged}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7V5zM18 5v14" /></svg>
+      </button>
     </div>
     {@render sure?.({ id: view.sureId, name: view.sureName, type: view.sureType })}
   {/if}

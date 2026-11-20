@@ -388,18 +388,23 @@ def _corroborate(cur, session_instance_id, target_id, data, user_id):
         """,
         (target_id, user_id, source, data.get("confidence")),
     )
-    # Two distinct actors agreeing on the same tune/slot = human-verified.
     cur.execute(
         "SELECT COUNT(DISTINCT user_id) FROM corroboration WHERE record_id = %s",
         (target_id,),
     )
     distinct_corroborators = cur.fetchone()[0]
-    save_to_history(cur, "session_instance_tune", "UPDATE", target_id, user_id=user_id)
-    cur.execute(
-        "UPDATE session_instance_tune SET confidence = 100, confidence_model = NULL, last_modified_user_id = %s "
-        "WHERE session_instance_tune_id = %s",
-        (user_id, target_id),
-    )
+    # A person adding the same tune = human-verified. A machine's add (a second phone's
+    # meter logging what it heard) is not a person's check: a provisional row
+    # (confidence under 100) stays provisional until someone confirms it.
+    if source == "human":
+        save_to_history(
+            cur, "session_instance_tune", "UPDATE", target_id, user_id=user_id
+        )
+        cur.execute(
+            "UPDATE session_instance_tune SET confidence = 100, confidence_model = NULL, last_modified_user_id = %s "
+            "WHERE session_instance_tune_id = %s",
+            (user_id, target_id),
+        )
     return {
         "_op_type": "corroborate",
         "record": _reselect(cur, target_id),

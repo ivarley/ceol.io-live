@@ -323,10 +323,6 @@
     "ga": "Fonn mícheart",
     "review": true
   },
-  "Tune changed": {
-    "ga": "D'athraigh an fonn",
-    "review": true
-  },
   "Tune {id}": {
     "ga": "Fonn {id}",
     "review": true
@@ -337,10 +333,6 @@
   },
   "Added to this session's tune list": {
     "ga": "Curtha le liosta fonn an tseisiúin seo",
-    "review": true
-  },
-  "Open the tune": {
-    "ga": "Oscail an fonn",
     "review": true
   },
   "Shown so far": {
@@ -471,6 +463,18 @@
   },
   "The recording so far is added to this night's recordings.": {
     "ga": "Cuirtear an méid atá taifeadta go dtí seo le taifeadtaí na hoíche seo.",
+    "review": true
+  },
+  "Right tune": {
+    "ga": "Fonn ceart",
+    "review": true
+  },
+  "Next tune": {
+    "ga": "An chéad fhonn eile",
+    "review": true
+  },
+  "Logged to the night, not checked yet": {
+    "ga": "Logáilte don oíche, gan seiceáil fós",
     "review": true
   }
 }

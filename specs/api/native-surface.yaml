@@ -1036,7 +1036,10 @@ components:
         order_position: { type: string }
         record_type: { type: string }
         source: { type: [string, "null"] }
-        # 0-100, how sure an automatic source was; the live logger writes 100.
+        # 0-100, how sure an automatic source was. Under 100 the row is provisional: a
+        # machine logged it (source 'listen') and no person has checked it. A person's
+        # check (set_confidence, or correcting the tune) makes it 100; a person's own
+        # entry has null.
         confidence: { type: [integer, "null"] }
         # which calibration model made a machine's `confidence` (spec 053, schema 060);
         # null when a person logged or confirmed the tune

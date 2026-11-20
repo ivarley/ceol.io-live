@@ -558,6 +558,15 @@ final class NightModel {
         remove(l.resolve(id))
     }
 
+    /// A person's check of a row `logTune` added, by the id it returned (as
+    /// `removeLogged` follows it): a provisional row is confirmed. A row not answered
+    /// yet is confirmed where it stands; the op goes with the real id.
+    func confirmLogged(_ id: RecordID) {
+        guard var l = log, let op = l.confirm(l.resolve(id)) else { return }
+        log = l
+        enqueue([op])
+    }
+
     func remove(_ id: RecordID) {
         guard var l = log else { return }
         if selected == id { selected = nil }

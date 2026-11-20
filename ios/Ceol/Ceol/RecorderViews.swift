@@ -272,8 +272,8 @@ struct ListenMeterView: View {
     @Environment(AppModel.self) private var app
     let recorder: NightRecorder
     var context = ListenContext()
-    /// The confirmed tune was tapped: "Wrong tune" or "Tune changed".
-    @State private var correcting = false
+    /// The sure tune's name was tapped: its sheet.
+    @State private var openTune: TuneRef?
     /// "Stop logging": asked to be sure.
     @State private var confirmingStopLogging = false
     /// The options, opened (folded away each time the meter opens).
@@ -501,12 +501,13 @@ struct ListenMeterView: View {
     }
 
     /// Sure of the tune (100%, or a person said so): just that tune, a green check to its
-    /// left. Tapping it says it was wrong, or has ended.
+    /// left; tapping it opens the tune. Under it, three taps: wrong tune, right tune (a
+    /// person's check of what the meter logged) and next tune (it has ended).
     private func sure(_ c: Int) -> some View {
         let candidate = recorder.state?.top.first { $0.tuneID == c }
         let name = candidate?.name ?? tr("Tune \(c)")
         return VStack(alignment: .leading, spacing: 8) {
-            Button { correcting = true } label: {
+            Button { openTune = TuneRef(id: c, name: name, type: candidate?.type, statusKnown: false) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30)).foregroundStyle(CeolTokens.success)
@@ -528,13 +529,22 @@ struct ListenMeterView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("meter.sure")
-            .confirmationDialog(name, isPresented: $correcting, titleVisibility: .visible) {
-                Button("Wrong tune", role: .destructive) { recorder.wrongTune() }
-                Button("Tune changed") { recorder.tuneChanged() }
+            .sheet(item: $openTune) { TuneSheet(tune: $0) }
+            HStack(spacing: 8) {
+                sureTap("hand.thumbsdown", tr("Wrong tune"), id: "meter.wrong", tint: CeolTokens.danger) { recorder.wrongTune() }
+                sureTap(recorder.approved == c ? "hand.thumbsup.fill" : "hand.thumbsup", tr("Right tune"), id: "meter.right",
+                        tint: CeolTokens.success, on: recorder.approved == c) { recorder.rightTune() }
+                sureTap("forward.end", tr("Next tune"), id: "meter.next", tint: CeolTokens.textColor) { recorder.tuneChanged() }
             }
             if recorder.logged == c {
-                Label("Logged to the night", systemImage: "checkmark")
-                    .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
+                if recorder.loggedUnchecked {
+                    Text("Logged to the night, not checked yet")
+                        .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.attention)
+                        .accessibilityIdentifier("meter.unchecked")
+                } else {
+                    Label("Logged to the night", systemImage: "checkmark")
+                        .font(.ceol(size: 13, weight: .semibold)).foregroundStyle(CeolTokens.success)
+                }
             } else if recorder.isLogging {
                 // sure, but not logged by itself (the switch off, or logged lately): by hand
                 Button { recorder.tapThis(c) } label: {
@@ -546,10 +556,24 @@ struct ListenMeterView: View {
                 .tint(CeolTokens.primaryFill)
                 .accessibilityIdentifier("meter.log")
             }
-            Text("Tap the tune if it's wrong or has changed.")
-                .font(.ceol(size: 13)).foregroundStyle(CeolTokens.textMuted)
             if !recorder.isLogging { sureActions(c, name: name, type: candidate?.type) }
         }
+    }
+
+    /// One of the three taps under the sure tune: an icon, named for VoiceOver.
+    private func sureTap(_ icon: String, _ label: String, id: String, tint: Color, on: Bool = false,
+                         _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 24)).foregroundStyle(tint)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(on ? tint.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(on ? tint : CeolTokens.borderColor, lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier(id)
     }
 
     /// What to do with a tune it is sure of when no night is being logged (spec 059):

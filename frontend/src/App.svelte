@@ -23,8 +23,9 @@
     maxPos, cursorPos, remapAnchors, wireBody, normName,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor, cursorAtClosedSetEnd,
-    rememberInHistory, historyStep, nextTs, recordChanges, metaChanges,
+    rememberInHistory, historyStep, nextTs, recordChanges, metaChanges, isProvisional,
   } from './logstate.js'
+  import { latestSetRow, PROVISIONAL_CONFIDENCE } from './listenpage/meter.js'
   import {
     dragBlock, dropTargets, optimisticMove,
     serializeClipboard, parseClipboard, rangeBetween, selectableIds,
@@ -2095,6 +2096,11 @@
     else setCursor({ before: id })
   }
   function confirmRow(id) {
+    sendConfirm(id)
+    selectedId = null
+  }
+  // Confirm: a person's check of a provisional row (a machine logged it).
+  function sendConfirm(id) {
     // Optimistic + offline-queued (like change/remove/set-starter): patch confidence,
     // reconcile by op_id, undo on reject. Works offline via trySend's queue (§G).
     const prev = byId.get(id)
@@ -2102,7 +2108,6 @@
     const op_id = crypto.randomUUID()
     flashId(id)
     trySend({ op_id, op_type: 'set_confidence', payload: { record_id: id, confidence: 100 }, status: 'sending', ts: nextTs(), prev })
-    selectedId = null
   }
   function removeRow(id) {
     removeTune(id)
@@ -3186,22 +3191,53 @@
 
   // A tune the meter is sure of, by its thesession.org id (the server imports one Ceol
   // doesn't hold yet). Returns the new row's id, or {already} when the open set has it
-  // already (the server would merge the add into it, §H30).
-  function listenLog(tune) {
+  // already (the server would merge the add into it, §H30). `auto`: the meter logged it
+  // by itself, so the row is provisional (source 'listen', confidence under 100) until
+  // a person checks it.
+  function listenLog(tune, { auto = false } = {}) {
     const payload = { tune_id: tune.tune_id, name: tune.name || t('Tune {id}', { id: tune.tune_id }), tune_type: tune.type }
     if (openSetMergeTarget(payload, ordered)) return { already: true }
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
+    const machine = auto ? { source: 'listen', confidence: PROVISIONAL_CONFIDENCE } : {}
     byId.set(tempId, {
       session_instance_tune_id: tempId, name: payload.name, tune_id: tune.tune_id, tune_type: tune.type ?? null,
       record_type: 'tune', order_position: generateAppend(maxPos(byId.values())), deleted: false, _temp: true, _status: 'sending',
     })
     trySend({
       op_id, name: payload.name, op_type: 'add_tune',
-      payload: { thesession_id: tune.tune_id, name: payload.name, after_record_id: null, before_record_id: null },
+      payload: { thesession_id: tune.tune_id, name: payload.name, after_record_id: null, before_record_id: null, ...machine },
       status: 'sending', ts: nextTs(), tempId,
     })
     return { row: tempId }
+  }
+
+  // "Right tune": a person's check of a tune the meter logged. `row` is the row this
+  // page's meter added (still on its way, it is confirmed once the server has given it
+  // its id), or null for whoever's row in the latest set has the tune.
+  function listenConfirm(row, tuneId, tries = 0) {
+    if (row == null) {
+      const r = latestSetRow(tuneId, ordered)
+      if (r && !r._temp && isProvisional(r)) sendConfirm(r.session_instance_tune_id)
+      return
+    }
+    const real = typeof row === 'string' && row.startsWith('temp-') ? tempToReal.get(row) : row
+    if (real != null) {
+      if (isProvisional(byId.get(real))) sendConfirm(real)
+      return
+    }
+    // Not sent yet (offline): it goes as the person's own entry instead.
+    const queued = [...pending.values()].find((e) => e.tempId === row && e.status === 'queued')
+    if (queued) {
+      const { source, confidence, ...rest } = queued.payload
+      queued.payload = rest
+      queuePut({
+        op_id: queued.op_id, op_type: queued.op_type, payload: rest,
+        name: queued.name, ts: queued.ts, session_instance_id: config.sessionInstanceId,
+      })
+      return
+    }
+    if (tries < 20) setTimeout(() => listenConfirm(row, tuneId, tries + 1), 500)
   }
 
   // "Wrong tune": the row the meter logged comes back out. Still on its way, it is
@@ -4122,6 +4158,7 @@
               <span class="actions"><span class="spinner"></span><span class="pend-label">{t('removing')}</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>{t('Restore')}</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title={t('Not linked to a catalog tune')}>⚠ {t('unlinked')}</span>{/if}
+              {#if isProvisional(r)}<span class="row-warn row-unchecked" title={t('The listener logged this tune. Nobody has checked it yet.')}>{t('not checked')}</span>{/if}
               <!-- Hear this tune. Deliberately NOT gated on canEdit (unlike ⓘ): playing
                    back is reading, so it survives view and search mode. Only the marks
                    gate it — a tune nobody timestamped has no button at all. -->
@@ -4206,7 +4243,7 @@
             {:else}
             <div class="row-actions">
               {#if r.tune_id}<button onclick={() => openDrawer(r)}>ⓘ {t('Info')}</button>{/if}
-              {#if r.confidence != null && r.confidence <= 70}
+              {#if isProvisional(r)}
                 <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ {t('Confirm')}</button>
               {/if}
               <button onclick={() => startEdit(r.session_instance_tune_id)}>✎ {t('Edit')}</button>
@@ -4317,6 +4354,7 @@
         canRecord={canManageRecordings}
         onLog={listenLog}
         onRemove={listenRemove}
+        onConfirm={listenConfirm}
         onEndSet={endSet} />
     {/if}
     {#if playQ}

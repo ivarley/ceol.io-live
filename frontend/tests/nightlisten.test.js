@@ -6,7 +6,7 @@
 // and the strip that says it is listening.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/svelte'
-import { Meter, latestSetEndsWith, RELOG_AFTER_MS } from '../src/listenpage/meter.js'
+import { Meter, latestSetEndsWith, latestSetRow, RELOG_AFTER_MS } from '../src/listenpage/meter.js'
 
 const tune = (tune_id, p, extra = {}) => ({ tune_id, name: `Tune ${tune_id}`, type: 'reel', p, outside: false, ...extra })
 const st = (t_ms, top, extra = {}) => ({ type: 'state', status: 'listening', t_ms, top, none: 0.1, shown: top[0] ? top[0].tune_id : null, history: [], ...extra })
@@ -50,6 +50,32 @@ describe('the meter in Log mode', () => {
     expect(m.logged).toBeNull()
     expect(m.loggedRow).toBeNull()
     expect(m.loggedAt.has(1)).toBe(false)
+  })
+
+  it('a tune logged by itself is provisional until a person says it is right', () => {
+    const m = new Meter()
+    m.received(st(4000, [tune(1, 0.996)]), 0)
+    m.markLogged(1, 'temp-a', 0, true)
+    expect(m.loggedAuto).toBe(true)
+    expect(m.approved).toBeNull()
+    expect(m.rightTune()).toEqual({ type: 'tap', action: 'this', tune_id: 1, shown: [1] })
+    expect(m.approved).toBe(1)
+    expect(m.loggedAuto).toBe(false)
+    expect(m.showing).toBe('sure')
+  })
+
+  it('a tapped candidate is a person\'s word already', () => {
+    const m = new Meter()
+    m.received(st(4000, [tune(1, 0.6), tune(2, 0.3)]), 0)
+    m.tapThis(2)
+    expect(m.approved).toBe(2)
+    m.wrongTune()
+    expect(m.approved).toBeNull()
+  })
+
+  it('finds the row of a tune in the latest set', () => {
+    expect(latestSetRow(7, [row(1, 5), brk(2), row(3, 7), row(4, 8)])).toMatchObject({ session_instance_tune_id: 3 })
+    expect(latestSetRow(5, [row(1, 5), brk(2), row(3, 7)])).toBeNull()
   })
 
   it('can end the set after three states of no tune, when the log ends with a tune', () => {
@@ -121,7 +147,7 @@ function stubStorage() {
 }
 
 describe('NightListen', () => {
-  let onLog, onRemove, onEndSet
+  let onLog, onRemove, onEndSet, onConfirm
   beforeEach(() => {
     links.length = 0
     stubStorage()
@@ -129,6 +155,7 @@ describe('NightListen', () => {
     onLog = vi.fn(() => ({ row: `temp-${++n}` }))
     onRemove = vi.fn()
     onEndSet = vi.fn()
+    onConfirm = vi.fn()
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -136,7 +163,7 @@ describe('NightListen', () => {
   })
 
   async function begin(props = {}) {
-    const r = render(NightListen, { props: { instanceId: 90, title: 'Mueller, Sun 1 Feb', ordered: [], onLog, onRemove, onEndSet, ...props } })
+    const r = render(NightListen, { props: { instanceId: 90, title: 'Mueller, Sun 1 Feb', ordered: [], onLog, onRemove, onEndSet, onConfirm, ...props } })
     await r.component.begin()
     await waitFor(() => expect(document.querySelector('#nl-strip')).toBeTruthy())
     return r
@@ -153,9 +180,49 @@ describe('NightListen', () => {
     expect(links[0].instanceId).toBe(90)
     expect(document.querySelector('#nl-logging').textContent).toContain('Logging tunes to Mueller, Sun 1 Feb')
     await hear(st(4000, [tune(7, 0.996)]))
-    expect(onLog).toHaveBeenCalledWith({ tune_id: 7, name: 'Tune 7', type: 'reel' })
+    expect(onLog).toHaveBeenCalledWith({ tune_id: 7, name: 'Tune 7', type: 'reel' }, { auto: true })
     await waitFor(() => expect(document.querySelector('#nl-logged')).toBeTruthy())
     expect(document.querySelector('#nl-strip').textContent).toContain('Tune 7')
+  })
+
+  it('a tune logged by itself is not checked until thumbs up, which confirms its row', async () => {
+    await begin()
+    await hear(st(4000, [tune(7, 0.996)]))
+    await waitFor(() => expect(document.querySelector('#nl-logged').textContent).toContain('not checked yet'))
+    expect(document.querySelector('#lp-right').getAttribute('aria-pressed')).toBe('false')
+    await fireEvent.click(document.querySelector('#lp-right'))
+    expect(onConfirm).toHaveBeenCalledWith('temp-1', 7)
+    expect(links[0].sent.at(-1)).toMatchObject({ type: 'tap', action: 'this', tune_id: 7 })
+    await waitFor(() => expect(document.querySelector('#nl-logged').textContent).not.toContain('not checked yet'))
+    expect(document.querySelector('#lp-right').getAttribute('aria-pressed')).toBe('true')
+    expect(onLog).toHaveBeenCalledTimes(1)
+  })
+
+  it('thumbs up on a tune someone else\'s meter logged confirms their row', async () => {
+    await begin({ ordered: [{ ...row(1, 7), source: 'listen', confidence: 99 }] })
+    await hear(st(4000, [tune(7, 0.996)]))
+    await waitFor(() => expect(document.querySelector('#nl-logged').textContent).toContain('not checked yet'))
+    await fireEvent.click(document.querySelector('#lp-right'))
+    expect(onConfirm).toHaveBeenCalledWith(null, 7)
+    expect(onLog).not.toHaveBeenCalled()
+  })
+
+  it('with the switch off, thumbs up logs the tune as the person\'s own', async () => {
+    await begin()
+    await fireEvent.click(document.querySelector('#nl-auto'))
+    await hear(st(4000, [tune(7, 0.996)]))
+    await fireEvent.click(document.querySelector('#lp-right'))
+    expect(onLog).toHaveBeenCalledWith(expect.objectContaining({ tune_id: 7 }), { auto: false })
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  it('"next tune" lets go of the tune and leaves its row', async () => {
+    await begin()
+    await hear(st(4000, [tune(7, 0.996)]))
+    await fireEvent.click(document.querySelector('#lp-changed'))
+    expect(links[0].sent.at(-1)).toMatchObject({ action: 'none', shown: [7], why: 'changed' })
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(onConfirm).not.toHaveBeenCalled()
   })
 
   it('leaves a tune someone else has just logged', async () => {
@@ -181,8 +248,9 @@ describe('NightListen', () => {
     await waitFor(() => expect(document.querySelectorAll('.lp-row').length).toBe(2))
     await fireEvent.click(document.querySelectorAll('.lp-row')[1])
     expect(links[0].sent.at(-1)).toMatchObject({ type: 'tap', action: 'this', tune_id: 8 })
-    expect(onLog).toHaveBeenCalledWith(expect.objectContaining({ tune_id: 8 }))
+    expect(onLog).toHaveBeenCalledWith(expect.objectContaining({ tune_id: 8 }), { auto: false })
     await waitFor(() => expect(document.querySelector('#lp-wrong')).toBeTruthy())
+    expect(document.querySelector('#lp-right').getAttribute('aria-pressed')).toBe('true')
     await fireEvent.click(document.querySelector('#lp-wrong'))
     expect(onRemove).toHaveBeenCalledWith('temp-1')
     expect(links[0].sent.at(-1)).toMatchObject({ action: 'none', shown: [8], why: 'wrong' })

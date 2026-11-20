@@ -1614,5 +1614,13 @@
   "Logging status": {
     "ga": "Stádas logála",
     "review": true
+  },
+  "not checked": {
+    "ga": "gan seiceáil",
+    "review": true
+  },
+  "The listener logged this tune. Nobody has checked it yet.": {
+    "ga": "Logáil an t-éisteoir an fonn seo. Níor sheiceáil aon duine fós é.",
+    "review": true
   }
 }

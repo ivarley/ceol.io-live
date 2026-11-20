@@ -444,6 +444,40 @@ def test_duplicate_append_collapses_to_corroborate(
     assert len(_records(db_cursor, inst)) == 1
 
 
+def test_a_machines_duplicate_add_leaves_the_row_provisional(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """A tune the meter logged by itself is provisional (confidence under 100) until a
+    person checks it. A second meter logging the same tune is not a person's check;
+    a person logging it is."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, first = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            source="listen",
+            confidence=99,
+        )
+        assert first["record"]["source"] == "listen"
+        assert first["record"]["confidence"] == 99
+        _, machine = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            source="listen",
+            confidence=99,
+        )
+        assert machine["op_type"] == "corroborate"
+        assert machine["record"]["confidence"] == 99
+        _, person = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+    assert person["op_type"] == "corroborate"
+    assert person["record"]["confidence"] == 100
+    assert len(_records(db_cursor, inst)) == 1
+
+
 def test_no_merge_keeps_both(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:
