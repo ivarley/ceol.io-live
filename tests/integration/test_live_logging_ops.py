@@ -2829,3 +2829,157 @@ def test_bootstrap_and_logs_carry_is_cancelled(
     nights = [n for group in logs["instances_by_year"].values() for n in group]
     mine = next(n for n in nights if n["session_instance_id"] == inst)
     assert mine["is_cancelled"] is True
+
+
+# --------------------------------------------------------------------------- #
+# late changes (they waited on a device): placed by when they were made
+# --------------------------------------------------------------------------- #
+
+
+def _sql(statement, params=()):
+    """Run one committed statement (the endpoint reads on its own connection)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(statement, params)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def _backdate(record_id, minutes):
+    _sql(
+        "UPDATE session_instance_tune SET inserted_timestamp = inserted_timestamp "
+        "- make_interval(mins => %s) WHERE session_instance_tune_id = %s",
+        (minutes, record_id),
+    )
+
+
+def test_late_add_merges_into_the_same_tune_logged_at_that_time(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """A phone that was cut off sends its queue after the other logger has moved on
+    to later sets: its add is the play logged around the time it was made, in a set
+    long since ended, not a new row at the end."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, first = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        _op(client, inst, op_type="set_break", action="insert")
+        _op(client, inst, op_type="add_tune", tune_id=live_instance["maid"])
+        reel_row = first["record"]["session_instance_tune_id"]
+        _backdate(reel_row, 10)
+        _, late = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            age_ms=9 * 60 * 1000,
+        )
+    assert late["op_type"] == "corroborate"
+    assert late["record"]["session_instance_tune_id"] == reel_row
+    assert len(_records(db_cursor, inst)) == 3
+
+
+def test_late_add_of_a_tune_played_at_another_time_is_a_new_row(
+    client, authenticated_user, live_instance, db_cursor
+):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, first = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        _op(client, inst, op_type="set_break", action="insert")
+        _backdate(first["record"]["session_instance_tune_id"], 40)
+        _, late = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            age_ms=10 * 60 * 1000,
+        )
+        # the new row keeps the time it was made: the next phone's late add of the
+        # same play finds it
+        _, again = _op(
+            client,
+            inst,
+            op_type="add_tune",
+            tune_id=live_instance["reel"],
+            age_ms=11 * 60 * 1000,
+            no_merge=False,
+        )
+    assert late["op_type"] == "add_tune"
+    assert again["op_type"] == "corroborate"
+    assert (
+        again["record"]["session_instance_tune_id"]
+        == late["record"]["session_instance_tune_id"]
+    )
+    assert len(_records(db_cursor, inst)) == 3
+
+
+def test_an_add_sent_at_once_is_not_matched_by_time(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """A tune played again in a later set, logged as it happens, is a second play."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        _op(client, inst, op_type="set_break", action="insert")
+        _, second = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"], age_ms=800
+        )
+    assert second["op_type"] == "add_tune"
+    assert len(_records(db_cursor, inst)) == 3
+
+
+def test_late_end_of_set_is_dropped_when_the_log_has_moved_on(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """A late "end the set" ends the set its sender was logging. With someone else's
+    tune last in the log it would cut their set short; once the sender's own late add
+    has merged into that tune, the set is theirs to end too."""
+    inst = live_instance["instance_id"]
+    late = 2 * 60 * 1000
+    with authenticated_user:
+        _, first = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        # someone else's row
+        _sql(
+            "UPDATE session_instance_tune SET created_by_user_id = 1 "
+            "WHERE session_instance_tune_id = %s",
+            (first["record"]["session_instance_tune_id"],),
+        )
+        _sql(
+            "DELETE FROM corroboration WHERE record_id = %s",
+            (first["record"]["session_instance_tune_id"],),
+        )
+        _, skipped = _op(
+            client, inst, op_type="set_break", action="insert", age_ms=late
+        )
+        assert skipped["success"] is True
+        assert skipped["op_type"] == "late_break_skipped"
+        assert len(_records(db_cursor, inst)) == 1
+
+        _, merged = _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"], age_ms=late
+        )
+        assert merged["op_type"] == "corroborate"
+        _, ended = _op(client, inst, op_type="set_break", action="insert", age_ms=late)
+        assert ended["op_type"] == "set_break"
+        assert ended["record"]["record_type"] == "break"
+        # and a second late break has no set to end
+        _, twice = _op(client, inst, op_type="set_break", action="insert", age_ms=late)
+        assert twice["op_type"] == "late_break_skipped"
+    assert [r[3] for r in _records(db_cursor, inst)] == ["tune", "break"]
+
+
+def test_late_end_of_set_after_your_own_tune_is_kept(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """One person logging with no signal: the whole queue lands as it was made."""
+    inst = live_instance["instance_id"]
+    late = 20 * 60 * 1000
+    with authenticated_user:
+        _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["reel"], age_ms=late
+        )
+        _op(client, inst, op_type="set_break", action="insert", age_ms=late)
+        _op(
+            client, inst, op_type="add_tune", tune_id=live_instance["maid"], age_ms=late
+        )
+    assert [r[3] for r in _records(db_cursor, inst)] == ["tune", "break", "tune"]

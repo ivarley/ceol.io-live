@@ -372,6 +372,81 @@ def _find_corroboration_target(cur, session_instance_id, tune_id, name):
     return cur.fetchone()
 
 
+# A change that waited on a device (no signal, a locked phone) arrives late, carrying
+# its age (`age_ms`: how long ago it was made, by the device's own clock difference, so
+# a wrong clock doesn't matter). Past LATE_AFTER_MS it is placed by when it was made,
+# not by what the log looks like when it arrives.
+LATE_AFTER_MS = 30_000
+# A late add is the same play as a row of that tune logged within this long of it.
+LATE_SAME_PLAY_SECONDS = 300
+_MAX_AGE_MS = 7 * 24 * 3600 * 1000
+
+
+def _late_age_ms(data):
+    """The op's age in ms when it is late (over LATE_AFTER_MS), else None."""
+    try:
+        age = int(data.get("age_ms"))
+    except (TypeError, ValueError):
+        return None
+    if age <= LATE_AFTER_MS:
+        return None
+    return min(age, _MAX_AGE_MS)
+
+
+def _find_late_target(cur, session_instance_id, tune_id, name, age_ms):
+    """The same tune logged around the time a late add was made, in any set.
+
+    Two loggers at one session, one of them cut off: its queued adds arrive after the
+    other has moved on to later sets, so the open-set check sees nothing to merge with
+    and whole sets were logged twice. A row's time is when it was heard
+    (`logged_timestamp`, set for a late add) or else when it arrived."""
+    made = "((NOW() AT TIME ZONE 'UTC') - make_interval(secs => %s))"
+    # (the same clock expression inserted_timestamp is written with)
+    when = "COALESCE(logged_timestamp, inserted_timestamp)"
+    if tune_id is not None:
+        match, value = "tune_id = %s", tune_id
+    elif name:
+        match, value = (
+            "tune_id IS NULL AND LOWER(unaccent(name)) = LOWER(unaccent(%s))",
+            name,
+        )
+    else:
+        return None
+    secs = age_ms / 1000.0
+    cur.execute(
+        f"""
+        SELECT session_instance_tune_id, created_by_user_id
+        FROM session_instance_tune
+        WHERE session_instance_id = %s AND record_type = 'tune'
+          AND deleted = FALSE AND {match}
+          AND ABS(EXTRACT(EPOCH FROM ({when} - {made}))) <= %s
+        ORDER BY ABS(EXTRACT(EPOCH FROM ({when} - {made}))) LIMIT 1
+        """,
+        (session_instance_id, value, secs, LATE_SAME_PLAY_SECONDS, secs),
+    )
+    return cur.fetchone()
+
+
+def _late_break_is_stale(cur, session_instance_id, user_id):
+    """A late "end the set" ends the set its sender was logging. If the log's last row
+    is not a tune that user logged (or also logged), the log has moved on: someone
+    else ended that set already, and a break at the end would cut theirs short."""
+    cur.execute(
+        """
+        SELECT sit.record_type,
+               sit.created_by_user_id = %s
+               OR EXISTS (SELECT 1 FROM corroboration c
+                          WHERE c.record_id = sit.session_instance_tune_id AND c.user_id = %s)
+        FROM session_instance_tune sit
+        WHERE sit.session_instance_id = %s AND sit.deleted = FALSE
+        ORDER BY sit.order_position DESC LIMIT 1
+        """,
+        (user_id, user_id, session_instance_id),
+    )
+    row = cur.fetchone()
+    return row is None or row[0] != "tune" or not row[1]
+
+
 def _corroborate(cur, session_instance_id, target_id, data, user_id):
     """Record a corroboration on an existing record + bump its confidence (§H30).
 
@@ -797,7 +872,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
         and data.get("before_record_id") is None
         and not data.get("no_merge")
     ):
-        target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
+        # A late add (it waited on a device) is matched by when it was made first.
+        late_ms = _late_age_ms(data)
+        target = None
+        if late_ms is not None:
+            target = _find_late_target(cur, session_instance_id, tune_id, name, late_ms)
+        if target is None:
+            target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
         if target is not None:
             # A corroborated add still carries any explicitly chosen setting (spec 032) —
             # applied FIRST so _corroborate's reselect returns the row with its override.
@@ -818,6 +899,16 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
         data.get("before_record_id"),
     )
 
+    # A late add keeps the time it was made, for the next late add to be matched with.
+    logged_timestamp = data.get("logged_timestamp")
+    late_ms = _late_age_ms(data)
+    if logged_timestamp is None and late_ms is not None:
+        cur.execute(
+            "SELECT (NOW() AT TIME ZONE 'UTC') - make_interval(secs => %s)",
+            (late_ms / 1000.0,),
+        )
+        logged_timestamp = cur.fetchone()[0]
+
     cur.execute(
         """
         INSERT INTO session_instance_tune (
@@ -835,7 +926,7 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
             source,
             confidence,
             confidence_model,
-            data.get("logged_timestamp"),
+            logged_timestamp,
             data.get("client_device_id"),
             user_id,
             user_id,
@@ -1123,6 +1214,16 @@ def _handle_set_break(cur, session_instance_id, data, user_id):
         raise OpRejected(
             "invalid", _("unknown set_break action '%(action)s'.", action=action)
         )
+    # A late "end the set" (it waited on a device) whose set someone else has since
+    # ended, or logged past: nothing to do. Said as an event of its own type so every
+    # client settles the change and draws nothing.
+    if (
+        data.get("after_record_id") is None
+        and data.get("before_record_id") is None
+        and _late_age_ms(data) is not None
+        and _late_break_is_stale(cur, session_instance_id, user_id)
+    ):
+        return {"_op_type": "late_break_skipped"}
     # before_record_id supports the between-sets "new set" gap insert (§C): a break
     # placed just before the next set's first tune, after the new tune we just added.
     new_position = _position_for(

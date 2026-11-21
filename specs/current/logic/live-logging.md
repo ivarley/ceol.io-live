@@ -81,6 +81,29 @@ the 32-character limit in September 2026. A new key may therefore equal a tombst
 that have already grown long are valid and harmless; `scripts/renumber_order_positions.py`
 reports the longest per instance and can repack one.
 
+### Late changes (a queue sent after the log moved on)
+
+Every op may carry `age_ms`: how long it waited on the device before this send (the
+web's and the iPhone's queues both send it; it is a difference on the device's own
+clock, so a wrong clock doesn't matter). Over `LATE_AFTER_MS` (30s) the op is *late*
+and is placed by when it was made, not by what the log looks like when it arrives.
+This is for two people logging one night when one of them is cut off (a locked phone):
+without it the queue lands after the other has logged later sets, the open-set check
+finds nothing to merge with, and whole sets are logged twice.
+
+- **Late `add_tune`** (an append): merges (`corroborate`) into the same tune logged
+  within `LATE_SAME_PLAY_SECONDS` (five minutes) of when it was made, in any set
+  (`_find_late_target`). A row's time is `logged_timestamp` if set, else
+  `inserted_timestamp`. With no such row the open-set check runs as usual, and a new
+  row keeps the time it was made in `logged_timestamp`, for the next late add.
+- **Late `set_break`** (an append): applied only when the log's last row is a tune the
+  sender created or corroborated (`_late_break_is_stale`). Otherwise someone else has
+  ended that set or logged past it; the op succeeds with `op_type`
+  `late_break_skipped` and changes nothing, so clients settle it and draw nothing.
+
+The iPhone also retries a waiting queue every ten seconds (`retryQueueLater`), so a
+queue rarely gets old enough for this to matter.
+
 ### Re-dating a log (spec 046)
 
 `set_date` moves `session_instance.date`. The motivating case is a session logged past

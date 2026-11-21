@@ -1157,6 +1157,12 @@ components:
           enum: [add_tune, remove_tune, change_tune, set_confidence, set_break, attribute_set_starter,
                  edit_notes, set_date, set_name, attendance_add, attendance_remove, attendance_create_person,
                  mark_complete, mark_incomplete, set_cancelled, move_tunes, remove_tunes, restore_tunes]
+        # How long the change waited on the device before this send, in ms (optional).
+        # Over 30s it is late: a late add_tune merges into the same tune logged within
+        # five minutes of when it was made, in any set; a late appended set_break is
+        # skipped (op_type late_break_skipped in the result) unless the log's last row
+        # is a tune the sender logged or also logged.
+        age_ms: { type: integer }
     LiveOpResult:
       type: object
       required: [success]

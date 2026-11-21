@@ -4436,6 +4436,53 @@
           "expected": false
         }
       ]
+    },
+    "isProvisional": {
+      "params": [
+        "r"
+      ],
+      "cases": [
+        {
+          "name": "a tune the meter logged by itself",
+          "input": {
+            "r": {
+              "session_instance_tune_id": 1,
+              "source": "listen",
+              "confidence": 99
+            }
+          },
+          "expected": true
+        },
+        {
+          "name": "a tune a person checked",
+          "input": {
+            "r": {
+              "session_instance_tune_id": 1,
+              "source": "listen",
+              "confidence": 100
+            }
+          },
+          "expected": false
+        },
+        {
+          "name": "a person's own entry has no confidence",
+          "input": {
+            "r": {
+              "session_instance_tune_id": 1,
+              "source": "human",
+              "confidence": null
+            }
+          },
+          "expected": false
+        },
+        {
+          "name": "no record",
+          "input": {
+            "r": null
+          },
+          "expected": false
+        }
+      ]
     }
   }
 }

@@ -89,6 +89,7 @@ let logStateAdapters = ModuleAdapters(
         "wireBody": { args in .object(LogState.wireBody(try args.require("payload", \.objectValue))) },
         "stripThe": { args in .string(LogState.stripThe(try args.require("s", \.stringValue))) },
         "normName": { args in .string(LogState.normName(args.string("s"))) },
+        "isProvisional": { args in .bool(args["r"].map { $0.isNull ? false : $0.isProvisional } ?? false) },
         "openSetMergeTarget": { args in
             LogState.openSetMergeTarget(try args.require("payload", { $0 }), ordered: try records(args, "ordered")) ?? .null
         },

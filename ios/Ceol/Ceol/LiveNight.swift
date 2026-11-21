@@ -145,6 +145,13 @@ final class NightModel {
     private var outbox: [String] = []
     private var sender: Task<Void, Never>?
     private var stream: Task<Void, Never>?
+    /// Counts the loads begun (connect). Two can be under way at once (the app comes
+    /// forward as the network returns, a pull to refresh): only the newest opens the
+    /// stream, so there is never more than one.
+    @ObservationIgnored private var connects = 0
+    /// The newest event said in an activity line.
+    @ObservationIgnored private var lastNoted = 0
+    @ObservationIgnored private var queueRetry: Task<Void, Never>?
     private var watchdog: Task<Void, Never>?
     private var lastAlive = Date()
     private var failures = 0
@@ -200,6 +207,7 @@ final class NightModel {
         saveNow()
         player.release()
         path.cancel()
+        queueRetry?.cancel()
         running = false
         if editing { app.editingNight = false }
         stream?.cancel()
@@ -219,6 +227,8 @@ final class NightModel {
     // MARK: -
 
     private func connect() async {
+        connects += 1
+        let mine = connects
         stream?.cancel()
         watchdog?.cancel()
         if log == nil {
@@ -269,6 +279,8 @@ final class NightModel {
             status = .finished
             return
         }
+        // a newer load is under way, or has opened the stream already: it's that one's
+        guard mine == connects else { return }
         openStream()
     }
 
@@ -323,6 +335,10 @@ final class NightModel {
 
     private func openStream() {
         guard running, let from = log?.highWater else { return }
+        // Only ever one stream: a second would say every change twice (each stream's
+        // copy of an event got its own activity line).
+        stream?.cancel()
+        watchdog?.cancel()
         status = failures == 0 ? .connecting : .reconnecting
         lastAlive = Date()
         stream = Task { [weak self] in
@@ -351,6 +367,7 @@ final class NightModel {
                 Task { await self.flush() }
                 var parser = SSEParser(lastEventID: String(from))
                 for try await byte in bytes {
+                    if Task.isCancelled { return }
                     self.lastAlive = Date()
                     for event in parser.feed(CollectionOfOne(byte)) { self.handle(event) }
                 }
@@ -379,7 +396,12 @@ final class NightModel {
         guard let json = try? JSONDecoder().decode(JSONValue.self, from: Data(event.data.utf8)) else { return }
         switch event.type {
         case "op":
-            noteRemote(json)
+            // Each event is said once, however often it arrives (a reconnect's replay).
+            // Not by the log's high-water mark: my own change's answer raises that
+            // before its echo comes, and the echo is what says it while watching.
+            let eid = json["event_id"]?.intValue
+            if eid.map({ $0 > lastNoted }) ?? true { noteRemote(json) }
+            if let eid { lastNoted = max(lastNoted, eid) }
             let changed = log?.apply(json) == true
             if changed { settleCursor() }
             if changed, log?.meta["log_complete"] == true {
@@ -989,13 +1011,17 @@ final class NightModel {
                 outbox.removeFirst()  // settled already, by the stream's echo
                 continue
             }
-            guard let body = l.sendableBody(opID) else {
+            guard var body = l.sendableBody(opID) else {
                 // Its row never reached the server (that add was refused): nothing to send.
                 log?.rollback(opID)
                 outbox.removeFirst()
                 if op.queued { flushRejects.append(reviewItem(op, why: tr("the tune it changed was never saved"))) }
                 continue
             }
+            // How long this change waited on the phone. The server places a late one by
+            // when it was made: a queue sent after others have logged on past it would
+            // otherwise log their sets a second time.
+            body["age_ms"] = .number(Double(max(0, Int64(Date().timeIntervalSince1970 * 1000) - op.ts)))
             do {
                 let (code, answer) = try await app.postJSON("/api/live/instances/\(instanceID)/ops", body: .object(body))
                 // The sign-in ran out (postJSON has told the app): not a refusal of
@@ -1018,6 +1044,7 @@ final class NightModel {
                 waitingForNetwork = true
                 for id in outbox { log?.markQueued(id) }
                 saveNow()
+                retryQueueLater()
                 break
             }
         }
@@ -1065,6 +1092,19 @@ final class NightModel {
                     return
                 }
             }
+        }
+    }
+
+    /// A change that couldn't be sent goes again every ten seconds until it lands. The
+    /// other signs that the connection is back (the stream, the network path, the app
+    /// coming forward) can all stay quiet on a locked phone, and a queue that waits for
+    /// the unlock lands long after others have logged past it.
+    private func retryQueueLater() {
+        queueRetry?.cancel()
+        queueRetry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, !Task.isCancelled, self.running else { return }
+            await self.flushIfWaiting()
         }
     }
 

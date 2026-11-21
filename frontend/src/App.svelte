@@ -2624,7 +2624,10 @@
       return
     }
     try {
-      const res = await sendOp(config, entry.op_type, wireBody(payload), entry.op_id)
+      // age_ms: how long this change waited here. The server places a late one by when
+      // it was made (a queue sent after others have logged on past it).
+      const age_ms = entry.ts ? Math.max(0, Date.now() - entry.ts) : 0
+      const res = await sendOp(config, entry.op_type, { ...wireBody(payload), age_ms }, entry.op_id)
       settleOp(entry, res)
       // This POST just proved the server is reachable. If the stream isn't live,
       // resync NOW instead of waiting for a poll — while the stream is down, ops
