@@ -350,6 +350,21 @@ struct TuneSheetBody: View {
     @State private var detail: LoadState<Components.Schemas.TuneDetail> = .loading
     @State private var incipit: UIImage?
     @State private var full: UIImage?
+    /// Every setting of the tune, paged on the notation card itself (swipe it, or the
+    /// chevrons under it); it opens on the drawn setting. While it sits on another, the
+    /// card shows that one, and a button offers to make it the default — yours, or the
+    /// session's. The web drawer's staff does the same.
+    @State private var pager: SettingPagerModel?
+    @State private var makingDefault = false
+    @State private var makeDefaultFailure: String?
+    /// The card slides as it pages: the staff in view off one side, its neighbour on from
+    /// the other. `slideX` is where the staff sits (under a finger, or settling);
+    /// `slideLock` says whether the drag in progress is sideways (nil: not decided yet);
+    /// `settling` is a page finishing; `stageWidth` is how far a staff slides.
+    @State private var slideX: CGFloat = 0
+    @State private var slideLock: Bool?
+    @State private var settling = false
+    @State private var stageWidth: CGFloat = 0
     @State private var showFull = false
     /// The ABC instead of the staff (the notes / abc tabs under it).
     @State private var abcMode = false
@@ -423,8 +438,9 @@ struct TuneSheetBody: View {
                 Text("Its status, notes and heard count go with it.")
             }
             .fullScreenCover(isPresented: $fullScreen) {
-                if let image = showFull ? (full ?? incipit) : incipit { NotationFullScreen(image: image, name: tune.name) }
+                if let image = showFull ? (shownFull ?? shownIncipit) : shownIncipit { NotationFullScreen(image: image, name: tune.name) }
             }
+            .onDisappear { pager?.dispose() }
             .sheet(item: $chooser) { layer in
                 if let t = detail.value?.sessionTune {
                     SettingChooser(
@@ -525,6 +541,7 @@ struct TuneSheetBody: View {
             sessKey = d.sessionTune.key ?? ""
             detail = .loaded(d)
             await loadNotation(d.sessionTune)
+            startPager(d.sessionTune)
         } catch {
             detail = .failed(loadFailureMessage(error))
         }
@@ -533,6 +550,49 @@ struct TuneSheetBody: View {
     /// The setting the staff draws: a night's own, else the one under it.
     private func drawnSetting(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Int? {
         t.settingOverride ?? t.settingId
+    }
+
+    /// The pager, once the detail is in: the settings Ceol holds at once (thesession.org's
+    /// list only when something pages), opening on the drawn setting with the notation
+    /// just loaded for it, so nothing is drawn twice. A reload after a save keeps the
+    /// pager where it was; only the mark moves.
+    private func startPager(_ t: Components.Schemas.TuneDetail.SessionTunePayload) {
+        if let pager {
+            pager.setCurrent(drawnSetting(t))
+            return
+        }
+        let p = SettingPagerModel(
+            client: model.auth.client, tuneID: tune.id, tuneType: t.tuneType, current: drawnSetting(t),
+            size: showFull ? .full : .incipit, canBackfill: !model.isGuest)
+        if let drawn = drawnSetting(t) {
+            p.seed(incipit, for: drawn, kind: .incipit)
+            p.seed(full, for: drawn, kind: .full)
+        }
+        pager = p
+        Task { await p.load() }
+    }
+
+    /// The setting the card is showing: the pager's, else the drawn one.
+    private func shownSetting(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> SettingPagerModel.Setting? {
+        if let s = pager?.setting { return s }
+        guard let id = drawnSetting(t) else { return nil }
+        return SettingPagerModel.Setting(id: id, key: t.settingKey, abc: t.abc ?? "", incipitAbc: t.incipitAbc, remote: false)
+    }
+
+    /// Is the card on a setting other than the drawn one?
+    private func browsing(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Bool {
+        guard let s = pager?.setting else { return false }
+        return s.id != drawnSetting(t)
+    }
+
+    private var shownIncipit: UIImage? {
+        if let pager, let s = pager.setting { return pager.image(s.id, .incipit) ?? (pager.isCurrent ? incipit : nil) }
+        return incipit
+    }
+
+    private var shownFull: UIImage? {
+        if let pager, let s = pager.setting { return pager.image(s.id, .full) ?? (pager.isCurrent ? full : nil) }
+        return full
     }
 
     private func loadNotation(_ t: Components.Schemas.TuneDetail.SessionTunePayload) async {
@@ -926,18 +986,39 @@ struct TuneSheetBody: View {
 
     // MARK: Which version
 
-    /// Which layer "a different version" means here, or nil when this viewer can't change
-    /// it: on your list, yours; at a session, the session's (its admins); on one night,
-    /// that night's (its members, and only for a tune played that night). As the web.
-    private func settingLayer(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> SettingLayer? {
-        guard let path = tune.sessionPath else { return status != nil ? .mine : nil }
-        guard let scope = JSONValue(encoding: t.sessionScope) else { return nil }
-        if let night = tune.instanceID {
-            let played = scope["played_instances"]?.arrayValue?
-                .contains { $0["session_instance_id"]?.intValue == night } ?? false
-            return played && scope["can_edit_instance"]?.boolValue == true ? .night(path: path, instanceID: night) : nil
+    /// The layer the button under the paged card would set, or nil when paging is for
+    /// looking: at a session (or one of its nights), the session's default — its admins
+    /// — else yours, when the tune is on your list. As the web.
+    private func defaultLayer(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> SettingLayer? {
+        guard !model.isGuest else { return nil }
+        if let path = tune.sessionPath, canEditSession(t) { return .session(path: path) }
+        return status != nil ? .mine : nil
+    }
+
+    private func defaultLabel(_ layer: SettingLayer, _ t: Components.Schemas.TuneDetail.SessionTunePayload) -> String {
+        switch layer {
+        case .mine: tr("Make this my default setting")
+        default: tr("Make this \(sessionName(t))’s default setting")
         }
-        return scope["can_edit_session"]?.boolValue == true ? .session(path: path) : nil
+    }
+
+    /// Which layers play the setting in view: a ★ for each in the pager's label.
+    private func settingBadges(_ s: SettingPagerModel.Setting, _ t: Components.Schemas.TuneDetail.SessionTunePayload) -> [String] {
+        var out: [String] = []
+        if s.id == settingInUse(.mine, t), status != nil || tune.sessionPath == nil { out.append(tr("★ yours")) }
+        if tune.sessionPath != nil, s.id == t.settingId { out.append(tr("★ \(sessionName(t))’s")) }
+        if tune.sessionPath != nil, let night = t.settingOverride, s.id == night { out.append(tr("★ this night’s")) }
+        return out
+    }
+
+    /// The button under the paged card: the setting in view becomes the layer's.
+    private func makeDefault(_ layer: SettingLayer, _ settingID: Int) async {
+        guard !makingDefault else { return }
+        makingDefault = true
+        makeDefaultFailure = nil
+        let problem = await saveSetting(settingID, for: layer)
+        makingDefault = false
+        if let problem { makeDefaultFailure = problem }
     }
 
     private func sessionName(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> String {
@@ -988,8 +1069,10 @@ struct TuneSheetBody: View {
         if let refused { return refused }
         incipit = nil
         full = nil
-        showFull = false
+        if pager == nil { showFull = false }
         await load()
+        // The pager stays on the setting just saved (it is the layer's now).
+        pager?.jumpTo(settingID)
         onChanged()
         return nil
     }
@@ -1224,9 +1307,12 @@ extension TuneSheetBody {
     /// tapped to flip opening bars ⇄ the whole tune; under it the notes / abc tabs on the
     /// left and, on the right, "open in" (thesession.org, abc-tools) and full screen.
     @ViewBuilder private func notation(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        let shown = shownSetting(t)
+        let abc = browsing(t) ? shown?.abc : t.abc
+        let incipitAbc = browsing(t) ? shown?.incipitAbc : t.incipitAbc
         VStack(spacing: 10) {
             Group {
-                if abcMode, let text = showFull ? t.abc : (t.incipitAbc ?? t.abc) {
+                if abcMode, let text = showFull ? abc : (incipitAbc ?? abc) {
                     Button { flipSize(t) } label: {
                         Text(verbatim: text).font(.system(size: 13, design: .monospaced))
                             .foregroundStyle(.black).padding(10)
@@ -1237,7 +1323,7 @@ extension TuneSheetBody {
                     .accessibilityLabel("Notation for \(t.tuneName)")
                     .accessibilityHint(showFull ? Text("Tap to show the opening bars") : Text("Tap to show the whole tune"))
                     .accessibilityIdentifier("sheet.notation")
-                } else if !abcMode, let image = showFull ? (full ?? incipit) : incipit {
+                } else if !abcMode, let image = showFull ? (shownFull ?? shownIncipit) : shownIncipit {
                     Button { flipSize(t) } label: {
                         Image(uiImage: image)
                             .resizable().scaledToFit()
@@ -1248,6 +1334,16 @@ extension TuneSheetBody {
                     .accessibilityLabel("Notation for \(t.tuneName)")
                     .accessibilityHint(showFull ? Text("Tap to show the opening bars") : Text("Tap to show the whole tune"))
                     .accessibilityIdentifier("sheet.notation")
+                } else if browsing(t), let s = shown, pager?.undrawable(s.id) == true {
+                    // The renderer couldn't draw it: the abc still says what the setting is.
+                    Text(verbatim: (showFull ? s.abc : (s.incipitAbc ?? s.abc))).font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(.black).padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+                } else if browsing(t) {
+                    // A setting paged to, its staff still being drawn.
+                    ProgressView().tint(.gray).frame(maxWidth: .infinity, minHeight: 80)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
                 } else if notationFailed {
                     Text("Couldn't draw the notation just now.").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
                 } else if t.incipitAbc == nil && t.abc == nil {
@@ -1256,11 +1352,52 @@ extension TuneSheetBody {
                     ProgressView().frame(height: 80)
                 }
             }
+            .frame(maxWidth: .infinity)
+            .offset(x: slideX)
+            // Either neighbour a full width off to the side, moved with the staff, and
+            // clipped at the card's edges: a swipe slides one off and the other on.
+            .overlay(alignment: .top) {
+                if let s = neighbourSetting(-1) { slide(s).offset(x: slideX - stageWidth) }
+            }
+            .overlay(alignment: .top) {
+                if let s = neighbourSetting(1) { slide(s).offset(x: slideX + stageWidth) }
+            }
+            .clipped()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stageWidth = $0 }
+            .contentShape(Rectangle())
+            // Swipe the card to page through the tune's settings: the staff follows the
+            // finger (left for the next, right for the one before) and lets go into a page
+            // or springs back; past an end it only gives a little. Over the flip button,
+            // so a sideways drag never flips.
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 20)
+                    .onChanged { v in
+                        guard !settling else { return }
+                        if slideLock == nil {
+                            slideLock = abs(v.translation.width) > abs(v.translation.height)
+                            if slideLock == true { pager?.ensureBackfill() }
+                        }
+                        guard slideLock == true else { return }
+                        let w = v.translation.width
+                        var tx = Transaction()
+                        tx.disablesAnimations = true
+                        withTransaction(tx) { slideX = neighbourSetting(w < 0 ? 1 : -1) == nil ? w * 0.25 : w }
+                    }
+                    .onEnded { v in
+                        let horizontal = slideLock == true
+                        slideLock = nil
+                        guard horizontal, !settling else { return }
+                        let w = v.translation.width
+                        let d = w < 0 ? 1 : -1
+                        let far = abs(w) > 40 || abs(v.predictedEndTranslation.width) > stageWidth / 2
+                        if far, neighbourSetting(d) != nil { page(d) } else { withAnimation(.easeOut(duration: 0.24)) { slideX = 0 } }
+                    }
+            )
             HStack(spacing: 16) {
                 notationTab(tr("notes"), on: !abcMode) { abcMode = false }
                 notationTab(tr("abc"), on: abcMode) { abcMode = true }
-                    .disabled(t.abc == nil && t.incipitAbc == nil)
-                    .opacity(t.abc == nil && t.incipitAbc == nil ? 0.4 : 1)
+                    .disabled(abc == nil && incipitAbc == nil)
+                    .opacity(abc == nil && incipitAbc == nil ? 0.4 : 1)
                 Spacer()
                 // Copy what's showing: the staff as an image, or the ABC as text.
                 if let copy = copyable(t) {
@@ -1284,7 +1421,7 @@ extension TuneSheetBody {
                     .accessibilityIdentifier("sheet.copy")
                 }
                 // Full screen, once the whole tune is up (the opening bars fit as they are).
-                if showFull && !abcMode && full != nil {
+                if showFull && !abcMode && shownFull != nil {
                     Button { fullScreen = true } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17))
                             .foregroundStyle(CeolTokens.primary)
@@ -1296,9 +1433,11 @@ extension TuneSheetBody {
                 }
                 // Where else to see it: a menu, so more can join thesession.org and abc-tools.
                 Menu {
-                    // Names, not words to translate.
-                    Link(destination: Self.theSessionURL(t)) { Label { Text(verbatim: "thesession.org") } icon: { Image(systemName: "safari") } }
-                    if let url = Self.abcToolsURL(t) {
+                    // Names, not words to translate. Both links follow the setting in view.
+                    Link(destination: Self.theSessionURL(tuneID: t.tuneId, settingID: shown?.id)) {
+                        Label { Text(verbatim: "thesession.org") } icon: { Image(systemName: "safari") }
+                    }
+                    if let url = Self.abcToolsURL(name: t.tuneName, type: t.tuneType, key: shown?.key ?? t.settingKey, abc: abc ?? incipitAbc) {
                         Link(destination: url) { Label { Text(verbatim: "abc-tools") } icon: { Image(systemName: "music.note") } }
                     }
                 } label: {
@@ -1308,6 +1447,27 @@ extension TuneSheetBody {
                 }
                 .accessibilityLabel("Open in…")
                 .accessibilityIdentifier("sheet.openIn")
+            }
+            // The pager's row, once there is more than one setting to page (or more may
+            // be coming), and under it the button that makes the one in view the default.
+            if let pager, !pager.loading, !pager.loadFailed, pager.count > 1 || pager.backfilling {
+                pagerRow(pager, t)
+            }
+            if let pager, let s = pager.setting, pager.touched, let layer = defaultLayer(t), s.id != settingInUse(layer, t) {
+                VStack(spacing: 6) {
+                    if let makeDefaultFailure { Text(makeDefaultFailure).font(.ceol(size: 14)).foregroundStyle(CeolTokens.danger) }
+                    Button { Task { await makeDefault(layer, s.id) } } label: {
+                        Text(makingDefault ? tr("Saving…") : defaultLabel(layer, t))
+                            .font(.ceol(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .foregroundStyle(.white)
+                            .background(CeolTokens.primaryFill, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(makingDefault)
+                    .opacity(makingDefault ? 0.55 : 1)
+                    .accessibilityIdentifier("sheet.makeDefault")
+                }
             }
         }
         .padding(12)
@@ -1322,19 +1482,130 @@ extension TuneSheetBody {
         }
     }
 
+    /// "‹ Setting 2 of 7 · #13030 · Ddor ★ yours ›" under the card. The › spins while more
+    /// settings may still be on their way from thesession.org.
+    private func pagerRow(_ pager: SettingPagerModel, _ t: Components.Schemas.TuneDetail.SessionTunePayload) -> some View {
+        HStack(spacing: 8) {
+            pagerStep(pager, -1)
+            VStack(spacing: 1) {
+                Text("Setting \(pager.index + 1) of \(pager.count)").font(.ceol(size: 14, weight: .medium))
+                if let s = pager.setting {
+                    HStack(spacing: 6) {
+                        Text(verbatim: "#\(s.id)" + (s.key.map { " · \($0)" } ?? "")).foregroundStyle(CeolTokens.textMuted)
+                        ForEach(settingBadges(s, t), id: \.self) { badge in
+                            Text(badge).foregroundStyle(CeolTokens.warning)
+                        }
+                    }
+                    .font(.ceol(size: 13))
+                    .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .foregroundStyle(CeolTokens.textColor)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("sheet.settingLabel")
+            pagerStep(pager, 1)
+        }
+    }
+
+    private func pagerStep(_ pager: SettingPagerModel, _ d: Int) -> some View {
+        let n = pager.index + d
+        let more = pager.backfilling && d > 0 && n >= pager.count
+        let off = n < 0 || (n >= pager.count && !more)
+        return Button { page(d) } label: {
+            Group {
+                if more { ProgressView().controlSize(.small) } else { Image(systemName: d < 0 ? "chevron.left" : "chevron.right") }
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .frame(width: 36, height: 36)
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(CeolTokens.textColor)
+        .disabled(off)
+        .opacity(off ? 0.35 : 1)
+        .accessibilityLabel(d < 0 ? tr("Previous setting") : tr("Next setting"))
+        .accessibilityIdentifier(d < 0 ? "sheet.settingPrev" : "sheet.settingNext")
+    }
+
     private enum Copyable { case image(UIImage), text(String) }
 
     /// What the copy button copies: whatever the card is showing.
     private func copyable(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Copyable? {
-        if abcMode { return (showFull ? t.abc : (t.incipitAbc ?? t.abc)).map(Copyable.text) }
-        return (showFull ? (full ?? incipit) : incipit).map(Copyable.image)
+        let shown = shownSetting(t)
+        let abc = browsing(t) ? shown?.abc : t.abc
+        let incipitAbc = browsing(t) ? shown?.incipitAbc : t.incipitAbc
+        if abcMode { return (showFull ? abc : (incipitAbc ?? abc)).map(Copyable.text) }
+        return (showFull ? (shownFull ?? shownIncipit) : shownIncipit).map(Copyable.image)
     }
 
-    /// Opening bars ⇄ the whole tune, fetched the first time it is asked for. The first
+    /// Opening bars ⇄ the whole tune, fetched the first time it is asked for (by the
+    /// pager, which then draws the whole tune ahead for the next settings too). The first
     /// time through to the whole tune, a word about learning by ear (once per person).
+    /// The setting a step away from the one in view, if there is one.
+    private func neighbourSetting(_ d: Int) -> SettingPagerModel.Setting? {
+        guard let pager, pager.settings.indices.contains(pager.index + d) else { return nil }
+        return pager.settings[pager.index + d]
+    }
+
+    /// A page slides the staff off and its neighbour on, then the pager takes the step
+    /// and the card is back at rest, now showing the one that slid in. With no neighbour
+    /// on that side (the end of the list, more maybe still coming) the pager steps itself.
+    private func page(_ d: Int) {
+        guard let pager, !settling else { return }
+        guard stageWidth > 0, neighbourSetting(d) != nil else {
+            pager.step(d)
+            return
+        }
+        settling = true
+        withAnimation(.easeOut(duration: 0.24)) { slideX = CGFloat(-d) * stageWidth }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) {
+                pager.step(d)
+                slideX = 0
+            }
+            settling = false
+        }
+    }
+
+    /// A neighbouring setting, drawn as the staff is (its abc when it couldn't be), for the
+    /// edge of the card.
+    @ViewBuilder private func slide(_ s: SettingPagerModel.Setting) -> some View {
+        let kind: SettingPagerModel.Kind = showFull ? .full : .incipit
+        Group {
+            if abcMode {
+                Text(verbatim: showFull ? s.abc : (s.incipitAbc ?? s.abc)).font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.black).padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+            } else if let image = pager?.image(s.id, kind) ?? (showFull ? pager?.image(s.id, .incipit) : nil) {
+                Image(uiImage: image).resizable().scaledToFit()
+                    .padding(6)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+            } else if pager?.undrawable(s.id, kind) == true {
+                Text(verbatim: showFull ? s.abc : (s.incipitAbc ?? s.abc)).font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.black).padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+            } else {
+                ProgressView().tint(.gray).frame(maxWidth: .infinity, minHeight: 80)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
+    }
+
     private func flipSize(_ t: Components.Schemas.TuneDetail.SessionTunePayload) {
         showFull.toggle()
-        if showFull && !abcMode { Task { await loadFull(t) } }
+        if let pager {
+            pager.size = showFull ? .full : .incipit
+        } else if showFull && !abcMode {
+            Task { await loadFull(t) }
+        }
         if showFull && !notationNoticeDone && !Self.notationNoticeSeen(for: model.user?.personId) { showNotationNotice = true }
     }
 
@@ -1348,22 +1619,31 @@ extension TuneSheetBody {
 
     /// The tune on thesession.org, at the setting drawn (a night's own, else the session's).
     static func theSessionURL(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> URL {
-        let base = "https://thesession.org/tunes/\(t.tuneId)"
-        if let setting = t.settingOverride ?? t.settingId { return URL(string: "\(base)#setting\(setting)")! }
+        theSessionURL(tuneID: t.tuneId, settingID: t.settingOverride ?? t.settingId)
+    }
+
+    /// The tune on thesession.org, at a setting.
+    static func theSessionURL(tuneID: Int, settingID: Int?) -> URL {
+        let base = "https://thesession.org/tunes/\(tuneID)"
+        if let setting = settingID { return URL(string: "\(base)#setting\(setting)")! }
         return URL(string: base)!
     }
 
     /// The tune in michaeleskin.com's abc-tools, the ABC in the link as the web builds it
     /// (tunesheet/logic.js abcToolsUrl): the same header, compressed the same way.
     static func abcToolsURL(_ t: Components.Schemas.TuneDetail.SessionTunePayload) -> URL? {
-        guard let abc = t.abc ?? t.incipitAbc, !abc.isEmpty else { return nil }
+        abcToolsURL(name: t.tuneName, type: t.tuneType, key: t.settingKey, abc: t.abc ?? t.incipitAbc)
+    }
+
+    static func abcToolsURL(name tuneName: String, type tuneType: String?, key: String?, abc: String?) -> URL? {
+        guard let abc, !abc.isEmpty else { return nil }
         let body = abc.replacingOccurrences(of: "!", with: "\n")
-        let type = t.tuneType ?? ""
+        let type = tuneType ?? ""
         let meter = Self.meter(for: type)
-        let formatted = "X: 1\nT: \(t.tuneName)\nR: \(type)" + (meter.map { "\nM: \($0)" } ?? "")
-            + "\nL: 1/8\nK: \(t.settingKey ?? "")\n\(body)"
+        let formatted = "X: 1\nT: \(tuneName)\nR: \(type)" + (meter.map { "\nM: \($0)" } ?? "")
+            + "\nL: 1/8\nK: \(key ?? "")\n\(body)"
         let compressed = LZString.compressToEncodedURIComponent(formatted)
-        let name = t.tuneName.addingPercentEncoding(withAllowedCharacters: Self.uriComponentAllowed) ?? ""
+        let name = tuneName.addingPercentEncoding(withAllowedCharacters: Self.uriComponentAllowed) ?? ""
         return URL(string: "https://michaeleskin.com/abctools/abctools.html?lzw=\(compressed)&format=noten&ssp=45&name=\(name)&play=1")
     }
 
@@ -1688,15 +1968,6 @@ enum SettingLayer: Identifiable, Hashable {
     case night(path: String, instanceID: Int)
 
     var id: Self { self }
-
-    /// The line under the staff, beside Change Setting.
-    var prompt: String {
-        switch self {
-        case .mine: tr("I play a different version")
-        case .session: tr("We play a different version")
-        case .night: tr("We played a different version on this night")
-        }
-    }
 
     func heading(sessionName: String) -> String {
         switch self {

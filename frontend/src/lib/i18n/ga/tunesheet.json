@@ -147,10 +147,6 @@
     "ga": "líon na n-éisteachtaí a nuashonrú",
     "review": true
   },
-  "load your version of this tune": {
-    "ga": "do leagan den fhonn seo a lódáil",
-    "review": true
-  },
   "save your changes": {
     "ga": "d'athruithe a shábháil",
     "review": true
@@ -297,10 +293,6 @@
   },
   "This is the version {name} plays.": {
     "ga": "Seo an leagan a sheinneann {name}.",
-    "review": true
-  },
-  "Loading your version…": {
-    "ga": "Do leagan á lódáil…",
     "review": true
   },
   "Your personal version": {
@@ -783,18 +775,6 @@
     "ga": "Úsáid an leagan seo",
     "review": false
   },
-  "I play a different version": {
-    "ga": "Seinnim leagan eile",
-    "review": false
-  },
-  "We play a different version": {
-    "ga": "Seinnimid leagan eile",
-    "review": false
-  },
-  "We played a different version on this night": {
-    "ga": "Sheinneamar leagan eile an oíche seo",
-    "review": false
-  },
   "Which version do you play?": {
     "ga": "Cén leagan a sheinneann tú?",
     "review": false
@@ -814,5 +794,33 @@
   "Change Setting": {
     "ga": "Athraigh an leagan",
     "review": false
+  },
+  "Make this my default setting": {
+    "ga": "Déan an leagan seo mo leagan réamhshocraithe",
+    "review": true
+  },
+  "Make this {name}’s default setting": {
+    "ga": "Déan an leagan seo leagan réamhshocraithe {name}",
+    "review": true
+  },
+  "Now your default setting": {
+    "ga": "Do leagan réamhshocraithe anois",
+    "review": true
+  },
+  "Now {name}’s default setting": {
+    "ga": "Leagan réamhshocraithe {name} anois",
+    "review": true
+  },
+  "★ yours": {
+    "ga": "★ do cheannsa",
+    "review": true
+  },
+  "★ {name}’s": {
+    "ga": "★ ceann {name}",
+    "review": true
+  },
+  "★ this night’s": {
+    "ga": "★ ceann na hoíche seo",
+    "review": true
   }
 }

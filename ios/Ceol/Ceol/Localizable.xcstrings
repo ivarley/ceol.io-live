@@ -4890,6 +4890,7 @@
       }
     },
     "I play a different version": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5767,6 +5768,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Feadóg íseal"
+          }
+        }
+      }
+    },
+    "Make this %@’s default setting": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Déan an leagan seo leagan réamhshocraithe %@"
+          }
+        }
+      }
+    },
+    "Make this my default setting": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Déan an leagan seo mo leagan réamhshocraithe"
           }
         }
       }
@@ -10682,6 +10703,7 @@
       }
     },
     "We play a different version": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -10712,6 +10734,7 @@
       }
     },
     "We played a different version on this night": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11998,6 +12021,16 @@
       }
     },
     "○": {},
+    "★ %@’s": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ ceann %@"
+          }
+        }
+      }
+    },
     "★ on your list": {
       "localizations": {
         "ga": {
@@ -12074,6 +12107,26 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "★ seinnte uair amháin ag an seisiún seo"
+          }
+        }
+      }
+    },
+    "★ this night’s": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ ceann na hoíche seo"
+          }
+        }
+      }
+    },
+    "★ yours": {
+      "localizations": {
+        "ga": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "★ do cheannsa"
           }
         }
       }

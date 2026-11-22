@@ -100,7 +100,9 @@ whichever surface shows the notation:
 - deep-search preview → `…/setting-image/<setting_id>?kind=incipit|full` (`_ensure_setting_image`)
 - live logger → `…/incipit/<tune_id>` (`_ensure_incipit`, the tune's default setting)
 - tune-detail drawer → the setting-image endpoint for the setting its payload resolved
-  (`session_tune.setting_id`), fired automatically when the payload has ABC but no image
+  (`session_tune.setting_id`), fired automatically when the payload has ABC but no image;
+  paging the staff through the tune's other settings (spec 037) renders each held one the
+  same way, and one only thesession.org has ephemerally (`render-abc`, nothing stored)
 
 Each renders once and writes the PNG back to `tune_setting`, so it happens once per
 setting for all viewers, ever. Anything still imageless (offline, renderer down, a

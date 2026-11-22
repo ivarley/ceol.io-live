@@ -2,7 +2,7 @@
   // i18n-converted
   import { untrack } from 'svelte'
   import { Chevron, LoadError, Sheet, t } from '../lib/index.js'
-  import { tunePreview, thesessionPreview, settingImage, renderRemoteAbc } from '../client.js'
+  import { createSettingPager } from './settingpager.svelte.js'
 
   // The setting chooser: "which written version of this tune do we play?" Opened
   // from the tune drawer for one layer (mine, the session's, or one night's), it
@@ -10,9 +10,10 @@
   // thesession.org as they arrive — showing each one's FULL notation, and hands
   // the picked one back to the drawer to save.
   //
-  // Paging has to feel instant, so the renders run ahead of you: while you look
-  // at a setting, the next two are rendered (and, for a setting we hold, cached
-  // server-side for good) one after another, before you get to them.
+  // The list, the paging and the rendering ahead are the settings pager's
+  // (settingpager.svelte.js), shared with the drawer's own staff. Here the backfill
+  // from thesession.org runs as soon as the list is in: this sheet IS the ask for
+  // the whole list.
   let {
     open = $bindable(false),
     tuneId,
@@ -23,142 +24,45 @@
     onChoose, // async (setting, image) -> true when saved (the chooser then closes)
   } = $props()
 
-  const NO_SCOPE = {} // the preview endpoints' scope: none — the drawer knows its own
-
-  let settings = $state([]) // [{setting_id, key, abc, incipit_abc, incipit_image, remote?}]
-  let idx = $state(0)
-  let loading = $state(true)
-  let failed = $state(false)
-  let backfilling = $state(false)
-  let touched = $state(false) // has the user paged? (then a late backfill mustn't move them)
+  let pager = $state.raw(null)
   let saving = $state(false)
-  let images = $state({}) // setting_id -> base64, or false when it couldn't be drawn
-  let loadSeq = 0
-  let warmSeq = 0
 
-  const setting = $derived(settings[idx] || null)
-  const image = $derived(setting ? images[setting.setting_id] : undefined)
-  const isCurrent = $derived(!!setting && currentSettingId != null && setting.setting_id === Number(currentSettingId))
+  const setting = $derived(pager?.setting || null)
+  const settings = $derived(pager?.settings || [])
+  const idx = $derived(pager?.idx || 0)
+  const image = $derived(setting ? pager.image(setting.setting_id, 'full') : undefined)
+  const isCurrent = $derived(!!pager?.isCurrent)
   const tsUrl = $derived(
     setting
       ? `https://thesession.org/tunes/${tuneId}?setting=${setting.setting_id}#setting${setting.setting_id}`
       : `https://thesession.org/tunes/${tuneId}`
   )
 
-  // Load on every open: the settings we hold first (instant), then thesession.org's
-  // full list in the background, merged in setting order so "Setting 3 of 12" means
-  // the same as it does there.
+  // A fresh pager on every open (the tune and the layer may differ from last time).
   $effect(() => {
     if (!open || tuneId == null) return
     untrack(load)
     // Closed (or gone): whatever is still in flight lands on nothing.
-    return () => {
-      loadSeq++
-      warmSeq++
-    }
+    return () => pager?.dispose()
   })
 
-  function load() {
-    const seq = ++loadSeq
-    settings = []
-    idx = 0
-    touched = false
+  async function load() {
+    pager?.dispose()
     saving = false
-    failed = false
-    loading = true
-    backfilling = false
-    tunePreview(NO_SCOPE, tuneId)
-      .then((d) => {
-        if (seq !== loadSeq) return
-        settings = d.settings || []
-        loading = false
-        jumpToCurrent()
-        backfill(seq)
-      })
-      .catch(() => {
-        if (seq !== loadSeq) return
-        failed = true
-        loading = false
-      })
-  }
-
-  async function backfill(seq) {
-    backfilling = true
-    let ts
-    try {
-      ts = await thesessionPreview(NO_SCOPE, tuneId, true)
-    } catch {
-      if (seq === loadSeq) backfilling = false
-      return // offline or thesession.org down: the settings we hold stand
-    }
-    if (seq !== loadSeq) return
-    backfilling = false
-    const have = new Set(settings.map((s) => s.setting_id))
-    const extra = (ts?.settings || []).filter((s) => !have.has(s.setting_id)).map((s) => ({ ...s, remote: true }))
-    if (!extra.length) return
-    const showing = setting?.setting_id
-    settings = [...settings, ...extra].sort((a, b) => a.setting_id - b.setting_id)
-    // The current setting may only just have arrived; otherwise stay on the one showing.
-    if (!touched && jumpToCurrent()) return
-    const i = settings.findIndex((s) => s.setting_id === showing)
-    if (i >= 0) idx = i
-  }
-
-  function jumpToCurrent() {
-    if (currentSettingId == null) return false
-    const i = settings.findIndex((s) => s.setting_id === Number(currentSettingId))
-    if (i < 0) return false
-    idx = i
-    return true
-  }
-
-  // One setting's full notation. A setting we hold renders through the setting-image
-  // endpoint, which caches the PNG for everyone; one only thesession.org has renders
-  // ephemerally (it isn't ours until somebody picks it). Both share client.js's image
-  // registry with the search preview, so nothing is ever drawn twice in a page.
-  function warm(s) {
-    if (!s || s.setting_id in images) return Promise.resolve()
-    const p = s.remote
-      ? renderRemoteAbc(NO_SCOPE, `ts:${tuneId}:${s.setting_id}:full`, {
-          abc: s.abc,
-          key: s.key,
-          tune_type: tuneType,
-          kind: 'full',
-        })
-      : settingImage(NO_SCOPE, s.setting_id, 'full')
-    return p.then((img) => {
-      images[s.setting_id] = img || false
-    })
-  }
-
-  // The one in view first, then the next two, one at a time so the renderer works on
-  // what you'll see soonest. Paging on starts a fresh run from the new place.
-  $effect(() => {
-    const i = idx
-    const list = settings
-    if (!open || !list.length) return
-    untrack(() => warmFrom(i, list))
-  })
-  async function warmFrom(i, list) {
-    const seq = ++warmSeq
-    await warm(list[i])
-    for (const j of [i + 1, i + 2]) {
-      if (seq !== warmSeq) return
-      await warm(list[j])
-    }
+    const p = createSettingPager({ tuneId, tuneType, currentSettingId, kind: 'full' })
+    pager = p
+    await p.load()
+    p.ensureBackfill()
   }
 
   function step(d) {
-    const n = idx + d
-    if (n < 0 || n >= settings.length) return
-    idx = n
-    touched = true
+    pager?.step(d)
   }
 
   async function choose() {
     if (!setting || isCurrent || saving) return
     saving = true
-    const ok = await onChoose(setting, images[setting.setting_id] || null).catch(() => false)
+    const ok = await onChoose(setting, image || null).catch(() => false)
     saving = false
     if (ok) open = false
   }
@@ -180,13 +84,13 @@
 <Sheet bind:open title={heading} onCancel={() => (open = false)}>
   <div class="sc">
     <div class="sc-name">{tuneName}</div>
-    {#if loading}
+    {#if !pager || pager.loading}
       <div class="sc-skel" style="height:28px"></div>
       <div class="sc-skel" style="height:160px"></div>
-    {:else if failed}
+    {:else if pager.failed}
       <LoadError what={t('the settings of this tune')} onRetry={load} />
     {:else if !settings.length}
-      <div class="sc-empty">{backfilling ? t('Looking for settings on thesession.org…') : t('No settings found for this tune')}</div>
+      <div class="sc-empty">{pager.backfilling ? t('Looking for settings on thesession.org…') : t('No settings found for this tune')}</div>
     {:else}
       <div class="sc-nav">
         <button class="sc-step" disabled={idx === 0} aria-label={t('Previous setting')} onclick={() => step(-1)}
@@ -203,7 +107,7 @@
           aria-label={t('Next setting')}
           onclick={() => step(1)}
         >
-          {#if backfilling && idx >= settings.length - 1}
+          {#if pager.backfilling && idx >= settings.length - 1}
             <!-- more settings may still be on their way from thesession.org -->
             <span class="sc-spin" aria-hidden="true"></span>
           {:else}<Chevron size={18} />{/if}

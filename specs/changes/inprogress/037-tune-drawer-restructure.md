@@ -68,45 +68,76 @@ it also always appears in Stats.
 
 When the notation being drawn comes from a setting other than yours, a dim line under the
 staff: *"This is the version The Cobblestone plays. **Your personal version** differs."* The
-bold part is a button that re-renders the staff from your setting and flips the line to
-*"Showing your version. **The Cobblestone** plays a different one."* Purely a view toggle —
-saves nothing, resets on close.
+bold part is a button that pages the staff to your setting (the settings pager below) and
+flips the line to *"Showing your version. **The Cobblestone** plays a different one."*
+Purely a view toggle — saves nothing, resets on close.
 
 Deliberately **not** covered: instance-vs-session setting differences (the Session tab shows
-those) and key differences (the key doesn't change what's drawn). Spec-later: an upcoming
-change goes deeper on settings and will revisit this.
+those) and key differences (the key doesn't change what's drawn).
+
+### Paging the settings on the staff (BUILT, Nov 2026)
+
+The staff itself pages through every setting of the tune, in place: **swipe** it left or
+right on a phone, the **‹ ›** under it or **← →** on a desktop. The row under the staff reads
+*‹ Setting 2 of 7 · #13030 · Ddor ★ yours ›*, with a ★ for each layer that plays the setting
+in view (*yours*, *The Cobblestone's*, *this night's*). The notes/abc tabs, the copy button and
+the thesession.org / abc-tools links all follow the setting in view.
+
+The engine is `frontend/src/tunesheet/settingpager.svelte.js` (`createSettingPager`), shared
+with the chooser sheet below; `ios/Ceol/Ceol/SettingPager.swift` (`SettingPagerModel`) is its
+twin. It lists the settings we hold at once (`GET /api/tunes/<id>/preview`, local and cheap)
+and merges thesession.org's full list in setting order (`GET /api/tunes/thesession/<id>/preview?full=1`)
+**lazily**: that is a live call to thesession.org with no server-side cache, and the drawer
+opens on every tune tap across the site, so it runs once, the first time something asks to
+page — a finger on the staff, ‹ ›, ← →. A step past the end while the list is still growing is
+kept and applied when it lands (the › slot spins meanwhile). Rendering runs ahead in the size
+being looked at (opening bars, or the whole tune once flipped): the setting in view, then the
+next, then the one before, then the one after next — both neighbours are drawn before a finger
+can reach them, because the staff slides as it pages: under a swipe the one in view follows the
+finger off one edge while its neighbour rides in from the other (past an end it only gives a
+little); let go past the threshold it settles into the page, short of it springs back. ‹ › and
+← → make the same slide. A setting we hold renders through `/api/tunes/settings/<id>/image`, which caches the
+PNG on `tune_setting`; one only thesession.org has renders ephemerally (`/api/tunes/render-abc`),
+cached for the page in `client.js`'s image registry. Signed out, the thesession.org list and the
+ephemeral render are gated, so a guest pages the held settings only.
+
+Once the pager has been worked and sits on a setting the view's layer doesn't use, a button
+under it makes that the default:
+
+| view | button | writes |
+|---|---|---|
+| my list (no session), tune on my list | **Make this my default setting** | `POST /api/my-tunes/ops` `{type: set_setting, tune_id, setting_id}` |
+| session, or one of its nights — session admins | **Make this {session}'s default setting** | `PUT /api/sessions/<path>/tunes/<id>` `{setting_id}` |
+| session, or one of its nights — a member whose list holds the tune | **Make this my default setting** | the tunebook op |
+| not on my list and no session; signed out | (no button: paging is for looking) | — |
+
+A night's own override (`session_instance_tune.setting_override`) is deliberately **not** what
+the button writes from a night: the per-night setting is set from the History form's Change
+button, as before. The save happens at once, like the learn status; the server imports a
+setting only thesession.org has before saving it (`ensure_setting_held` /
+`_ensure_setting_local`: the ABC only; its images render on first view). Saved, the ★ moves,
+the button goes, and the staff stays on the setting just saved. The old under-staff line
+(*I play a different version* **[Change Setting]**) is gone on both platforms.
 
 ### The setting chooser (BUILT, Oct 2026)
 
-A setting is no longer typed in as a thesession.org number. Every place that set one — the
+A setting is never typed in as a thesession.org number. Every form that sets one — the
 personal Configure form, the Details form, the History form — shows the current setting
-(`#5150`) with a **Change** button, and under the staff a line offers the layer the drawer
-is looking at:
+(`#5150`) with a **Change** button, which opens `SettingChooser.svelte` (a kit Sheet) for that
+layer: the same pager, showing each setting's **full** notation, with thesession.org's list
+fetched as soon as the held settings are in (the sheet IS the ask for the whole list), and
+**Use this setting** at the foot. The History form's row is the one way to set what a night
+played (`PUT /api/sessions/<path>/<instance>/tunes/<id>` `{setting_override}`; members, and
+only for a tune played that night). A setting thesession.org doesn't have for the tune is a
+404, and nothing is written.
 
-| view | line | writes |
-|---|---|---|
-| my list (no session) | *I play a different version* **[Change Setting]** | `POST /api/my-tunes/ops` `{type: set_setting, tune_id, setting_id}` |
-| session (admins) | *We play a different version* **[Change Setting]** | `PUT /api/sessions/<path>/tunes/<id>` `{setting_id}` |
-| one night (members, tune played that night) | *We played a different version on this night* **[Change Setting]** | `PUT /api/sessions/<path>/<instance>/tunes/<id>` `{setting_override}` |
-
-Both open `SettingChooser.svelte` (a kit Sheet): the tune's settings we hold
-(`GET /api/tunes/<id>/preview`), then thesession.org's full list merged in setting order
-(`GET /api/tunes/thesession/<id>/preview?full=1`), opening on the setting the layer uses
-now. Each shows its **full** notation. Paging is instant because rendering runs ahead: the
-setting in view, then the next two, one at a time. A setting we hold renders through
-`/api/tunes/settings/<id>/image?kind=full`, which caches the PNG on `tune_setting`; one only
-thesession.org has renders ephemerally (`/api/tunes/render-abc`) and is cached for the page
-in `client.js`'s image registry. The pick saves at once, like the learn status — not behind
-the form's Save — in one request: all three writes import a setting only thesession.org has
-before saving it (`ensure_setting_held` / `_ensure_setting_local`: the ABC only, about a
-second; its images render on first view), since nothing may point at a setting we don't
-hold. A setting thesession.org doesn't have for the tune is a 404, and nothing is written.
-
-The iOS app has the same chooser (`ios/Ceol/Ceol/SettingChooser.swift`) on its tune sheet,
-with the same three lines and the same rules; a tune opened from a night's log carries the
-night (`TuneRef.instanceID`). The native surface gained the `set_setting` op, the two
-session writes (setting only), `setting_override` on the tune payload, a schema for
-thesession.org's preview (`?full=1`) and a body for `render-abc` — all additive.
+The iOS app has the same chooser (`ios/Ceol/Ceol/SettingChooser.swift`) behind the same
+Change buttons, and the same paged notation card with the same button and rules
+(`TuneSheetBody`, `TunesViews.swift`); a tune opened from a night's log carries the night
+(`TuneRef.instanceID`). The native surface gained the `set_setting` op, the two session
+writes (setting only), `setting_override` on the tune payload, a schema for thesession.org's
+preview (`?full=1`) and a body for `render-abc` — all additive; paging the staff needed
+nothing new.
 
 ## The name matcher
 

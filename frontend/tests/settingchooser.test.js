@@ -60,15 +60,16 @@ describe('SettingChooser', () => {
     expect(use.disabled).toBe(true)
   })
 
-  it('renders the next two settings before the user gets there, and none behind', async () => {
+  it('renders the settings either side before the user gets there, and not the one three away', async () => {
     stubFetch(routesFor(502, [5210, 5220], [5210, 5220, 5230, 5240, 5250]))
     render(SettingChooser, { open: true, tuneId: 502, tuneType: 'reel', currentSettingId: 5220, onChoose: vi.fn() })
 
-    // 5220 is in view: 5230 and 5240 (only thesession.org has them) render ahead; 5250
-    // is three away and 5210 is behind, so neither is asked for yet.
+    // 5220 is in view: 5230 (only thesession.org has it) renders ahead, then 5210 behind
+    // it, then 5240; 5250 is three away, so it isn't asked for yet.
     await waitFor(() => expect(remoteRenders().map((b) => b.abc)).toEqual(['abc-5230', 'abc-5240']))
     expect(remoteRenders().every((b) => b.kind === 'full' && b.tune_type === 'reel')).toBe(true)
-    expect(urls().some((u) => u.includes('/settings/5210/'))).toBe(false)
+    expect(urls().some((u) => u.includes('/settings/5210/'))).toBe(true)
+    expect(remoteRenders().map((b) => b.abc)).not.toContain('abc-5250')
 
     // Paging on is instant — the image is already here — and the run moves with you.
     await fireEvent.click(screen.getByRole('button', { name: 'Next setting' }))

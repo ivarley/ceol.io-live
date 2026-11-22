@@ -1709,11 +1709,13 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
   })
 })
 
-// ---- the setting chooser's ways in -------------------------------------------------
-// The setting used to be a text box for a thesession.org setting number. Now each view
-// offers its own layer under the staff, and each form's setting row opens the chooser.
-describe('changing the setting through the chooser', () => {
-  const chooserRoutes = (tuneId, localIds, allIds) => [
+// ---- paging the settings on the staff ------------------------------------------------
+// The staff pages through every setting of the tune in place (swipe / ‹ › / ← →), and
+// once it sits on one the view's layer doesn't use, a button under it makes that the
+// default: mine on my list, the session's at a session (its admins). The chooser sheet
+// still opens from each form's Change button (settingchooser.test.js).
+describe('paging the settings on the staff', () => {
+  const pagerRoutes = (tuneId, localIds, allIds) => [
     [
       `/api/tunes/${tuneId}/preview`,
       { success: true, tune_id: tuneId, settings: localIds.map((id) => ({ setting_id: id, key: 'Dmajor', abc: `abc-${id}`, incipit_abc: `inc-${id}`, incipit_image: `INC-${id}` })) },
@@ -1726,72 +1728,97 @@ describe('changing the setting through the chooser', () => {
     ['/api/tunes/render-abc', (url, opts) => ({ success: true, image: `R-${JSON.parse(opts.body).abc}` })],
   ]
   const puts = () => fetchMock.mock.calls.filter(([, o]) => o && o.method === 'PUT')
-  const pickNext = async () => {
+  const thesessionCalls = () => fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/tunes/thesession/'))
+  const pagerLabel = (container) => container.querySelector('.notation-pager-label')?.textContent || ''
+  const defaultBtn = () => screen.queryByRole('button', { name: /default setting/ })
+  const next = async () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Next setting' }).disabled).toBe(false))
     await fireEvent.click(screen.getByRole('button', { name: 'Next setting' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Use this setting' }))
   }
 
-  it('on my list: "I play a different version" saves my setting and redraws the staff', async () => {
+  it('on my list: › pages the staff, then "Make this my default setting" saves my setting', async () => {
     const onSave = vi.fn()
     stubFetch([
       ['/api/tunes/601/detail', detailPayload({ tune: { tune_id: 601, setting_id: 6010 }, pts: fullPts({ setting_id: 6010 }) })],
       ['/api/my-tunes/ops', { success: true }],
-      ...chooserRoutes(601, [6010, 6020], [6010, 6020]),
+      ...pagerRoutes(601, [6010, 6020], [6010, 6020]),
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 601, onSave })
-    await waitFor(() => expect(container.querySelector('.notation-change-setting')).toBeTruthy())
-    expect(container.querySelector('.notation-change-setting').textContent).toContain('I play a different version')
+    // The settings we hold are listed at once; thesession.org is NOT asked on open.
+    await waitFor(() => expect(pagerLabel(container)).toContain('Setting 1 of 2'))
+    expect(pagerLabel(container)).toContain('#6010')
+    expect(pagerLabel(container)).toContain('★ yours')
+    expect(thesessionCalls().length).toBe(0)
+    expect(defaultBtn()).toBeNull() // nothing to make default: this IS mine
 
-    await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
-    await pickNext()
+    await next()
+    // The staff now draws the setting paged to, from the preview's own incipit.
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC-6020'))
+    expect(pagerLabel(container)).toContain('Setting 2 of 2')
+    expect(pagerLabel(container)).not.toContain('★ yours')
+    // Paging is the ask for the whole list: thesession.org is consulted once.
+    expect(thesessionCalls().length).toBe(1)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Make this my default setting' }))
     // Mine is a tunebook op, as in the iOS app.
     await waitFor(() => expect(opsPosted().length).toBe(1))
     expect(opsPosted()[0]).toMatchObject({ type: 'set_setting', tune_id: 601, setting_id: 6020 })
     await waitFor(() => expect(onSave).toHaveBeenCalled())
-    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC-6020'))
+    // Saved: the button goes, the ★ moves, the staff stays on the new setting.
+    await waitFor(() => expect(defaultBtn()).toBeNull())
+    expect(pagerLabel(container)).toContain('★ yours')
+    expect(container.querySelector('.abc-notation-image').src).toContain('INC-6020')
     // ...and Configure's setting row says so.
     component.toggleConfigSection()
     flushSync()
     expect(container.querySelector('#setting-value').textContent).toContain('#6020')
   })
 
-  it('at a session: "We play a different version" writes the session row, admins only', async () => {
+  it('at a session: admins make it the session’s default; a member on their list, their own', async () => {
     const payload = (canEdit) =>
       detailPayload({
         tune: { tune_id: 602, setting_id: 6110, session_scope: sessScope({ can_edit_session: canEdit }) },
-        pts: fullPts({ person_tune_id: 55 }),
+        pts: fullPts({ person_tune_id: 55, setting_id: 6110 }),
       })
     stubFetch([
       ['/api/tunes/602/detail', payload(true)],
       ['/api/sessions/austin/mueller/tunes/602', { success: true }],
-      ...chooserRoutes(602, [6110, 6120], [6110, 6120]),
+      ...pagerRoutes(602, [6110, 6120], [6110, 6120]),
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 602, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(container.querySelector('.notation-change-setting')).toBeTruthy())
-    expect(container.querySelector('.notation-change-setting').textContent).toContain('We play a different version')
-    expect(document.body.textContent).not.toContain('Which version does Mueller Session play?')
+    await waitFor(() => expect(pagerLabel(container)).toContain('Setting 1 of 2'))
+    expect(pagerLabel(container)).toContain('★ Mueller Session’s')
+    expect(defaultBtn()).toBeNull()
 
-    await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
-    expect(document.body.textContent).toContain('Which version does Mueller Session play?')
-    await pickNext()
+    await next()
+    await fireEvent.click(screen.getByRole('button', { name: 'Make this Mueller Session’s default setting' }))
     await waitFor(() => expect(puts().length).toBe(1))
     expect(puts()[0][0]).toBe('/api/sessions/austin/mueller/tunes/602')
     expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_id: 6120 })
     await waitFor(() => expect(container.querySelector('#dc-setting-value').textContent).toContain('#6120'))
+    await waitFor(() => expect(defaultBtn()).toBeNull())
 
-    // A member who isn't an admin can't change what the session plays.
+    // A member who isn't an admin can't change what the session plays, but can still
+    // make the version they're looking at their own.
     cleanup()
-    stubFetch([['/api/tunes/602/detail', payload(false)]])
+    stubFetch([
+      ['/api/tunes/602/detail', payload(false)],
+      ['/api/my-tunes/ops', { success: true }],
+      ...pagerRoutes(602, [6110, 6120], [6110, 6120]),
+    ])
     const ro = render(TuneSheet)
     ro.component.show({ tuneId: 602, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(ro.container.querySelector('#details-tab')).toBeTruthy())
-    expect(ro.container.querySelector('.notation-change-setting')).toBeFalsy()
+    await waitFor(() => expect(pagerLabel(ro.container)).toContain('Setting 1 of 2'))
+    await next()
+    await fireEvent.click(screen.getByRole('button', { name: 'Make this my default setting' }))
+    await waitFor(() => expect(opsPosted().length).toBe(1))
+    expect(opsPosted()[0]).toMatchObject({ type: 'set_setting', tune_id: 602, setting_id: 6120 })
+    expect(puts().length).toBe(0)
   })
 
-  it('on one night: writes that night, the server importing a setting only thesession.org has', async () => {
+  it('on one night: ← → page too, and the button writes the SESSION’s default, not the night’s', async () => {
     const night = { session_instance_id: 77, date: '2026-03-05', start_time: null, location_override: null, positions: [] }
     stubFetch([
       [
@@ -1800,28 +1827,93 @@ describe('changing the setting through the chooser', () => {
           tune: {
             tune_id: 603,
             setting_id: 6210,
-            session_scope: sessScope({ instance: 77, played_instances: [night], can_edit_instance: true }),
+            session_scope: sessScope({ instance: 77, played_instances: [night], can_edit_session: true, can_edit_instance: true }),
           },
         }),
       ],
-      ['/api/sessions/austin/mueller/77/tunes/603', { success: true }],
-      ...chooserRoutes(603, [6210], [6210, 6220]),
+      ['/api/sessions/austin/mueller/tunes/603', { success: true }],
+      ...pagerRoutes(603, [6210], [6210, 6220]),
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 603, scope: { session: 'austin/mueller', instance: 77 } })
-    await waitFor(() => expect(container.querySelector('.notation-change-setting')).toBeTruthy())
-    expect(container.querySelector('.notation-change-setting').textContent).toContain(
-      'We played a different version on this night'
-    )
+    await waitFor(() => expect(container.querySelector('.abc-notation-display')).toBeTruthy())
+    // One setting held, so no pager yet — and no line asking to change anything.
+    expect(container.querySelector('.notation-pager')).toBeNull()
+    expect(container.querySelector('.notation-change-setting')).toBeNull()
 
-    await fireEvent.click(container.querySelector('.notation-change-setting .change-setting-btn'))
-    await pickNext()
-    await waitFor(() => expect(puts().length).toBe(1))
-    expect(puts()[0][0]).toBe('/api/sessions/austin/mueller/77/tunes/603')
-    expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_override: 6220 })
-    // One round trip: no separate import call from the page.
+    // → asks for the whole list; the step waits for it and lands on the new setting,
+    // which only thesession.org has — drawn for this look only.
+    await fireEvent.keyDown(window, { key: 'ArrowRight' })
+    await waitFor(() => expect(pagerLabel(container)).toContain('Setting 2 of 2'))
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('R-abc-6220'))
+    // Nothing is imported by the page for looking.
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/settings/cache'))).toBe(false)
-    // The new opening bars render on first view, now that the server holds the setting.
-    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('IMG-6220'))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Make this Mueller Session’s default setting' }))
+    await waitFor(() => expect(puts().length).toBe(1))
+    expect(puts()[0][0]).toBe('/api/sessions/austin/mueller/tunes/603')
+    expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_id: 6220 })
+    // ← goes back to the first; the ★ now sits on the second.
+    await fireEvent.keyDown(window, { key: 'ArrowLeft' })
+    await waitFor(() => expect(pagerLabel(container)).toContain('Setting 1 of 2'))
+    expect(pagerLabel(container)).not.toContain('★')
+  })
+
+  it('not on my list and no session: paging is for looking — no button; signed out, held settings only', async () => {
+    stubFetch([
+      ['/api/tunes/604/detail', detailPayload({ tune: { tune_id: 604, setting_id: 6310 }, pts: notOnListPts })],
+      ...pagerRoutes(604, [6310, 6320], [6310, 6320, 6330]),
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 604 })
+    await waitFor(() => expect(pagerLabel(container)).toContain('Setting 1 of 2'))
+    await next()
+    await waitFor(() => expect(pagerLabel(container)).toContain('Setting 2 of 3'))
+    expect(defaultBtn()).toBeNull()
+
+    cleanup()
+    stubFetch([
+      ['/api/tunes/605/detail', detailPayload({ tune: { tune_id: 605, setting_id: 6410 }, pts: null, viewer: { logged_in: false } })],
+      ...pagerRoutes(605, [6410, 6420], [6410, 6420, 6430]),
+    ])
+    const out = render(TuneSheet)
+    out.component.show({ tuneId: 605 })
+    await waitFor(() => expect(pagerLabel(out.container)).toContain('Setting 1 of 2'))
+    await next()
+    await waitFor(() => expect(pagerLabel(out.container)).toContain('Setting 2 of 2'))
+    // The thesession.org list and the ephemeral render are sign-in gated: never asked.
+    expect(thesessionCalls().length).toBe(0)
+    expect(defaultBtn()).toBeNull()
+  })
+
+  it('the mismatch note pages the staff to my version and back, with no second fetch', async () => {
+    stubFetch([
+      [
+        '/api/tunes/606/detail',
+        detailPayload({
+          tune: { tune_id: 606, setting_id: 6510, incipit_image: 'PLAYED', session_scope: sessScope() },
+          pts: fullPts({ setting_id: 6520 }),
+        }),
+      ],
+      ...pagerRoutes(606, [6510, 6520], [6510, 6520]),
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 606, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(container.querySelector('.notation-mismatch')).toBeTruthy())
+    expect(container.querySelector('.notation-mismatch').textContent).toContain('This is the version Mueller Session plays.')
+    expect(container.querySelector('.abc-notation-image').src).toContain('PLAYED')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Your personal version' }))
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('INC-6520'))
+    expect(container.querySelector('.notation-mismatch').textContent).toContain('Showing your version.')
+    expect(pagerLabel(container)).toContain('Setting 2 of 2')
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/detail')).length).toBe(1)
+    // Looking at my own version isn't an ask to make it the session's — the admin
+    // button is for a setting the session doesn't use, and this viewer isn't one anyway.
+    expect(defaultBtn()).toBeNull()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Mueller Session' }))
+    await waitFor(() => expect(container.querySelector('.abc-notation-image').src).toContain('PLAYED'))
+    expect(container.querySelector('.notation-mismatch').textContent).toContain('This is the version Mueller Session plays.')
   })
 })

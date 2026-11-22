@@ -85,6 +85,7 @@
   } from './logic.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
   import SettingChooser from './SettingChooser.svelte'
+  import { createSettingPager } from './settingpager.svelte.js'
 
   // The tune type as the server sent it in English (the pill's CSS sets its case), the
   // interface word in Irish.
@@ -99,7 +100,6 @@
   // a definitive answer (a merged-away tunebook entry) doesn't.
   let errorRetry = $state(null)
   let adding = $state(false) // the not-on-list Add button, while its op is in flight
-  let myVersionLoading = $state(false)
   let mySessionsState = $state('idle') // idle | loading — the "different session" list
   let overridesError = $state(false) // the instance form's overrides failed to load
   let config = $state(null) // normalized show() config {tuneId, ptid, scope, callbacks, hints}
@@ -212,11 +212,23 @@
   // ABC notation display state machine
   let notationMode = $state('dots') // 'dots' | 'abc'
   let notationSize = $state('incipit') // 'incipit' | 'full'
-  // The staff always draws what was actually PLAYED (instance -> session -> mine).
-  // When that isn't my setting, a note under it offers to swap to my version; this
-  // holds the fetched notation for that view. Purely a view toggle — saves nothing.
-  let myNotation = $state(null) // {setting_id, abc, incipit_abc, image, incipit_image}
-  let showingMyVersion = $state(false)
+  // The staff opens on what was actually PLAYED (instance -> session -> mine), and
+  // swiping it (or ‹ ›, or ← →) pages it through every setting of the tune in place:
+  // the settings pager, created once the payload is in and seeded on the played
+  // setting. While it sits on another setting, the staff draws that one, and a button
+  // under it offers to make that the default — mine, or the session's.
+  let pager = $state.raw(null)
+  let pagerSaving = $state(false)
+  let swiped = false // a swipe just ended: the click that follows mustn't flip incipit ⇄ full
+  // The staff slides as it pages: the one in view off one side, its neighbour on from the
+  // other. `slideX` is where the staff sits (under a finger, or settling); `sliding` puts
+  // the transition on; `settling` is the step a slide is finishing, ±1.
+  let slideX = $state(0)
+  let sliding = $state(false)
+  let settling = 0
+  let settleTimer = null
+  let stageEl = null
+  const SLIDE_MS = 240
 
   // History / Played With: fetched lazily and asynchronously, cached for this modal open.
   // Value: {status: 'loading'|'ready'|'error'|'none'|'offline', data}. History is keyed by
@@ -362,12 +374,51 @@
   )
   const sessionLabel = $derived(sessionScope?.session_name || t('this session'))
 
-  // What the notation section renders from: the played setting, or — while the
-  // mismatch note's toggle is on — the viewer's own setting.
-  // (My version is mine alone: a night's own setting must not ride along with it.)
-  const notationSource = $derived(
-    showingMyVersion && myNotation ? { ...tune, ...myNotation, setting_override: null } : tune
+  // What the notation section renders from: the played setting, or — while the pager
+  // sits on another one — that setting, with whatever the pager has drawn of it so far.
+  // (A browsed setting is the tune's alone: a night's own must not ride along with it.)
+  const browsed = $derived(
+    pager?.setting && pager.setting.setting_id !== playedSettingId ? pager.setting : null
   )
+  const browsing = $derived(!!browsed)
+  const notationSource = $derived.by(() => {
+    if (!tune) return null
+    if (!browsed) return tune
+    return {
+      ...tune,
+      setting_override: null,
+      setting_id: browsed.setting_id,
+      setting_key: browsed.key ?? null,
+      abc: browsed.abc,
+      incipit_abc: browsed.incipit_abc,
+      image: pager.image(browsed.setting_id, 'full') || null,
+      incipit_image: pager.image(browsed.setting_id, 'incipit') || null,
+    }
+  })
+  // A browsed setting whose staff is still being drawn: show that, not its abc.
+  const browsedPending = $derived(
+    !!browsed && notationMode === 'dots' && pager.image(browsed.setting_id, notationSize) === undefined
+  )
+  // The settings either side of the one in view, drawn as the staff draws them, so a
+  // swipe slides one on while the other goes (the pager draws both ahead). null at an end.
+  const slidePrev = $derived(neighbourSlide(-1))
+  const slideNext = $derived(neighbourSlide(1))
+  function neighbourSlide(d) {
+    if (!pager || !tune) return null
+    const s = pager.settings[pager.idx + d]
+    if (!s) return null
+    const pending = notationMode === 'dots' && pager.image(s.setting_id, notationSize) === undefined
+    if (pending) return { pending: true, view: null }
+    const src = {
+      abc: s.abc,
+      incipit_abc: s.incipit_abc,
+      image: pager.image(s.setting_id, 'full') || null,
+      incipit_image: pager.image(s.setting_id, 'incipit') || null,
+    }
+    return { pending: false, view: notationDisplay(src, notationMode, notationSize) }
+  }
+  // The mismatch note's toggle: is the staff on MY setting rather than the played one?
+  const showingMyVersion = $derived(!!browsed && !!mySettingId && browsed.setting_id === mySettingId)
   const notation = $derived(notationSource ? notationInfo(notationSource) : null)
   const notationView = $derived(
     notationSource ? notationDisplay(notationSource, notationMode, notationSize) : null
@@ -596,8 +647,7 @@
 
     refreshState = 'idle'
     statusSaving = false
-    myNotation = null
-    showingMyVersion = false
+    startPager(data.session_tune)
     // Personal config starts collapsed; admin's canonical-name editor is always open.
     isConfigVisible = mode === 'admin'
     // Default tab is My List when it applies (logged-in, non-admin), else History.
@@ -771,6 +821,12 @@
 
   export function close() {
     chooserOpen = false
+    pager?.dispose()
+    pager = null
+    clearTimeout(settleTimer)
+    settling = 0
+    sliding = false
+    slideX = 0
     showCls = false
     pendingHeard = 0
     removeUrlTuneParam(mode)
@@ -809,9 +865,18 @@
   // the capture phase, before Bits' own Escape handling closes the sheet, so the check
   // still sees it open.
   function onKeydown(event) {
-    if (event.key !== 'Escape' || !visible) return
+    if (!visible) return
     if (chooserOpen || sessionPickerOpen || removeMyTunesOpen || removeSessionOpen) return
-    close()
+    if (event.key === 'Escape') {
+      close()
+      return
+    }
+    // ← → page the staff through the tune's settings, unless you're typing.
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && pager) {
+      if (event.target?.closest?.('input, textarea, select')) return
+      event.preventDefault()
+      stepSetting(event.key === 'ArrowLeft' ? -1 : 1)
+    }
   }
 
   // ---- tunebook status control ------------------------------------------------------
@@ -1028,45 +1093,152 @@
 
   // ---- configure section / save --------------------------------------------------------
 
+  // ---- the settings pager -----------------------------------------------------------
+
+  // Every setting of the tune, paged on the staff itself. The pager loads the settings
+  // we hold at once (one local call); thesession.org's full list is fetched the first
+  // time something asks to page — never on open, since the drawer opens on every tune
+  // tap across the site. A signed-out viewer pages the held settings only (the
+  // thesession.org fetch and the ephemeral render are sign-in gated).
+  function startPager(st) {
+    // The same tune again (a payload refreshed after a save, a re-scope): the pager
+    // keeps its list and its place; only the mark moves.
+    if (st && pager && pager.tuneId === st.tune_id) {
+      pager.setCurrent(st.setting_override || st.setting_id || null)
+      return
+    }
+    pager?.dispose()
+    pager = null
+    if (!st || !onlineNow) return
+    const p = createSettingPager({
+      tuneId: st.tune_id,
+      tuneType: st.tune_type || '',
+      currentSettingId: st.setting_override || st.setting_id || null,
+      kind: 'incipit',
+      canBackfill: loggedIn,
+    })
+    pager = p
+    p.load()
+  }
+
+  function wantAllSettings() {
+    pager?.ensureBackfill()
+  }
+
+  // A step slides the staff: the one in view off, its neighbour on, then the pager moves.
+  // With no neighbour on that side (the end of the list, more maybe still coming) the
+  // pager takes the step itself; nothing can slide in without a width to slide across.
+  function stepSetting(d) {
+    if (!pager || settling) return
+    wantAllSettings()
+    const w = stageEl?.clientWidth || 0
+    if (!w || !pager.settings[pager.idx + d]) {
+      pager.step(d)
+      return
+    }
+    settle(d, w)
+  }
+
+  function settle(d, w) {
+    settling = d
+    sliding = true
+    slideX = -d * w
+    clearTimeout(settleTimer)
+    settleTimer = setTimeout(() => {
+      pager?.step(d)
+      // The pager's staff is now the one that slid in: back to rest, with no transition.
+      sliding = false
+      slideX = 0
+      settling = 0
+    }, SLIDE_MS)
+  }
+
+  // Let go short of a page (or past an end): the staff springs back.
+  function springBack() {
+    sliding = true
+    slideX = 0
+    clearTimeout(settleTimer)
+    settleTimer = setTimeout(() => (sliding = false), SLIDE_MS)
+  }
+
+  // The size being looked at is the size the pager draws ahead.
+  $effect(() => {
+    pager?.setSize(notationSize)
+  })
+
+  // Swipe the staff to page: it follows the finger, the next setting (or the one before)
+  // coming on beside it, and lets go into a page or springs back. A sideways drag is
+  // claimed (the drawer doesn't scroll under it, and /my-tunes's swipe-right-closes-the-
+  // drawer doesn't see it); an up-down one is left alone. Past an end the staff only
+  // gives a little, so the end can be felt.
+  function swipeSettings(node) {
+    let x0 = 0
+    let y0 = 0
+    let lock = null // null | 'h' | 'v'
+    const neighbour = (d) => !!pager?.settings[pager.idx + d]
+    const start = (e) => {
+      if (e.touches.length !== 1 || settling) return
+      x0 = e.touches[0].clientX
+      y0 = e.touches[0].clientY
+      lock = null
+      wantAllSettings() // a finger on the staff: the whole list, before the swipe lands
+    }
+    const move = (e) => {
+      if (lock === 'v' || e.touches.length !== 1 || settling) return
+      const dx = e.touches[0].clientX - x0
+      const dy = e.touches[0].clientY - y0
+      if (!lock) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
+        lock = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'
+        if (lock === 'v') return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      sliding = false
+      slideX = neighbour(dx < 0 ? 1 : -1) ? dx : dx * 0.25
+    }
+    const end = (e) => {
+      if (lock !== 'h') {
+        lock = null
+        return
+      }
+      lock = null
+      e.stopPropagation()
+      if (settling) return
+      const dx = (e.changedTouches[0]?.clientX ?? x0) - x0
+      // A click synthesized from this touch (if any) follows within a moment; a later
+      // tap is a tap again.
+      swiped = true
+      setTimeout(() => (swiped = false), 400)
+      const d = dx < 0 ? 1 : -1
+      if (Math.abs(dx) < 40 || !pager || !neighbour(d)) {
+        springBack()
+        return
+      }
+      stepSetting(d)
+    }
+    node.addEventListener('touchstart', start, { passive: true })
+    node.addEventListener('touchmove', move, { passive: false })
+    node.addEventListener('touchend', end, { passive: true })
+    node.addEventListener('touchcancel', end, { passive: true })
+    return {
+      destroy() {
+        node.removeEventListener('touchstart', start)
+        node.removeEventListener('touchmove', move)
+        node.removeEventListener('touchend', end)
+        node.removeEventListener('touchcancel', end)
+      },
+    }
+  }
+
   // ---- the setting-mismatch note ----------------------------------------------------
 
   // The staff draws what was PLAYED. When that isn't my setting, the note under it
-  // swaps the staff to my version and back — view only, saves nothing, resets on close.
+  // pages the staff to my version and back — the same pager a swipe works, view only.
   // A warning you can't act on is just an irritant; being able to compare is the point.
   export function toggleMyVersion() {
-    if (showingMyVersion) {
-      showingMyVersion = false
-      return
-    }
-    if (myNotation) {
-      showingMyVersion = true
-      return
-    }
-    if (myVersionLoading) return
-    myVersionLoading = true
-    // The unscoped detail payload resolves notation from MY setting.
-    fetch(detailUrl(tune.tune_id, null))
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.success) throw new Error('no payload')
-        const st = data.session_tune
-        myNotation = {
-          setting_id: st.setting_id,
-          setting_key: st.setting_key,
-          abc: st.abc,
-          incipit_abc: st.incipit_abc,
-          image: st.image,
-          incipit_image: st.incipit_image,
-        }
-        showingMyVersion = true
-        const info = notationInfo(myNotation)
-        notationMode = info.initialMode
-        notationSize = 'incipit'
-      })
-      .catch((error) => toastFailure(t('load your version of this tune'), error))
-      .finally(() => {
-        myVersionLoading = false
-      })
+    if (!pager) return
+    pager.jumpTo(showingMyVersion ? playedSettingId : mySettingId)
   }
 
   // The Session form's PUT target follows the droplist: 'general' writes the session's
@@ -1434,11 +1606,9 @@
       })
   }
 
-  // Put a setting's notation on the staff — the abc and whichever images it has. Any
-  // "your version" view is dropped: the staff now shows what was just fetched or chosen.
+  // Put a setting's notation on the staff — the abc and whichever images it has: the
+  // staff now shows what was just fetched or chosen.
   function showNotation(n) {
-    showingMyVersion = false
-    myNotation = null
     tune.abc = n.abc
     tune.incipit_abc = n.incipit_abc
     tune.image = n.image || null
@@ -1522,28 +1692,54 @@
   let chooserOpen = $state(false)
   let chooserLayer = $state(null) // {kind: 'personal' | 'session' | 'instance', instanceId?}
 
-  // The link under the staff offers the layer the drawer is looking at: on my list, my
-  // version; at a session, the session's; on one night, that night's.
-  const viewLayer = $derived.by(() => {
+  // The button under the paged staff offers the layer this view would set: at a
+  // session (or one of its nights), the session's default — its admins — else mine,
+  // when the tune is on my list. Neither: paging is for looking.
+  const defaultLayer = $derived.by(() => {
     if (!tune || !loggedIn || isOffline) return null
-    if (mode === 'session_instance') {
-      const instanceId = sessionScope?.instance
-      const playedThatNight = playedInstances.some((i) => String(i.session_instance_id) === String(instanceId))
-      return playedThatNight && sessionScope?.can_edit_instance ? { kind: 'instance', instanceId } : null
-    }
-    if (mode === 'session') return sessionScope?.can_edit_session ? { kind: 'session' } : null
-    if (mode === 'my_tunes') return { kind: 'personal' }
+    if (inSession && sessionScope?.can_edit_session) return { kind: 'session' }
+    if (onList) return { kind: 'personal' }
     return null
   })
-  const viewLayerPrompt = $derived(
-    !viewLayer
-      ? ''
-      : viewLayer.kind === 'personal'
-        ? t('I play a different version')
-        : viewLayer.kind === 'session'
-          ? t('We play a different version')
-          : t('We played a different version on this night')
+  const defaultSettingId = $derived(defaultLayer ? layerSettingId(defaultLayer) : null)
+  // Offered once the pager has been worked and sits on a setting the layer doesn't use;
+  // the drawer opening on a night's own setting is not an ask to change the session's.
+  const canMakeDefault = $derived(
+    !!defaultLayer && !!pager?.setting && pager.touched && pager.setting.setting_id !== defaultSettingId
   )
+  const makeDefaultLabel = $derived(
+    !defaultLayer
+      ? ''
+      : defaultLayer.kind === 'personal'
+        ? t('Make this my default setting')
+        : t('Make this {name}’s default setting', { name: sessionLabel })
+  )
+  // Which layers play the setting in view: a ★ for each in the pager's label.
+  const settingBadges = $derived.by(() => {
+    const s = pager?.setting
+    if (!s) return []
+    const out = []
+    if (mySettingId && s.setting_id === mySettingId) out.push(t('★ yours'))
+    if (inSession && tune?.setting_id && s.setting_id === tune.setting_id) out.push(t('★ {name}’s', { name: sessionLabel }))
+    if (inSession && tune?.setting_override && s.setting_id === tune.setting_override) out.push(t('★ this night’s'))
+    return out
+  })
+
+  // The button: write the setting in view to the layer, then mark it the pager's own.
+  async function makeDefault() {
+    const layer = defaultLayer
+    const s = pager?.setting
+    if (!layer || !s || pagerSaving) return
+    pagerSaving = true
+    const ok = await writeSetting(layer, s, pager.image(s.setting_id, 'full') || null)
+    pagerSaving = false
+    if (!ok) return
+    pager.setCurrent(s.setting_id)
+    toast(
+      layer.kind === 'personal' ? t('Now your default setting') : t('Now {name}’s default setting', { name: sessionLabel }),
+      'success'
+    )
+  }
 
   const isScopedInstance = (instanceId) => String(instanceId) === String(sessionScope?.instance ?? '')
 
@@ -1597,12 +1793,17 @@
     }
   }
 
-  // The chooser's pick: write it to the layer, then mirror it here. A setting only
-  // thesession.org has is imported by the server on the way (nothing may point at a
-  // setting we don't hold); its opening bars then render on first view. Resolves true
-  // when saved, which closes the chooser.
-  async function chooseSetting(setting, fullImage) {
-    const layer = chooserLayer
+  // The chooser's pick: write it to the layer, then mirror it here. Resolves true when
+  // saved, which closes the chooser.
+  function chooseSetting(setting, fullImage) {
+    return writeSetting(chooserLayer, setting, fullImage)
+  }
+
+  // Write a setting to a layer (the chooser's pick, or the button under the staff),
+  // then mirror it here. A setting only thesession.org has is imported by the server
+  // on the way (nothing may point at a setting we don't hold); its opening bars then
+  // render on first view. Resolves true when saved.
+  async function writeSetting(layer, setting, fullImage) {
     if (!tune || !layer) return false
     const { method, endpoint, body } = settingWrite(layer, tune.tune_id, setting.setting_id)
     try {
@@ -1616,8 +1817,8 @@
       applyChosenSetting(layer, setting.setting_id, {
         abc: setting.abc,
         incipit_abc: setting.incipit_abc,
-        incipit_image: setting.incipit_image || null,
-        image: fullImage || null,
+        incipit_image: setting.incipit_image || pager?.image(setting.setting_id, 'incipit') || null,
+        image: fullImage || pager?.image(setting.setting_id, 'full') || null,
         key: setting.key,
       })
       if (config?.onSave && typeof config.onSave === 'function') config.onSave(data)
@@ -1672,10 +1873,9 @@
     const data = await res.json().catch(() => ({}))
     return data.image || null
   }
-  // Write a freshly rendered PNG back into whichever block the view is reading from.
+  // Write a freshly rendered PNG back into the payload the staff draws from.
   function patchNotationImage(settingId, field, value) {
     if (tune && (tune.setting_override || tune.setting_id) === settingId) tune[field] = value
-    if (myNotation && myNotation.setting_id === settingId) myNotation = { ...myNotation, [field]: value }
   }
   async function renderMissingNotation(settingId) {
     try {
@@ -1692,7 +1892,7 @@
     }
   }
   $effect(() => {
-    if (!visible || !loggedIn || isOffline) return
+    if (!visible || !loggedIn || isOffline || browsing) return // the pager draws what it pages
     const src = notationSource
     // The setting drawn: a night's own, else the one under it.
     const settingId = src?.setting_override || src?.setting_id
@@ -1944,6 +2144,10 @@
   }
 
   function onNotationClick() {
+    if (swiped) {
+      swiped = false // the tap that ended a swipe is not a tap
+      return
+    }
     if (notation?.canToggleSize) toggleNotationSize()
   }
 
@@ -2106,6 +2310,16 @@
              The staff draws what was PLAYED (instance -> session -> mine): a name is a
              label, so the most personal wins, but a setting is a record of what
              happened, so the most specific factual layer wins. -->
+        {#snippet sideSlide(slide)}
+          <!-- a neighbouring setting, drawn as the staff is (its abc when it couldn't be) -->
+          {#if slide.pending}
+            <div class="notation-pending"><span class="notation-spin"></span></div>
+          {:else if slide.view?.kind === 'img'}
+            <img src="data:image/png;base64,{slide.view.src}" alt="" class="abc-notation-image abc-notation-{slide.view.size}" />
+          {:else if slide.view}
+            <pre class="abc-notation-text abc-notation-{slide.view.size}">{slide.view.text}</pre>
+          {/if}
+        {/snippet}
         {#if notation && notation.hasAny}
           <div class="abc-notation-section">
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -2115,18 +2329,55 @@
               data-current-size={notationSize}
               title={notation.canToggleSize ? t('Click to toggle between incipit and full notation') : undefined}
               onclick={onNotationClick}
+              onpointerenter={wantAllSettings}
+              use:swipeSettings
             >
-              {#if notationView}
-                {#if notationView.kind === 'img'}
-                  <img
-                    src="data:image/png;base64,{notationView.src}"
-                    alt={notationView.size === 'incipit' ? t('Incipit notation') : t('Full notation')}
-                    class="abc-notation-image abc-notation-{notationView.size}"
-                  />
-                {:else}
-                  <pre class="abc-notation-text abc-notation-{notationView.size}">{notationView.text}</pre>
+              <!-- The stage: the staff in view, and either neighbour waiting just off the
+                   edge, so a swipe slides one off and the other on. -->
+              <div class="notation-stage" bind:this={stageEl}>
+                <div
+                  class="notation-slide notation-slide-current"
+                  style:transform={slideX ? `translateX(${slideX}px)` : undefined}
+                  style:transition={sliding ? `transform ${SLIDE_MS}ms ease-out` : undefined}
+                >
+                  {#if browsedPending}
+                    <!-- a setting paged to, its staff still being drawn -->
+                    <div class="notation-pending" aria-live="polite">
+                      <span class="notation-spin" aria-hidden="true"></span> {t('rendering notation…')}
+                    </div>
+                  {:else if notationView}
+                    {#if notationView.kind === 'img'}
+                      <img
+                        src="data:image/png;base64,{notationView.src}"
+                        alt={notationView.size === 'incipit' ? t('Incipit notation') : t('Full notation')}
+                        class="abc-notation-image abc-notation-{notationView.size}"
+                      />
+                    {:else}
+                      <pre class="abc-notation-text abc-notation-{notationView.size}">{notationView.text}</pre>
+                    {/if}
+                  {/if}
+                </div>
+                {#if slidePrev}
+                  <div
+                    class="notation-slide notation-slide-side"
+                    aria-hidden="true"
+                    style:transform="translateX(calc(-100% + {slideX}px))"
+                    style:transition={sliding ? `transform ${SLIDE_MS}ms ease-out` : undefined}
+                  >
+                    {@render sideSlide(slidePrev)}
+                  </div>
                 {/if}
-              {/if}
+                {#if slideNext}
+                  <div
+                    class="notation-slide notation-slide-side"
+                    aria-hidden="true"
+                    style:transform="translateX(calc(100% + {slideX}px))"
+                    style:transition={sliding ? `transform ${SLIDE_MS}ms ease-out` : undefined}
+                  >
+                    {@render sideSlide(slideNext)}
+                  </div>
+                {/if}
+              </div>
             </div>
             <div class="notation-controls-row">
               <div class="notation-mode-tabs">
@@ -2193,10 +2444,51 @@
                   >{/if}
               </div>
             </div>
+            <!-- The pager: swipe the staff (or ‹ ›, or ← →) through every setting of the
+                 tune. Shown once there is more than one to page, or more may be coming. -->
+            {#if pager && !pager.failed && (pager.count > 1 || pager.backfilling)}
+              <div class="notation-pager" data-setting-id={pager.setting?.setting_id}>
+                <button
+                  type="button"
+                  class="notation-pager-step"
+                  disabled={pager.idx === 0}
+                  aria-label={t('Previous setting')}
+                  onclick={() => stepSetting(-1)}><Chevron dir="left" size={16} /></button
+                >
+                <span class="notation-pager-label">
+                  {t('Setting {n} of {total}', { n: pager.idx + 1, total: pager.count })}
+                  {#if pager.setting}
+                    <span class="notation-pager-meta">#{pager.setting.setting_id}{pager.setting.key ? ` · ${pager.setting.key}` : ''}</span>
+                  {/if}
+                  {#each settingBadges as badge (badge)}
+                    <span class="notation-pager-badge">{badge}</span>
+                  {/each}
+                </span>
+                <button
+                  type="button"
+                  class="notation-pager-step"
+                  disabled={pager.idx >= pager.count - 1 && !pager.backfilling}
+                  aria-label={t('Next setting')}
+                  onclick={() => stepSetting(1)}
+                >
+                  {#if pager.backfilling && pager.idx >= pager.count - 1}
+                    <!-- more settings may still be on their way from thesession.org -->
+                    <span class="notation-spin" aria-hidden="true"></span>
+                  {:else}<Chevron size={16} />{/if}
+                </button>
+              </div>
+            {/if}
+            {#if canMakeDefault}
+              <div class="notation-make-default">
+                <button type="button" class="make-default-btn" disabled={pagerSaving} onclick={makeDefault}
+                  >{pagerSaving ? t('Saving…') : makeDefaultLabel}</button
+                >
+              </div>
+            {/if}
             <!-- You're looking at the session's version, not yours. A warning you can't
-                 act on is just an irritant, so the link swaps the staff to your setting
-                 and back. View only — it saves nothing and resets when the drawer closes. -->
-            {#if settingMismatch}
+                 act on is just an irritant, so the link pages the staff to your setting
+                 and back. View only — it saves nothing. -->
+            {#if settingMismatch && pager}
               <div class="notation-mismatch">
                 {#if showingMyVersion}
                   {t('Showing your version.')}
@@ -2205,8 +2497,8 @@
                   >{mismatchMine[1]}
                 {:else}
                   {t('This is the version {name} plays.', { name: sessionLabel })}
-                  {mismatchTheirs[0]}<button type="button" class="notation-mismatch-link" onclick={toggleMyVersion} disabled={myVersionLoading}
-                    >{myVersionLoading ? t('Loading your version…') : t('Your personal version')}</button
+                  {mismatchTheirs[0]}<button type="button" class="notation-mismatch-link" onclick={toggleMyVersion}
+                    >{t('Your personal version')}</button
                   >{mismatchTheirs[1]}
                 {/if}
               </div>
@@ -2223,14 +2515,6 @@
             >
               {pcFetchState === 'loading' ? t('Generating notation…') : t('Generate Notation')}
             </button>
-          </div>
-        {/if}
-        {#if viewLayer}
-          <div class="notation-change-setting">
-            {viewLayerPrompt}
-            <button type="button" class="change-setting-btn" onclick={() => openChooser(viewLayer)}
-              >{t('Change Setting')}</button
-            >
           </div>
         {/if}
 
