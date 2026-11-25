@@ -99,6 +99,18 @@ final class AppModel {
     }
     /// A night is being logged: the tab bar gives way to the composer.
     var editingNight = false
+    /// Export mode (the web's `?export=1`): the Tunes tab, or one session's page, shows
+    /// its usual filters plus an export bar in place of the tab bar; Done or Leave
+    /// clears it. Set from Me → Export my data (ExportChooserView).
+    var exporting: ExportRules.Target?
+    /// The format the export bar last had; kept across targets within a launch.
+    var exportFormat: ExportRules.Format = .json
+    /// Which of a session's tabs the chooser asked for ("tunes" or "logs"); the session
+    /// page reads it once as it appears in export mode.
+    var exportTab: String?
+    /// Whether the app's bottom bars (the tab bar and what sits over it) are away:
+    /// logging a night, or exporting.
+    var bottomBarsHidden: Bool { editingNight || exporting != nil }
     /// The listener (spec 053, 059): the Listen tab's meter, and the mini bar over the
     /// tabs while another tab is up. One at a time; logging a night's tunes or not.
     var recorder: NightRecorder?

@@ -7,7 +7,20 @@
 {% block help_content %}
 <h1>Release Notes: {{ month_name }}</h1>
 
-{% if month == '2026-10' %}
+{% if month == '2026-11' %}
+<p class="release-date">November 2026</p>
+
+<h2>Export your data</h2>
+<ul class="release-notes-list">
+    <li>On Me, <strong>Export my data</strong> lets you download your tune list, a session's tunes or a session's logs as JSON, CSV or PDF. Each opens the usual page in export mode, so the normal search and filters decide what goes in the file. The PDF carries each tune's notation; a log's PDF has the nights as headings and the sets under them. The iPhone app has the same, with the file going to the share sheet. See <a href="/help/account">Your Account</a>.</li>
+</ul>
+
+<h2>Live logger</h2>
+<ul class="release-notes-list">
+    <li>A logger left open through an update now says so: a small bar offers a reload when a newer version of Ceol is ready. It never reloads on its own.</li>
+</ul>
+
+{% elif month == '2026-10' %}
 <p class="release-date">October 2026</p>
 
 <h2>Ceol has a new address: ceol.app</h2>

@@ -3138,3 +3138,51 @@ def build_listen_payload(
     finally:
         cur.close()
     return {"success": True, "context": context}
+
+
+# ---------------------------------------------------------------------------
+# export chooser — the /export page and GET /api/export/options
+# ---------------------------------------------------------------------------
+
+
+def build_export_options_payload(conn, person_id: Optional[int]) -> Dict[str, Any]:
+    """What the Export chooser offers: the person's own sessions first (member or
+    visitor, most recently active first), then every session on Ceol by name,
+    each with its town so two sessions with one name can be told apart. The
+    chooser only builds links from these; the export itself happens on the
+    pages they lead to (export_routes.py)."""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        mine: List[Dict[str, Any]] = []
+        if person_id:
+            cur.execute(
+                """
+                SELECT s.path, s.name, p.name AS place, MAX(si.date) AS last_date
+                FROM session_person sp
+                JOIN session s ON s.session_id = sp.session_id
+                LEFT JOIN place p ON p.place_id = s.place_id
+                LEFT JOIN session_instance si ON si.session_id = s.session_id
+                WHERE sp.person_id = %s
+                GROUP BY s.session_id, s.path, s.name, p.name
+                ORDER BY last_date DESC NULLS LAST, s.name
+                """,
+                (person_id,),
+            )
+            mine = [
+                {"path": r["path"], "name": r["name"], "place": r["place"]}
+                for r in cur.fetchall()
+            ]
+        cur.execute(
+            """
+            SELECT s.path, s.name, p.name AS place
+            FROM session s LEFT JOIN place p ON p.place_id = s.place_id
+            ORDER BY s.name, p.name
+            """
+        )
+        everyone = [
+            {"path": r["path"], "name": r["name"], "place": r["place"]}
+            for r in cur.fetchall()
+        ]
+    finally:
+        cur.close()
+    return {"success": True, "my_sessions": mine, "all_sessions": everyone}

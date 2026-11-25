@@ -276,6 +276,50 @@ struct SessionDetailView: View {
     /// Your tunebook, for the Tunes tab's status filter, from the kept list.
     private var tunebook: Tunebook? { model.myTunes.value?.tunebook }
 
+    /// Export mode (the web's /sessions/<path>?export=1): this page's own filters, an
+    /// export bar in place of the tab bar, and the tab deciding what the file holds.
+    private var exporting: Bool { model.exporting == .session(path: path) }
+
+    /// The Tunes tab's rows as filtered and sorted: what the list shows, and what an
+    /// export sends, in that order.
+    private func shownTunes(_ d: SessionDetailPayload) -> [SessionPage.Row] {
+        let all = (allTunes ?? d.tunes).map {
+            SessionPage.Tune(tuneID: $0.tuneId, name: $0.tuneName, type: $0.tuneType, playCount: $0.playCount,
+                             tunebookCount: $0.tunebookCount ?? 0, attendedPlayCount: $0.attendedPlayCount ?? 0)
+        }
+        var f = tuneFilters
+        f.search = tuneSearch
+        return SessionPage.filterAndSortTunes(all, filters: f, sort: tuneSort, status: myStatus, abcIDs: abcIDs)
+    }
+
+    /// What the export bar offers on the tab that is up: the tunes, the nights, or
+    /// nothing (People).
+    private var exportKind: ExportRules.Kind? {
+        switch tab {
+        case .tunes: .sessionTunes(path: path)
+        case .logs: .sessionLogs(path: path)
+        case .people: nil
+        }
+    }
+
+    private var exportIDs: [Int] {
+        switch tab {
+        case .tunes: state.value.map { shownTunes($0).map(\.tune.tuneID) } ?? []
+        case .logs: logs.value.map { filteredGroups($0).flatMap { $0.nights.map(\.sessionInstanceId) } } ?? []
+        case .people: []
+        }
+    }
+
+    private var exportLines: [ExportRules.Line] {
+        var f = tuneFilters
+        f.search = tuneSearch
+        switch tab {
+        case .tunes: return ExportRules.sessionTunesLines(filters: f, sort: tuneSort)
+        case .logs: return ExportRules.sessionLogsLines(view: logView, tuneName: chosenTune?.name)
+        case .people: return []
+        }
+    }
+
     /// The nights the chosen tune was played, and where in each ("Set 2, tune 1").
     struct TuneNights {
         let ids: Set<Int>
@@ -294,6 +338,11 @@ struct SessionDetailView: View {
             .ceolKept(state)
             // The web's Share: a link to this page, for someone without the app too.
             .ceolPushedBar(name) { PageMenu(path: "/sessions/\(path)/\(tab.rawValue.lowercased())", subject: name) }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if exporting {
+                    ExportBar(kind: exportKind, ids: exportIDs, lines: exportLines, onDone: { model.exporting = nil })
+                }
+            }
             .navigationDestination(item: $newNight) { NightView(sessionInstanceID: $0.id, title: $0.title) }
             .sheet(isPresented: $editingRole) {
                 if let p = state.value?.permissions, let relationship = p.relationship {
@@ -386,6 +435,11 @@ struct SessionDetailView: View {
         defaultsApplied = true
         if d.defaultTab == .logs { tab = .logs }
         if d.session.sessionType == "festival" { logView = .all }
+        // Opened from the Export chooser: the tab it asked for, over the page's own default.
+        if exporting, let wanted = model.exportTab {
+            model.exportTab = nil
+            tab = wanted == "logs" ? .logs : .tunes
+        }
     }
 
     /// A search that looks like notes asks the server which of the session's tunes have
@@ -480,6 +534,12 @@ struct SessionDetailView: View {
                 .accessibilityValue(infoOpen ? "details shown" : "details hidden")
                 .accessibilityHint("Shows the session's details")
                 .padding(.horizontal, 20)
+                if exporting {
+                    ExportBanner(
+                        label: tr("Exporting \(d.session.name)"),
+                        hint: tr("The tab you are on is what gets exported. Tunes exports the repertoire, Logs exports the nights."))
+                        { model.exporting = nil }
+                }
                 if festival {
                     FestivalJoinBanner(
                         path: path, name: d.session.name, belongs: d.permissions.relationship != nil,
@@ -658,18 +718,13 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder private func tunes(_ d: SessionDetailPayload) -> some View {
-        let all = (allTunes ?? d.tunes).map {
-            SessionPage.Tune(tuneID: $0.tuneId, name: $0.tuneName, type: $0.tuneType, playCount: $0.playCount,
-                             tunebookCount: $0.tunebookCount ?? 0, attendedPlayCount: $0.attendedPlayCount ?? 0)
-        }
-        var f = tuneFilters
-        let _ = { f.search = tuneSearch }()
-        let shown = SessionPage.filterAndSortTunes(all, filters: f, sort: tuneSort, status: myStatus, abcIDs: abcIDs)
+        let all = allTunes ?? d.tunes
+        let shown = shownTunes(d)
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 SearchRow(
                     text: $tuneSearch, prompt: tr("Search by name or notes"), fieldID: "session.tunes.search",
-                    onAdd: d.permissions.isLoggedIn ? {
+                    onAdd: exporting ? nil : d.permissions.isLoggedIn ? {
                         searchingTunes = false
                         addingTune = true
                     } : model.isGuest ? { model.askToSignIn() } : nil,
@@ -883,7 +938,7 @@ struct SessionDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             SearchRow(
                 text: $logSearch, prompt: tr("Search for a tune"), fieldID: "logs.search",
-                onAdd: d.permissions.isLoggedIn ? { addingNight = true } : model.isGuest ? { model.askToSignIn() } : nil,
+                onAdd: exporting ? nil : d.permissions.isLoggedIn ? { addingNight = true } : model.isGuest ? { model.askToSignIn() } : nil,
                 addID: "session.addNight", addLabel: tr("Add a night"),
                 focused: $searchingLogs,
                 onFilter: {
@@ -979,7 +1034,7 @@ struct SessionDetailView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SearchRow(
                         text: $peopleSearch, prompt: tr("Search people…"), fieldID: "people.search",
-                        onAdd: {
+                        onAdd: exporting ? nil : {
                             searchingPeople = false
                             addingPerson = true
                         },

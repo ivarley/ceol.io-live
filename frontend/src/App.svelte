@@ -45,6 +45,50 @@
 
   let { config } = $props()
 
+  // ---- a newer build (spec: the logger is the one page left open for hours) --------
+  // The shell carries the build it was served with (config.build). Whenever this tab
+  // comes back — shown again, back online, the page restored from the bfcache — it
+  // asks /api/build once (at most every 60s) and, if the server has moved on, offers a
+  // reload in a quiet bar. It never reloads on its own: someone may be mid-entry.
+  // Dismissing hides the bar until the build changes again.
+  let newBuild = $state(null)
+  let buildDismissed = null
+  let lastBuildCheck = 0
+  async function checkBuild() {
+    const mine = config.build
+    if (!mine || document.visibilityState === 'hidden') return
+    const now = Date.now()
+    if (now - lastBuildCheck < 60000) return
+    lastBuildCheck = now
+    try {
+      const res = await fetch('/api/build', { cache: 'no-store', credentials: 'same-origin' })
+      if (!res.ok) return
+      const d = await res.json()
+      if (typeof d.build !== 'string' || !d.build) return
+      newBuild = d.build !== mine && d.build !== buildDismissed ? d.build : null
+    } catch {
+      // Offline or the server is mid-deploy: the next visibility change asks again.
+    }
+  }
+  function dismissBuild() {
+    buildDismissed = newBuild
+    newBuild = null
+  }
+  $effect(() => {
+    if (!untrack(() => config.build)) return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkBuild()
+    }
+    window.addEventListener('pageshow', checkBuild)
+    window.addEventListener('online', checkBuild)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('pageshow', checkBuild)
+      window.removeEventListener('online', checkBuild)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  })
+
   // Canonical records keyed by id (tunes + break rows), applied idempotently.
   // SvelteMap (not a plain Map) so .set/.delete are reactive in Svelte 5.
   const byId = new SvelteMap()
@@ -4061,6 +4105,13 @@
   {/if}
 
   <div class="feed-msgs">
+    {#if newBuild}
+      <div class="build-banner" role="status" id="build-banner">
+        <span class="build-banner-text">{t('A newer version of Ceol is ready.')}</span>
+        <button type="button" class="build-reload" onclick={() => window.location.reload()}>{t('Reload')}</button>
+        <button type="button" class="build-dismiss" aria-label={t('Dismiss')} onclick={dismissBuild}>×</button>
+      </div>
+    {/if}
     {#if notice}<div class="notice" role="button" tabindex="0" onclick={() => (notice = '')} onkeydown={(e) => activate(e, () => (notice = ''))}><span class="notice-text">{notice}</span><span class="notice-x" aria-hidden="true">×</span></div>{/if}
     {#if queuedCount > 0}
       <p class="offline-banner">

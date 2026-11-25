@@ -27,8 +27,75 @@
   import { statusLabel } from '../mytunes/labels.js'
 
   let { pageData = null } = $props()
-  import { Chevron, Chip, SearchField, Seg, Toolbar, toast, t, tn, tuneTypeName, instrumentName } from '../lib/index.js'
+  import {
+    Chevron,
+    Chip,
+    ExportBanner,
+    ExportBar,
+    SearchField,
+    Seg,
+    Toolbar,
+    isExportMode,
+    leaveExportMode,
+    onExportModeChange,
+    runExport,
+    toast,
+    t,
+    tn,
+    tuneTypeName,
+    instrumentName,
+    withExportParam,
+  } from '../lib/index.js'
   import NotOnYourList from './NotOnYourList.svelte'
+  import { myTunesExportSummary } from './exportsummary.js'
+
+  // ---- export mode (the profile's "Export my data" → /my-tunes?export=1) ----------
+  // The same page with the same filters; a banner says so and a bar at the bottom
+  // offers the format and Download. Editing goes quiet while it is on: no + button,
+  // no swipe-to-heard — the list is a picker now. Tapping a tune still opens its
+  // sheet, which is how you check what you are about to export. Leave/Done drop the
+  // flag and keep the filters, and the page reacts without a reload.
+  let exportMode = $state(isExportMode())
+  $effect(() => onExportModeChange((on) => (exportMode = on)))
+  let exportFormat = $state('json')
+  let exportBusy = $state(false)
+  let exportProgress = $state(null)
+  const exportNote = $derived(
+    exportFormat === 'pdf'
+      ? t('Title and notation for each tune, in the setting you play')
+      : t('Status, tags, notes and the setting you play, one row per tune')
+  )
+  async function downloadExport() {
+    if (exportBusy || !visible.length) return
+    exportBusy = true
+    exportProgress = null
+    try {
+      await runExport({
+        url: '/api/export/my-tunes',
+        format: exportFormat,
+        body: {
+          tune_ids: visible.map((x) => x.tune_id).filter((id) => id != null),
+          filters: myTunesExportSummary(filters, sort, {
+            statusLabel,
+            typeName,
+            instrumentName,
+            relLabel,
+            sortModeLabel,
+          }),
+        },
+        onProgress: (p) => {
+          exportProgress = p ? t('Preparing notation {done} of {total}', p) : null
+        },
+        fallbackName: 'my-tunes',
+      })
+    } catch (e) {
+      console.error('Export failed:', e)
+      toast(e?.message || t("Couldn't export. Check your connection and try again."), 'error')
+    } finally {
+      exportBusy = false
+      exportProgress = null
+    }
+  }
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -160,7 +227,8 @@
 
   // ---- URL <-> state ------------------------------------------------------------
   $effect(() => {
-    const params = paramsFromState(filters, sort)
+    // The export flag rides along with the filters: it is a mode on this URL, not a filter.
+    const params = withExportParam(paramsFromState(filters, sort), exportMode)
     const q = params.toString()
     const newURL = q ? `${window.location.pathname}?${q}` : window.location.pathname
     // Never clobber one-shot landing params (?show/?added/?already/?ptid) before
@@ -661,7 +729,13 @@
   }
 </script>
 
-<div class="my-tunes-container">
+<div class="my-tunes-container" class:export-mode={exportMode}>
+  {#if exportMode}
+    <ExportBanner
+      label={t('Exporting')}
+      hint={t('Filter the list as usual, then choose a format below.')}
+      onLeave={leaveExportMode} />
+  {/if}
   <div class="my-tunes-header-section">
     <!-- No page heading (spec 052 §B1), matching the sessions list. The tab bar
          already says where you are, and "My Tunes" over your tunes was a line of
@@ -683,10 +757,10 @@
         panelId="filter-panel"
         bind:open={panelVisible}
         activeCount={hasDrawerFilters ? 1 : 0}
-        addId="add-tune-btn"
-        addHref={addTuneHref}
+        addId={exportMode ? null : 'add-tune-btn'}
+        addHref={exportMode ? null : addTuneHref}
         addTitle={t('Add tune')}
-        onAdd={handleAddTuneClick}>
+        onAdd={exportMode ? null : handleAddTuneClick}>
         {#snippet search()}
         <SearchField
           bind:value={rawSearch}
@@ -1027,6 +1101,7 @@
             typeTitle={typeBadgeTitle(sort.type)}
             sortType={sort.type}
             onshow={(x) => showTuneDetail(x.person_tune_id)}
+            swipe={!exportMode}
             onincrement={incrementHeard} />
         {/each}
         <div class="tune-group-heading">{t('Tunes on other instruments')}</div>
@@ -1040,6 +1115,7 @@
             typeTitle={typeBadgeTitle(sort.type)}
             sortType={sort.type}
             onshow={(x) => showTuneDetail(x.person_tune_id)}
+            swipe={!exportMode}
             onincrement={incrementHeard} />
         {/each}
       {:else}
@@ -1053,6 +1129,7 @@
             typeTitle={typeBadgeTitle(sort.type)}
             sortType={sort.type}
             onshow={(x) => showTuneDetail(x.person_tune_id)}
+            swipe={!exportMode}
             onincrement={incrementHeard} />
         {/each}
       {/if}
@@ -1075,6 +1152,19 @@
     <span>{t('Loading more tunes...')}</span>
   </div>
 </div>
+
+{#if exportMode}
+  <ExportBar
+    bind:format={exportFormat}
+    label={tn(visible.length, 'Download {n} tune', 'Download {n} tunes')}
+    note={exportNote}
+    disabled={!visible.length}
+    reason={t('No tunes match these filters.')}
+    busy={exportBusy}
+    progress={exportProgress}
+    onDownload={downloadExport}
+    onDone={leaveExportMode} />
+{/if}
 
 <!-- Add-to-My-Tunes pane: same component as before, now a bundled-in child with
      callback props instead of the window.MyTunesAddPane global. -->

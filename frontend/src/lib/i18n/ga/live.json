@@ -1626,5 +1626,13 @@
   "Press and hold, then drag to move": {
     "ga": "Brúigh agus coinnigh, ansin tarraing chun bogadh",
     "review": true
+  },
+  "A newer version of Ceol is ready.": {
+    "ga": "Tá leagan níos nuaí de Ceol réidh.",
+    "review": true
+  },
+  "Reload": {
+    "ga": "Athlódáil",
+    "review": true
   }
 }

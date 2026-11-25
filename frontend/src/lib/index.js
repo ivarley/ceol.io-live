@@ -33,3 +33,8 @@ export { default as SessionPicker } from './SessionPicker.svelte'
 export { toast, toastFailure, ServerError } from './toast.js'
 // Spec 057: the interface language.
 export { t, tn, tc, currentLang, LANGUAGE_NAMES, formatDate, formatNumber, tuneTypeName, instrumentName } from './i18n/index.js'
+// Export mode (the profile's "Export my data"): the banner at the top of a page in
+// the mode, the bar at the bottom with format + Download, and the round trip.
+export { default as ExportBanner } from './ExportBanner.svelte'
+export { default as ExportBar } from './ExportBar.svelte'
+export { isExportMode, leaveExportMode, onExportModeChange, withExportParam, runExport, ExportError } from './export.js'

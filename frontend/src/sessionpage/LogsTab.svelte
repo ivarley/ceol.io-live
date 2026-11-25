@@ -27,9 +27,17 @@
     tunePlayLinks,
   } from './logic.js'
   import { publishHeight } from './sticky.js'
+  import { sessionLogsExportSummary } from './exportsummary.js'
   import { LoadError, Row, SearchField, Seg, Toolbar, t, tn } from '../lib/index.js'
 
-  let { active, session, isLoggedIn, onAddInstance } = $props()
+  let {
+    active,
+    session,
+    isLoggedIn,
+    onAddInstance,
+    exportMode = false, // the page is exporting: no Add links; the list is a picker
+    onVisible = null, // ({ids, filters}) => void: what an export of this tab would contain
+  } = $props()
 
   const sessionPath = session.path
 
@@ -160,6 +168,16 @@
   })
 
   const options = $derived(selectedTune ? [] : matchLoggedTunes(loggedTunes, tuneQuery))
+
+  // Export mode: tell the page what this tab would export — every night that survives
+  // the Logged/Attended/All toggle and the tune filter, in display order (newest
+  // first, as listed), and the filter in words (exportsummary.js).
+  $effect(() => {
+    if (!onVisible) return
+    const ids = view.sortedKeys.flatMap((key) => (view.byKey[key] || []).map((i) => i.session_instance_id))
+    const viewLabel = (id) => logViewOptions(isLoggedIn).find((o) => o.id === id)?.label || id
+    onVisible({ ids, filters: sessionLogsExportSummary(viewMode, selectedTune, { viewLabel }) })
+  })
   const dropdownOpen = $derived(inputFocused && options.length > 0)
   const activeIndex = $derived(Math.min(highlight, Math.max(options.length - 1, 0)))
   // A typed query with nothing under it: say which it is, rather than leaving a
@@ -313,9 +331,9 @@
       buttonClass="filter-panel-toggle"
       bind:open={filterOpen}
       activeCount={viewMode === 'logged' ? 0 : 1}
-      addId={isLoggedIn ? 'add-session-btn' : null}
+      addId={isLoggedIn && !exportMode ? 'add-session-btn' : null}
       addTitle={t('Add a log')}
-      onAdd={isLoggedIn ? addClick : null}>
+      onAdd={isLoggedIn && !exportMode ? addClick : null}>
       {#snippet search()}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="logs-tune-filter" onkeydown={onFilterKey}>
@@ -404,7 +422,7 @@
       <p>{t('No logs with {name}.', { name: selectedTune.name })}</p>
     {:else}
       <p>
-        {t('No logs yet.')}{#if isLoggedIn}
+        {t('No logs yet.')}{#if isLoggedIn && !exportMode}
           <span class="year-add-link" id="add-session-btn" onclick={addClick}>{t('Add')}</span>
         {/if}
       </p>
@@ -430,7 +448,9 @@
     <div style="text-align: center; padding: 40px; color: var(--disabled-text);"><p>{t('Loading logs...')}</p></div>
   {:else if totalInstances === 0}
     <div class="past-instances">
-      {#if isFestival}
+      {#if exportMode}
+        <p>{t('No logs yet.')}</p>
+      {:else if isFestival}
         <p><a href="#add" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>{t('Add your first session')}</a></p>
       {:else}
         <p><a href="#add" id="add-session-btn" style="color: var(--primary); text-decoration: none;" onclick={addClick}>{t('Add your first log')}</a></p>

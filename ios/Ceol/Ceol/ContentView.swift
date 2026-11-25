@@ -149,12 +149,12 @@ struct MainTabView: View {
             Tab(value: AppTab.tunes) { TunesView() }
             Tab(value: AppTab.me) { MeView() }
         }
-        .contentMargins(.bottom, model.editingNight ? 0 : bottomBars, for: .scrollContent)
-        .contentMargins(.bottom, model.editingNight ? 0 : bottomBars, for: .scrollIndicators)
+        .contentMargins(.bottom, model.bottomBarsHidden ? 0 : bottomBars, for: .scrollContent)
+        .contentMargins(.bottom, model.bottomBarsHidden ? 0 : bottomBars, for: .scrollIndicators)
         .overlay(alignment: .bottom) {
             // Logging a night, the composer takes the bottom of the screen (the night
-            // shows the recorder above it itself).
-            if !model.editingNight {
+            // shows the recorder above it itself); exporting, the export bar does.
+            if !model.bottomBarsHidden {
                 VStack(spacing: 0) {
                     if let recorder = model.recorder, model.tab != .listen {
                         RecorderBar(recorder: recorder)

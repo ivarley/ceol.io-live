@@ -23,6 +23,8 @@
     hasMoreTunes = false,
     deepLinkTuneId = null,
     addPane = () => null, // () => the bundled-in SessionTuneAddApp instance
+    exportMode = false, // the page is exporting: no add, no selection; the list is a picker
+    onVisible = null, // ({ids, filters}) => void: what an export of this tab would contain
   } = $props()
 
   const sessionPath = session.path
@@ -31,6 +33,7 @@
   import { Chip, LoadError, Row, SearchField, Seg, Sheet, Toolbar, toast, t, tn, tuneTypeName, instrumentName } from '../lib/index.js'
   import { createAbcMatcher } from '../shared/abcfilter.svelte.js'
   import { STATUSES } from '../mylist.js'
+  import { sessionTunesExportSummary } from './exportsummary.js'
 
   // How a status is worded (mylist.js STATUS_LABELS, in the page's language).
   const STATUS_WORDS = {
@@ -117,6 +120,22 @@
     return resultsCountLabel(filteredTunes.length, allTunes.length)
   })
   const showInstScope = $derived(!!filters.mystatus && statusInstruments.length > 0)
+
+  // Export mode: tell the page what this tab would export — the filtered rows in
+  // their display order, and the filters in words (exportsummary.js).
+  const SORT_WORDS = { alpha: () => t('a-z'), session: () => t('session'), everywhere: () => t('everywhere') }
+  $effect(() => {
+    if (!onVisible) return
+    onVisible({
+      ids: filteredTunes.map((x) => x.tune_id).filter((id) => id != null),
+      filters: sessionTunesExportSummary(filters, sort, myStatusInstrument, {
+        sortLabel: (id) => (SORT_WORDS[id] ? SORT_WORDS[id]() : id),
+        typeName: (ty) => cap(tuneTypeName(ty)),
+        statusWord: (st) => (st === 'all' ? t('Show My Status') : st === 'not on list' ? t('Not On My List') : statusWord(st)),
+        instrumentName,
+      }),
+    })
+  })
 
   // My-tunebook row coloring (roll-up, same rules as the tune-detail modal).
   function rowStatus(tune) {
@@ -541,10 +560,10 @@
         panelId="filter-panel"
         bind:open={panelVisible}
         activeCount={hasActiveFilters ? 1 : 0}
-        addId={isLoggedIn ? 'add-session-tune-btn' : null}
-        addHref={isLoggedIn ? `/sessions/${sessionPath}/tunes?add=1` : null}
+        addId={isLoggedIn && !exportMode ? 'add-session-tune-btn' : null}
+        addHref={isLoggedIn && !exportMode ? `/sessions/${sessionPath}/tunes?add=1` : null}
         addTitle={t('Add tune')}
-        onAdd={isLoggedIn ? handleAddSessionTuneClick : null}>
+        onAdd={isLoggedIn && !exportMode ? handleAddSessionTuneClick : null}>
         {#snippet search()}
           <SearchField
             bind:value={rawSearch}
@@ -637,7 +656,7 @@
               <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick={clearFilters}>{t('Clear Filters')}</button>
             {/if}
           </div>
-          {#if isLoggedIn}
+          {#if isLoggedIn && !exportMode}
             <div class="selection-buttons">
               <button id="select-tunes-btn" class="selection-btn" onclick={toggleSelectionMode}>
                 {selectionMode ? t('Cancel Selection') : t('Select Tunes...')}
@@ -687,7 +706,7 @@
       {#if filteredTunes.length === 0 && filters.search}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
           <p style="margin-bottom: 20px;">{t('No tunes found matching "{query}"', { query: filters.search })}</p>
-          {#if isLoggedIn}
+          {#if isLoggedIn && !exportMode}
             <a
               href="/sessions/{sessionPath}/tunes?add=1&q={encodeURIComponent(filters.search)}"
               class="btn btn-primary"

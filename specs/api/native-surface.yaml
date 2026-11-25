@@ -1337,6 +1337,48 @@ components:
         start_time: { $ref: "#/components/schemas/TimeOrNull" }
         end_time: { $ref: "#/components/schemas/TimeOrNull" }
 
+    # --- export (web: Me → Export my data; the same files from the app) -------------
+    ExportOptions:
+      type: object
+      required: [success, my_sessions, all_sessions]
+      properties:
+        success: { type: boolean, const: true }
+        # The viewer's own sessions, most recently active first; then every session.
+        my_sessions: { type: array, items: { $ref: "#/components/schemas/ExportSession" } }
+        all_sessions: { type: array, items: { $ref: "#/components/schemas/ExportSession" } }
+    ExportSession:
+      type: object
+      required: [path, name]
+      properties:
+        path: { type: string }
+        name: { type: string }
+        place: { type: [string, "null"] }
+    ExportCheck:
+      type: object
+      required: [success, missing_setting_ids, total]
+      properties:
+        success: { type: boolean, const: true }
+        # Settings whose full notation PNG is not cached yet. Warm each with
+        # GET /api/tunes/settings/{setting_id}/image?kind=full before asking for a PDF.
+        missing_setting_ids: { type: array, items: { type: integer } }
+        total: { type: integer }
+    ExportTunesRequest:
+      type: object
+      required: [format, tune_ids]
+      properties:
+        format: { type: string, enum: [json, csv, pdf] }
+        # In the order the file should list them; at most 5000 (413 beyond).
+        tune_ids: { type: array, items: { type: integer } }
+        # Lines describing the filters in force, printed at the top of the file.
+        filters: { type: array, items: { type: string } }
+    ExportLogsRequest:
+      type: object
+      required: [format, instance_ids]
+      properties:
+        format: { type: string, enum: [json, csv, pdf] }
+        instance_ids: { type: array, items: { type: integer } }
+        filters: { type: array, items: { type: string } }
+
 paths:
   # --- app shell -------------------------------------------------------------
   /api/app-config:
@@ -2333,3 +2375,86 @@ paths:
       security: [{ bearer: [] }]
       parameters: [{ name: person_id, in: path, required: true, schema: { type: integer } }]
       responses: { "200": { description: ok } }
+
+  # --- export ----------------------------------------------------------------------------
+  # The file endpoints answer with the file itself (Content-Disposition: attachment).
+  # A PDF needs every tune's notation image cached: call the /check twin first, warm
+  # the settings it lists, then ask for the file. Error codes: invalid_format,
+  # nothing_to_export (400); too_many (413); not_found (404); notation_pending (409).
+  /api/export/options:
+    get:
+      operationId: getExportOptions
+      summary: The sessions to offer in the Export chooser
+      security: [{ bearer: [] }]
+      responses: { "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ExportOptions" } } } } }
+  /api/export/my-tunes/check:
+    post:
+      operationId: checkMyTunesExport
+      summary: Which of the chosen tunes' settings still lack a notation image
+      security: [{ bearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExportTunesRequest" } } } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ExportCheck" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/export/my-tunes:
+    post:
+      operationId: exportMyTunes
+      summary: The viewer's tune list as a file, in the order given
+      security: [{ bearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExportTunesRequest" } } } }
+      responses:
+        "200":
+          description: the file
+          content:
+            application/json: { schema: { type: string, format: binary } }
+            text/csv: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/export/sessions/{session_path}/tunes/check:
+    post:
+      operationId: checkSessionTunesExport
+      summary: Which of the chosen tunes' settings still lack a notation image. Public
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExportTunesRequest" } } } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ExportCheck" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/export/sessions/{session_path}/tunes:
+    post:
+      operationId: exportSessionTunes
+      summary: A session's tunes as a file, under the names and settings the session uses. Public
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExportTunesRequest" } } } }
+      responses:
+        "200":
+          description: the file
+          content:
+            application/json: { schema: { type: string, format: binary } }
+            text/csv: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/export/sessions/{session_path}/logs/check:
+    post:
+      operationId: checkSessionLogsExport
+      summary: Which settings played on the chosen nights still lack a notation image. Public
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExportLogsRequest" } } } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/ExportCheck" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/export/sessions/{session_path}/logs:
+    post:
+      operationId: exportSessionLogs
+      summary: >-
+        A session's nights as a file, set by set. Public; who started a set and who was
+        there appear only for a member of the session (a Bearer token says who).
+      parameters: [{ name: session_path, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExportLogsRequest" } } } }
+      responses:
+        "200":
+          description: the file
+          content:
+            application/json: { schema: { type: string, format: binary } }
+            text/csv: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        default: { $ref: "#/components/responses/Error" }

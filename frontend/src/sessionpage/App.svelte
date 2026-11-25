@@ -15,6 +15,15 @@
   import SessionTuneAddApp from '../mytunes/SessionTuneAddApp.svelte'
   import { basePathOf } from './logic.js'
   import { publishHeight } from './sticky.js'
+  import {
+    ExportBanner,
+    ExportBar,
+    isExportMode,
+    leaveExportMode,
+    onExportModeChange,
+    runExport,
+    tn,
+  } from '../lib/index.js'
 
   // The tab strip is sticky under the fixed site header, and the active tab's
   // toolbar sticks under IT. Tabs renders the strip itself, so its height is
@@ -58,11 +67,91 @@
     return list
   })
 
-  let activeTab = $state(ctx.activeTab || defaultTab)
+  // The tab comes from the path (/sessions/<path>/tunes); `?tab=` is accepted too, so a
+  // link that cannot know the path shape (the export chooser) still lands on the tab.
+  const TAB_IDS = ['tunes', 'logs', 'people']
+  const tabParam = new URLSearchParams(window.location.search).get('tab')
+  let activeTab = $state(ctx.activeTab || (TAB_IDS.includes(tabParam) ? tabParam : null) || defaultTab)
 
-  // Path-based tab URLs; the legacy switchTab dropped the query string here.
+  // ---- export mode (the profile's "Export my data" → /sessions/<path>/<tab>?export=1) --
+  // One mode for the whole page: the tab you are on is what gets exported. Each tab
+  // that can export reports its visible ids (display order) and a summary of its
+  // filters through `onVisible`; the bar below sends them. People has nothing to
+  // export, so there the bar says so and is disabled.
+  let exportMode = $state(isExportMode())
+  $effect(() => onExportModeChange((on) => (exportMode = on)))
+  let exportFormat = $state('json')
+  let exportBusy = $state(false)
+  let exportProgress = $state(null)
+  let tunesExport = $state({ ids: [], filters: [] })
+  let logsExport = $state({ ids: [], filters: [] })
+  const exportTarget = $derived.by(() => {
+    if (activeTab === 'tunes')
+      return {
+        url: `/api/export/sessions/${sessionPath}/tunes`,
+        key: 'tune_ids',
+        ...tunesExport,
+        label: tn(tunesExport.ids.length, 'Download {n} tune', 'Download {n} tunes'),
+        reason: t('No tunes match these filters.'),
+        note:
+          exportFormat === 'pdf'
+            ? t('Title and notation for each tune, in the setting this session plays')
+            : t('One row per tune, with the name and setting this session uses'),
+        fallbackName: `${sessionPath.replace(/\//g, '-')}-tunes`,
+      }
+    if (activeTab === 'logs')
+      return {
+        url: `/api/export/sessions/${sessionPath}/logs`,
+        key: 'instance_ids',
+        ...logsExport,
+        label: tn(logsExport.ids.length, 'Download {n} night', 'Download {n} nights'),
+        reason: t('No nights match these filters.'),
+        note:
+          exportFormat === 'pdf'
+            ? t('Nights as headings, sets under them, each tune with its notation')
+            : t('One row per tune: night, set, position, name used that night, key, setting'),
+        fallbackName: `${sessionPath.replace(/\//g, '-')}-logs`,
+      }
+    return {
+      url: null,
+      key: null,
+      ids: [],
+      filters: [],
+      label: t('Download'),
+      reason: t('Nothing to export on this tab. Switch to Tunes or Logs.'),
+      note: '',
+      fallbackName: 'ceol-export',
+    }
+  })
+  async function downloadExport() {
+    const target = exportTarget
+    if (exportBusy || !target.url || !target.ids.length) return
+    exportBusy = true
+    exportProgress = null
+    try {
+      await runExport({
+        url: target.url,
+        format: exportFormat,
+        body: { [target.key]: target.ids, filters: target.filters },
+        onProgress: (p) => {
+          exportProgress = p ? t('Preparing notation {done} of {total}', p) : null
+        },
+        fallbackName: target.fallbackName,
+      })
+    } catch (e) {
+      console.error('Export failed:', e)
+      toast(e?.message || t("Couldn't export. Check your connection and try again."), 'error')
+    } finally {
+      exportBusy = false
+      exportProgress = null
+    }
+  }
+
+  // Path-based tab URLs; the legacy switchTab dropped the query string here. The
+  // export flag is the one param that survives: it is a mode on the page, and a
+  // tab switch in the mode is how you choose what to export.
   function onTabChange(tabName) {
-    const newPath = `${basePathOf(window.location.pathname)}/${tabName}`
+    const newPath = `${basePathOf(window.location.pathname)}/${tabName}${exportMode ? '?export=1' : ''}`
     window.history.pushState({}, '', newPath)
   }
 
@@ -105,6 +194,12 @@
      (.tab-buttons/.tab-button CSS + e2e select on these classes). Pane
      components stay mounted across switches so their state survives. This page
      never had the mobile <select>, and since spec 052 §B3 no page does. -->
+{#if exportMode}
+  <ExportBanner
+    label={t('Exporting {name}', { name: session.name })}
+    hint={t('The tab you are on is what gets exported. Tunes exports the repertoire, Logs exports the nights.')}
+    onLeave={leaveExportMode} />
+{/if}
 <div class="tabs-container">
   <Tabs
     {tabs}
@@ -123,13 +218,17 @@
     tunes={pageData.tunes || []}
     totalTunesCount={pageData.total_tunes_count || 0}
     hasMoreTunes={!!pageData.has_more_tunes}
-    deepLinkTuneId={ctx.tuneId || null} />
+    deepLinkTuneId={ctx.tuneId || null}
+    {exportMode}
+    onVisible={(v) => (tunesExport = v)} />
 
   <LogsTab
     active={active === 'logs'}
     {session}
     isLoggedIn={permissions.is_logged_in}
-    onAddInstance={openAddInstance} />
+    onAddInstance={openAddInstance}
+    {exportMode}
+    onVisible={(v) => (logsExport = v)} />
 
   {#if showPeopleTab}
     <PeopleTab
@@ -151,3 +250,16 @@
 <!-- Add-to-session-tunes pane: same component as before, now a bundled-in child
      with callback props instead of the window.SessionTuneAddPane global. -->
 <SessionTuneAddApp bind:this={addPane} />
+
+{#if exportMode}
+  <ExportBar
+    bind:format={exportFormat}
+    label={exportTarget.label}
+    note={exportTarget.note}
+    disabled={!exportTarget.url || !exportTarget.ids.length}
+    reason={exportTarget.reason}
+    busy={exportBusy}
+    progress={exportProgress}
+    onDownload={downloadExport}
+    onDone={leaveExportMode} />
+{/if}

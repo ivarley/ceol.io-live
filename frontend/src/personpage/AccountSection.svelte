@@ -67,6 +67,12 @@
       {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
     </Row>
 
+    <!-- Export my data (JSON, CSV or PDF of your tunes, or a session's tunes or logs):
+         the chooser at /export sends you to the right page in its export mode. -->
+    <Row styled={false} rowClass="kit-field account-row" href="/export" title={t('Export my data')} id="account-export">
+      {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}
+    </Row>
+
     <!-- App Store guideline 1.2: phones have no menu, so Report lives here too. -->
     <Row styled={false} rowClass="kit-field account-row" href="/report" title={t('Report')} id="account-report">
       {#snippet trailing()}<Chevron class="kit-chev" />{/snippet}

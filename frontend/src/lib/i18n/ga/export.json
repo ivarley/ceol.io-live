@@ -1,0 +1,222 @@
+{
+  "Exporting": {
+    "ga": "Ag easpórtáil",
+    "review": true
+  },
+  "Exporting {name}": {
+    "ga": "Ag easpórtáil {name}",
+    "review": true
+  },
+  "Export": {
+    "ga": "Easpórtáil",
+    "review": true
+  },
+  "Export my data": {
+    "ga": "Easpórtáil mo shonraí",
+    "review": true
+  },
+  "Format": {
+    "ga": "Formáid",
+    "review": true
+  },
+  "JSON": {
+    "ga": "JSON",
+    "review": true
+  },
+  "CSV": {
+    "ga": "CSV",
+    "review": true
+  },
+  "PDF": {
+    "ga": "PDF",
+    "review": true
+  },
+  "Preparing…": {
+    "ga": "Á ullmhú…",
+    "review": true
+  },
+  "Preparing notation {done} of {total}": {
+    "ga": "Nodaireacht á hullmhú: {done} as {total}",
+    "review": true
+  },
+  "Couldn't export. Check your connection and try again.": {
+    "ga": "Níorbh fhéidir easpórtáil. Seiceáil do nasc agus triail arís.",
+    "review": true
+  },
+  "Filter the list as usual, then choose a format below.": {
+    "ga": "Scag an liosta mar is gnách, ansin roghnaigh formáid thíos.",
+    "review": true
+  },
+  "Download": {
+    "ga": "Íoslódáil",
+    "review": true
+  },
+  "Download {n} tunes": {
+    "ga": {
+      "one": "Íoslódáil {n} fhonn",
+      "two": "Íoslódáil {n} fhonn",
+      "few": "Íoslódáil {n} fhonn",
+      "many": "Íoslódáil {n} bhfonn",
+      "other": "Íoslódáil {n} fonn"
+    },
+    "review": true
+  },
+  "Download {n} nights": {
+    "ga": {
+      "one": "Íoslódáil {n} oíche",
+      "two": "Íoslódáil {n} oíche",
+      "few": "Íoslódáil {n} oíche",
+      "many": "Íoslódáil {n} n-oíche",
+      "other": "Íoslódáil {n} oíche"
+    },
+    "review": true
+  },
+  "No tunes match these filters.": {
+    "ga": "Níl aon fhonn ag teacht leis na scagairí seo.",
+    "review": true
+  },
+  "No nights match these filters.": {
+    "ga": "Níl aon oíche ag teacht leis na scagairí seo.",
+    "review": true
+  },
+  "Title and notation for each tune, in the setting you play": {
+    "ga": "Teideal agus nodaireacht gach foinn, sa leagan a sheinneann tú",
+    "review": true
+  },
+  "Status, tags, notes and the setting you play, one row per tune": {
+    "ga": "Stádas, clibeanna, nótaí agus an leagan a sheinneann tú, ró amháin in aghaidh an fhoinn",
+    "review": true
+  },
+  "Title and notation for each tune, in the setting this session plays": {
+    "ga": "Teideal agus nodaireacht gach foinn, sa leagan a sheinneann an seisiún seo",
+    "review": true
+  },
+  "One row per tune, with the name and setting this session uses": {
+    "ga": "Ró amháin in aghaidh an fhoinn, leis an ainm agus an leagan a úsáideann an seisiún seo",
+    "review": true
+  },
+  "Nights as headings, sets under them, each tune with its notation": {
+    "ga": "Oícheanta mar cheannteidil, seiteanna faoina mbun, gach fonn lena nodaireacht",
+    "review": true
+  },
+  "One row per tune: night, set, position, name used that night, key, setting": {
+    "ga": "Ró amháin in aghaidh an fhoinn: oíche, seit, ionad, an t-ainm a úsáideadh an oíche sin, gléas, leagan",
+    "review": true
+  },
+  "The tab you are on is what gets exported. Tunes exports the repertoire, Logs exports the nights.": {
+    "ga": "Is é an cluaisín atá oscailte agat a easpórtáiltear. Easpórtálann Foinn an stór foinn; easpórtálann Logaí na hoícheanta.",
+    "review": true
+  },
+  "Nothing to export on this tab. Switch to Tunes or Logs.": {
+    "ga": "Níl aon rud le heaspórtáil ar an gcluaisín seo. Athraigh go Foinn nó Logaí.",
+    "review": true
+  },
+  "Status: {value}": {
+    "ga": "Stádas: {value}",
+    "review": true
+  },
+  "Type: {value}": {
+    "ga": "Cineál: {value}",
+    "review": true
+  },
+  "Instrument: {value}": {
+    "ga": "Uirlis: {value}",
+    "review": true
+  },
+  "Tag: {value}": {
+    "ga": "Clib: {value}",
+    "review": true
+  },
+  "Played: {value}": {
+    "ga": "Seinnte: {value}",
+    "review": true
+  },
+  "Added before {date}": {
+    "ga": "Curtha leis roimh {date}",
+    "review": true
+  },
+  "Added after {date}": {
+    "ga": "Curtha leis i ndiaidh {date}",
+    "review": true
+  },
+  "Search: {value}": {
+    "ga": "Cuardach: {value}",
+    "review": true
+  },
+  "Sort: {value}, {dir}": {
+    "ga": "Sórtáil: {value}, {dir}",
+    "review": true
+  },
+  "Then by: {value}, {dir}": {
+    "ga": "Ansin de réir: {value}, {dir}",
+    "review": true
+  },
+  "descending": {
+    "ga": "ag ísliú",
+    "review": true
+  },
+  "ascending": {
+    "ga": "ag ardú",
+    "review": true
+  },
+  "My Tunebook: {value}": {
+    "ga": "Mo leabhar fonn: {value}",
+    "review": true
+  },
+  "Nights with {name}": {
+    "ga": "Oícheanta le {name}",
+    "review": true
+  },
+  "Nights: {value}": {
+    "ga": "Oícheanta: {value}",
+    "review": true
+  },
+  "Which session’s logs?": {
+    "ga": "Logaí cén seisiúin?",
+    "review": true
+  },
+  "Which session’s tunes?": {
+    "ga": "Foinn cén seisiúin?",
+    "review": true
+  },
+  "Pick what to export. The next page has the usual filters; set them, then choose a format.": {
+    "ga": "Roghnaigh cad atá le heaspórtáil. Tá na gnáthscagairí ar an gcéad leathanach eile; socraigh iad, ansin roghnaigh formáid.",
+    "review": true
+  },
+  "Your tune list, with status, tags, notes and the setting you play.": {
+    "ga": "Do liosta fonn, le stádas, clibeanna, nótaí agus an leagan a sheinneann tú.",
+    "review": true
+  },
+  "Session Tunes": {
+    "ga": "Foinn seisiúin",
+    "review": true
+  },
+  "Everything a session plays, with its names and settings.": {
+    "ga": "Gach a sheinneann seisiún, lena ainmneacha agus a leaganacha.",
+    "review": true
+  },
+  "Choose a session": {
+    "ga": "Roghnaigh seisiún",
+    "review": true
+  },
+  "Session Logs": {
+    "ga": "Logaí seisiúin",
+    "review": true
+  },
+  "Nights at a session, set by set.": {
+    "ga": "Oícheanta ag seisiún, seit ar sheit.",
+    "review": true
+  },
+  "The two session pickers list your sessions first, then any session on Ceol.": {
+    "ga": "Liostaíonn an dá roghnóir seisiúin do chuid seisiún ar dtús, ansin seisiún ar bith ar Ceol.",
+    "review": true
+  },
+  "Your sessions": {
+    "ga": "Do chuid seisiún",
+    "review": true
+  },
+  "All sessions": {
+    "ga": "Gach seisiún",
+    "review": true
+  }
+}

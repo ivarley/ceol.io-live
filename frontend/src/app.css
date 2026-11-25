@@ -1016,6 +1016,44 @@ main.wide .hx-drawer {
   font-size: 13px;
 }
 
+/* A newer build is on the server (App.svelte checkBuild). Same quiet strip as the
+   offline banner, in the accent: an offer, not an alarm — reload when it suits. */
+.build-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(101, 180, 100, 0.14);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 6px 8px 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.build-banner-text { flex: 1 1 auto; min-width: 0; }
+.build-reload {
+  flex: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+.build-dismiss {
+  flex: none;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .typing { font-size: 13px; color: var(--muted); padding: 2px 4px 6px; min-height: 18px; }
 .typing .t-name { font-weight: 600; }
 .typing .t-name:not(:last-of-type)::after { content: ', '; color: var(--muted); font-weight: 400; }

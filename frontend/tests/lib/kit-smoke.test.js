@@ -27,6 +27,9 @@ const COMPONENTS = {
   // Composed from the kit rather than a primitive, but shared app-wide (spec 034).
   PersonPicker: { open: false, people: [] },
   SessionPicker: { open: false, sessions: [] },
+  // Export mode (the profile's "Export my data"): the banner and the bar.
+  ExportBanner: {},
+  ExportBar: { label: 'Download' },
 }
 
 describe('kit exports', () => {
@@ -34,7 +37,9 @@ describe('kit exports', () => {
     expect(Object.keys(kit).sort()).toEqual(
       [...Object.keys(COMPONENTS), 'toast', 'toastFailure', 'ServerError',
        // spec 057: the interface language
-       't', 'tn', 'tc', 'currentLang', 'LANGUAGE_NAMES', 'formatDate', 'formatNumber', 'tuneTypeName', 'instrumentName'].sort()
+       't', 'tn', 'tc', 'currentLang', 'LANGUAGE_NAMES', 'formatDate', 'formatNumber', 'tuneTypeName', 'instrumentName',
+       // export mode's round trip and URL flag (export.js)
+       'isExportMode', 'leaveExportMode', 'onExportModeChange', 'withExportParam', 'runExport', 'ExportError'].sort()
     )
   })
 

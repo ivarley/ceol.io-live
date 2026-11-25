@@ -23,6 +23,7 @@
     typeLabel,
     typeTitle = '',
     sortType = '',
+    swipe = true, // false (export mode): the card is a picker, so no swipe-to-heard
     onshow,
     onincrement,
   } = $props()
@@ -72,7 +73,7 @@
   // stop the page scrolling during a horizontal drag).
   $effect(() => {
     const el = cardEl
-    if (!el) return
+    if (!el || !swipe) return
 
     let startX = 0
     let startY = 0

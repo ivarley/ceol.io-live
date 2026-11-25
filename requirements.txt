@@ -28,3 +28,7 @@ uvicorn==0.49.0
 # The phone decider file's weekly rebuild (spec 053, jobs/publish_decider_data.py):
 # each tune's length once round comes from lab/analysis/form.py
 numpy
+
+# Exports as PDF (export_pdf.py): a tune list or a session's logs with notation.
+# Pure Python; the fonts it needs are shipped in static/fonts/.
+fpdf2

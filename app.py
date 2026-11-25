@@ -114,6 +114,13 @@ from live_logging_routes import (
     live_people,
     live_match,
 )
+from export_routes import (
+    export_my_tunes,
+    export_session_tunes,
+    export_session_logs,
+    export_options,
+)
+from build_info import BUILD_ID
 from timezone_utils import format_datetime_with_timezone, now_utc, utc_to_local
 from flask_login import current_user
 
@@ -726,6 +733,7 @@ app.add_url_rule(
     "/change-password", "change_password", change_password, methods=["GET", "POST"]
 )
 app.add_url_rule("/me", "user_profile", person_details)
+app.add_url_rule("/export", "export_page", export_page)
 app.add_url_rule("/my-tunes", "my_tunes", my_tunes)
 app.add_url_rule("/my-tunes/add", "add_my_tune_page", add_my_tune_page)
 app.add_url_rule("/my-tunes/sync", "sync_my_tunes_page", sync_my_tunes_page)
@@ -1697,6 +1705,59 @@ app.add_url_rule(
     get_my_sessions,
     methods=["GET"],
 )
+
+# Exports (export_routes.py): the page in export mode POSTs the ids it shows and
+# gets a JSON, CSV or PDF file back. The chooser's data has the usual page/API twin.
+app.add_url_rule(
+    "/api/export/options", "export_options", export_options, methods=["GET"]
+)
+app.add_url_rule(
+    "/api/export/my-tunes", "export_my_tunes", export_my_tunes, methods=["POST"]
+)
+# The /check twins (native surface): the same handlers, forced into check mode.
+app.add_url_rule(
+    "/api/export/my-tunes/check",
+    "export_my_tunes_check",
+    export_my_tunes,
+    methods=["POST"],
+    defaults={"force_check": True},
+)
+app.add_url_rule(
+    "/api/export/sessions/<path:session_path>/tunes/check",
+    "export_session_tunes_check",
+    export_session_tunes,
+    methods=["POST"],
+    defaults={"force_check": True},
+)
+app.add_url_rule(
+    "/api/export/sessions/<path:session_path>/logs/check",
+    "export_session_logs_check",
+    export_session_logs,
+    methods=["POST"],
+    defaults={"force_check": True},
+)
+app.add_url_rule(
+    "/api/export/sessions/<path:session_path>/tunes",
+    "export_session_tunes",
+    export_session_tunes,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/export/sessions/<path:session_path>/logs",
+    "export_session_logs",
+    export_session_logs,
+    methods=["POST"],
+)
+
+
+@public_api
+def api_build():
+    """GET /api/build: which build is running, for a long-open page (the live
+    logger) to notice a deploy and offer a reload. See build_info.py."""
+    return jsonify({"success": True, "build": BUILD_ID})
+
+
+app.add_url_rule("/api/build", "api_build", api_build, methods=["GET"])
 app.add_url_rule(
     "/api/offline/bundle",
     "get_offline_bundle",

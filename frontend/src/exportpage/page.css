@@ -1,0 +1,6 @@
+/* The export chooser (/export). The components carry their own scoped styles;
+   this file exists so the bundle emits static/exportpage/page.css for the shell's
+   extra_css block, and holds the one rule that must reach the page frame. */
+.export-page {
+  max-width: 560px;
+}

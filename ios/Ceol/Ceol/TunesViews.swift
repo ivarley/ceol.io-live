@@ -83,6 +83,14 @@ struct TunesView: View {
                     TunesFilterSheet(filters: $filters, sort: $sort, types: types, instruments: instruments, tags: tagsUsed)
                 }
                 .sheet(isPresented: $adding) { AddTuneSheet { Task { await load() } } }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if exporting {
+                        ExportBar(
+                            kind: .myTunes, ids: (state.value.map(filteredRows) ?? []).map(\.item.tuneID),
+                            lines: ExportRules.myTunesLines(filters: effectiveFilters, sort: sort),
+                            onDone: { model.exporting = nil })
+                    }
+                }
                 // The Tunes icon, tapped while here: back to the list itself.
                 .onChange(of: model.rootRequests[.tunes]) { _, _ in
                     open = nil
@@ -101,6 +109,23 @@ struct TunesView: View {
 
     private var instruments: [MyTunesList.Instrument] {
         (state.value?.instruments ?? []).map { .init(name: $0.instrument, isAuto: $0.isAuto) }
+    }
+
+    /// Export mode (the web's /my-tunes?export=1): the same list and filters, an export
+    /// bar in place of the tab bar, and no adding or swiping meanwhile.
+    private var exporting: Bool { model.exporting == .myTunes }
+
+    /// The filters as applied: the panel's, plus the search box and the status row.
+    private var effectiveFilters: MyTunesList.Filters {
+        var f = filters
+        f.search = search
+        f.status = model.tunesStatus?.rawValue ?? ""
+        return f
+    }
+
+    /// The rows on screen, in order: what the list shows and what an export sends.
+    private func filteredRows(_ payload: MyTunesPayload) -> [MyTunesList.Row] {
+        MyTunesList.filterAndSort(payload.tunes.map(\.listItem), filters: effectiveFilters, sort: sort, instruments: instruments)
     }
 
     /// The tags you've given tunes: the filter's choices.
@@ -168,19 +193,23 @@ struct TunesView: View {
 
     @ViewBuilder private func list(_ payload: MyTunesPayload) -> some View {
         let byID = Dictionary(payload.tunes.map { ($0.tuneId, $0) }, uniquingKeysWith: { a, _ in a })
-        var f = filters
-        let _ = { f.search = search; f.status = model.tunesStatus?.rawValue ?? "" }()
-        let rows = MyTunesList.filterAndSort(payload.tunes.map(\.listItem), filters: f, sort: sort, instruments: instruments)
+        let f = effectiveFilters
+        let rows = filteredRows(payload)
         let firstDimmed = rows.firstIndex { $0.dimmed }
         // Less any you added since the search ran.
         let catalogue = catalogue.filter { byID[$0.tuneId] == nil }
         List {
             VStack(alignment: .leading, spacing: 10) {
+                if exporting {
+                    ExportBanner(label: tr("Exporting"), hint: tr("Filter the list as usual, then choose a format below."))
+                        { model.exporting = nil }
+                        .padding(.horizontal, -16)
+                }
                 // The web's toolbar: search (your list, then the catalogue below it),
                 // sort and filter, and + to add a tune.
                 SearchRow(
                     text: $search, prompt: tr("Search"), fieldID: "tunes.search",
-                    onAdd: { adding = true }, addID: "tunes.add", addLabel: tr("Add a tune"),
+                    onAdd: exporting ? nil : { adding = true }, addID: "tunes.add", addLabel: tr("Add a tune"),
                     focused: $searching,
                     onFilter: { filtering = true },
                     filterCount: filters.activeCount + (sort == MyTunesList.Sort() ? 0 : 1))
@@ -229,7 +258,8 @@ struct TunesView: View {
                 .ceolRow()
                 .swipeActions(edge: .leading) {
                     // The web's swipe: one more hearing of a tune you want to learn.
-                    if e.status == MyTunesRules.Status.wantToLearn.rawValue {
+                    // Not while exporting: the list is a picker then, not an editor.
+                    if !exporting, e.status == MyTunesRules.Status.wantToLearn.rawValue {
                         Button("Heard it") { Task { await heard(e.tuneID, count: (t?.heardCount ?? 0) + 1) } }
                             .tint(CeolTokens.primaryFill)
                     }

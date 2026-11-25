@@ -21,6 +21,7 @@ import datetime
 from datetime import date, timedelta
 import os
 import domains
+from build_info import BUILD_ID
 import re
 
 import markdown
@@ -994,6 +995,7 @@ def help_credits():
 # Release notes months, most recent first. Single source of truth shared by
 # the index page and the per-month detail pages.
 RELEASE_NOTES_MONTHS = [
+    ("2026-11", "November 2026"),
     ("2026-10", "October 2026"),
     ("2026-07", "July 2026"),
     ("2026-06", "June 2026"),
@@ -3405,6 +3407,23 @@ def session_admin_bulk_import(session_path):
 
 
 @login_required
+@login_required
+def export_page():
+    """The Export chooser (a thin shell, spec 035): pick My Tunes, a session's
+    tunes or a session's logs. Each choice opens the real page in export mode
+    (`?export=1`), where the page's own filters narrow what the file holds; the
+    files themselves come from export_routes.py. Same payload as
+    GET /api/export/options."""
+    from serializers import build_export_options_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_export_options_payload(conn, current_user.person_id)
+    finally:
+        conn.close()
+    return render_template("export.html", payload=payload)
+
+
 def my_tunes():
     """Personal tune collection page (spec 035 Step 2): a thin shell that embeds
     the SAME payload GET /api/my-tunes returns (one serializer — they can't
@@ -3861,6 +3880,9 @@ def live_logging_screen(session_instance_id):
     streaming_base_url = domains.streaming_base_url(request.host)
     return render_template(
         "live_logging.html",
+        # Which build served this page (build_info.py); the logger compares it with
+        # GET /api/build when its tab comes back and offers a reload if it changed.
+        build_id=BUILD_ID,
         session_instance_id=session_instance_id,
         # session_id: the PersonPicker needs it at first paint and offline. It used to arrive
         # only via /bootstrap, so it was unavailable in both cases.

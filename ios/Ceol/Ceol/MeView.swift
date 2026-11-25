@@ -16,6 +16,8 @@ struct MeView: View {
     @State private var editing = false
     @State private var confirmSignOut = false
     @State private var showingRecordings = false
+    /// The Export chooser (the web's /export): what to take with you.
+    @State private var showingExport = false
     @State private var deleting = false
     @State private var page: WebPage?
     @State private var opening: String?
@@ -41,6 +43,7 @@ struct MeView: View {
                 }
                 .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
                 .sheet(isPresented: $showingRecordings) { RecordingsView() }
+                .sheet(isPresented: $showingExport) { ExportChooserView() }
                 .alert("Couldn't open that page", isPresented: Binding(get: { webFailure != nil }, set: { if !$0 { webFailure = nil } })) {
                     Button("OK") {}
                 } message: {
@@ -200,6 +203,15 @@ struct MeView: View {
                     .buttonStyle(.plain)
                     .disabled(opening != nil)
                     .accessibilityIdentifier("me.help")
+                    // Your tunes, a session's tunes or its logs as a file (the web's
+                    // Me → Export my data), chosen here, exported from the screen itself.
+                    Button { showingExport = true } label: {
+                        KitRow(label: tr("Export my data")) {
+                            Image(systemName: "chevron.right").foregroundStyle(CeolTokens.textMuted)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("me.export")
                     Button { Task { await openWeb("/support", needsSignIn: false) } } label: {
                         KitRow(label: tr("Contact & Support")) { WebMark(busy: opening == "/support") }
                     }

@@ -281,3 +281,23 @@ click — including the active one — because some hosts toggle-off on that
 | `styled` | `true` | `false` = structure only; skin via `segClass`/`optClass` |
 | `segClass`/`optClass` | — | legacy skin + e2e/CSS hook passthrough; options always carry an `active` class |
 | `...rest` | — | `role`, `aria-label`… pass to the container |
+
+### ExportBanner / ExportBar / export.js — export mode
+The profile's "Export my data" does not get pages of its own: the page that already
+has the filters (My Tunes, a session's Tunes or Logs tab) opens in export mode,
+`?export=1`. ExportBanner sits at the top and names the mode (`label`, `hint`,
+`onLeave`); ExportBar is fixed to the bottom with the format segment (JSON / CSV /
+PDF, `bind:format`), a `note` on what the format holds, the Download button
+(`label`, already pluralized by the page; `disabled` + `reason`; `busy` +
+`progress` text while it works) and Done (`onDone`). While the bar is mounted the
+body carries `has-export-bar`, which hides the phone tab bar and reserves room
+under the list.
+
+`export.js`: `isExportMode()`, `leaveExportMode()` (drops only the flag, keeps the
+filters, fires `ceol-export-mode`), `onExportModeChange(fn)` (popstate + that
+event; returns the unsubscribe), `withExportParam(params, on)` for a page that
+rebuilds its query string, and `runExport({url, body, format, onProgress})`: for a
+PDF it first POSTs `check:true`, warms each `missing_setting_ids` entry through
+`GET /api/tunes/settings/<id>/image?kind=full` two at a time (reporting `{done,
+total}`), then POSTs for the file and hands it to the browser. Errors are
+`ExportError` carrying the server's `message`.
