@@ -1522,26 +1522,3 @@
     cursor: default;
 }
 
-/* The Change button beside each form's setting opens the setting chooser. */
-.change-setting-btn {
-    padding: 3px 10px;
-    border: 1px solid var(--primary, #65b464);
-    border-radius: 4px;
-    background: none;
-    color: var(--primary, #65b464);
-    font-size: 12.5px;
-    cursor: pointer;
-    white-space: nowrap;
-}
-.change-setting-btn:hover:not(:disabled) {
-    background: var(--hover-bg, rgba(101, 180, 100, 0.12));
-}
-.change-setting-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-.setting-value {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}

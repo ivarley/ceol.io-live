@@ -830,7 +830,6 @@ describe('TuneSheet component', () => {
     const details = container.querySelector('#details-tab')
     expect(details.textContent).toContain('At Mueller Session')
     expect(container.querySelector('#dc-alias-input').value).toBe('The Banish')
-    expect(container.querySelector('#dc-setting-value').textContent).toContain('#5')
     expect(container.querySelector('#dc-key-select').value).toBe('Dmixolydian')
     // The inherit option names the SETTING's key — "as usual" is an instance's fallback,
     // and this form is never an instance.
@@ -905,7 +904,6 @@ describe('TuneSheet component', () => {
     expect(container.querySelector('#sess-key-select').value).toBe('Gmajor')
     // ...and Details is unmoved: still the session's own row.
     expect(container.querySelector('#dc-alias-input').value).toBe('The Banish')
-    expect(container.querySelector('#dc-setting-value').textContent).toContain('#5')
     expect(container.querySelector('#dc-key-select').value).toBe('Dmixolydian')
   })
 
@@ -1654,7 +1652,6 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     // The tag chips, in order — the TagInput renders one .kit-chip-body per tag.
     tags: [...c.querySelectorAll('.kit-taginput .kit-chip-body')].map((e) => norm(e.textContent)).join(','),
     nameAlias: c.querySelector('#name-alias-input')?.value,
-    settingField: c.querySelector('#setting-value')?.textContent.match(/#(\d+)/)?.[1],
     myKey: c.querySelector('#my-key-select')?.value,
     removeLink: /Remove From My Tunes/.test(c.querySelector('.tsc-action-danger')?.textContent || ''),
     // The whole Stats tab: tunebook count row (incl. "Last Updated"), list count,
@@ -1684,7 +1681,6 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     expect(onlineDigest.notes).toBe('first two bars')
     expect(onlineDigest.tags).toBe('practice,session')
     expect(onlineDigest.nameAlias).toBe('Cooleys (mine)')
-    expect(onlineDigest.settingField).toBe('4321')
     expect(onlineDigest.statsTab).toContain('Saved in 4 tune lists on Ceol')
     expect(onlineDigest.statsTab).toContain('Saved in 9 tunebooks on TheSession.org')
     expect(onlineDigest.statsTab).toContain('Last Updated 2026-01-01')
@@ -1712,8 +1708,8 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
 // ---- paging the settings on the staff ------------------------------------------------
 // The staff pages through every setting of the tune in place (swipe / ‹ › / ← →), and
 // once it sits on one the view's layer doesn't use, a button under it makes that the
-// default: mine on my list, the session's at a session (its admins). The chooser sheet
-// still opens from each form's Change button (settingchooser.test.js).
+// default: mine on my list, the session's at a session (its admins). That button is the
+// one way to set a setting; what a night played is not edited here.
 describe('paging the settings on the staff', () => {
   const pagerRoutes = (tuneId, localIds, allIds) => [
     [
@@ -1769,10 +1765,6 @@ describe('paging the settings on the staff', () => {
     await waitFor(() => expect(defaultBtn()).toBeNull())
     expect(pagerLabel(container)).toContain('★ yours')
     expect(container.querySelector('.abc-notation-image').src).toContain('INC-6020')
-    // ...and Configure's setting row says so.
-    component.toggleConfigSection()
-    flushSync()
-    expect(container.querySelector('#setting-value').textContent).toContain('#6020')
   })
 
   it('at a session: admins make it the session’s default; a member on their list, their own', async () => {
@@ -1797,8 +1789,8 @@ describe('paging the settings on the staff', () => {
     await waitFor(() => expect(puts().length).toBe(1))
     expect(puts()[0][0]).toBe('/api/sessions/austin/mueller/tunes/602')
     expect(JSON.parse(puts()[0][1].body)).toEqual({ setting_id: 6120 })
-    await waitFor(() => expect(container.querySelector('#dc-setting-value').textContent).toContain('#6120'))
     await waitFor(() => expect(defaultBtn()).toBeNull())
+    expect(pagerLabel(container)).toContain('★ Mueller Session’s')
 
     // A member who isn't an admin can't change what the session plays, but can still
     // make the version they're looking at their own.

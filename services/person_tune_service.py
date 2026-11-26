@@ -12,7 +12,7 @@ import re
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from models.person_tune import PersonTune
-from database import get_db_connection
+from database import get_db_connection, key_echoes_setting
 from flask_babel import gettext as _
 
 
@@ -334,6 +334,12 @@ class PersonTuneService:
 
             # Update setting_id if provided (can be None to clear it)
             if setting_id is not UNSET and setting_id != person_tune.setting_id:
+                # A key that only echoed the old setting's follows the new one.
+                if key is UNSET and self._key_echoes_setting(
+                    person_tune.tune_id, person_tune.setting_id, person_tune.key
+                ):
+                    person_tune.key = None
+                    changes_made.append("key")
                 person_tune.setting_id = setting_id
                 changes_made.append("setting_id")
 
@@ -376,6 +382,18 @@ class PersonTuneService:
             return False, f"Validation error: {str(e)}", None
         except Exception as e:
             return False, _("Error updating PersonTune: %(error)s", error=str(e)), None
+
+    @staticmethod
+    def _key_echoes_setting(tune_id, setting_id, key) -> bool:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            try:
+                return key_echoes_setting(cur, tune_id, setting_id, key)
+            finally:
+                cur.close()
+        finally:
+            conn.close()
 
     def delete_person_tune(
         self, person_tune_id: int, user_id: Optional[int] = None

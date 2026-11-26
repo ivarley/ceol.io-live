@@ -359,10 +359,6 @@
     "ga": "D'ainm féin ar an bhfonn seo",
     "review": true
   },
-  "I play setting:": {
-    "ga": "Seinnim leagan:",
-    "review": true
-  },
   "e.g., 123 or paste URL": {
     "ga": "m.sh., 123 nó greamaigh URL",
     "review": true
@@ -393,10 +389,6 @@
   },
   "We call this:": {
     "ga": "Tugaimid air:",
-    "review": true
-  },
-  "Our setting:": {
-    "ga": "Ár leagan:",
     "review": true
   },
   "We play this in:": {
@@ -441,10 +433,6 @@
   },
   "We called it:": {
     "ga": "Thugamar air:",
-    "review": true
-  },
-  "We played setting:": {
-    "ga": "Sheinneamar leagan:",
     "review": true
   },
   "We played it in:": {
@@ -775,24 +763,8 @@
     "ga": "Úsáid an leagan seo",
     "review": false
   },
-  "Which version do you play?": {
-    "ga": "Cén leagan a sheinneann tú?",
-    "review": false
-  },
-  "Which version does {name} play?": {
-    "ga": "Cén leagan a sheinntear ag {name}?",
-    "review": false
-  },
-  "Which version was played that night?": {
-    "ga": "Cén leagan a seinneadh an oíche sin?",
-    "review": false
-  },
   "change the setting": {
     "ga": "an leagan a athrú",
-    "review": false
-  },
-  "Change Setting": {
-    "ga": "Athraigh an leagan",
     "review": false
   },
   "Make this my default setting": {

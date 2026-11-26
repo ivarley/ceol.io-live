@@ -192,9 +192,6 @@ struct TuneHistoryPane: View {
     let nights: [PlayedNight]
     let counts: TuneHistoryCounts
     @Binding var scope: TuneHistoryScope
-    /// The night the sheet was opened from, with its own setting (nil: the session's),
-    /// when the viewer may change it (a member): that night's scope shows the row.
-    var ownNight: (id: Int, setting: Int?, change: () -> Void)? = nil
     let openNight: (TunePlayTarget) -> Void
 
     @State private var history: LoadState<Components.Schemas.TuneHistory> = .loading
@@ -389,17 +386,6 @@ struct TuneHistoryPane: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("history.position")
                 Hairline()
-            }
-            if let ownNight, ownNight.id == night.id {
-                HStack(spacing: 10) {
-                    Text("We played setting:").font(.ceol(size: 15)).foregroundStyle(CeolTokens.textMuted)
-                    Text(ownNight.setting.map { "#\($0)" } ?? tr("(the session's)")).font(.ceol(size: 15)).foregroundStyle(CeolTokens.textColor)
-                    Spacer(minLength: 8)
-                    Button("Change Setting") { ownNight.change() }
-                        .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary)
-                        .accessibilityIdentifier("history.nightSetting")
-                }
-                .padding(.top, 12)
             }
         }
     }

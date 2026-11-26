@@ -42,6 +42,7 @@ from database import (
     get_db_connection,
     get_current_user_id,
     save_to_history,
+    key_echoes_setting,
     find_matching_tune,
     normalize_override_name,
     normalize_quotes,
@@ -708,7 +709,7 @@ def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_
     row = None
     if session_id is not None:
         cur.execute(
-            "SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            "SELECT setting_id, key FROM session_tune WHERE session_id = %s AND tune_id = %s",
             (session_id, tune_id),
         )
         row = cur.fetchone()
@@ -721,8 +722,12 @@ def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_
         save_to_history(
             cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=user_id
         )
+        # A key that only echoed the old setting's follows the new one.
+        key_sql = (
+            ", key = NULL" if key_echoes_setting(cur, tune_id, existing, row[1]) else ""
+        )
         cur.execute(
-            "UPDATE session_tune SET setting_id = %s, last_modified_user_id = %s WHERE session_id = %s AND tune_id = %s",
+            f"UPDATE session_tune SET setting_id = %s{key_sql}, last_modified_user_id = %s WHERE session_id = %s AND tune_id = %s",
             (setting_id, user_id, session_id, tune_id),
         )
         return "session"

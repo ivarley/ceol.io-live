@@ -1,14 +1,12 @@
 // The settings pager: every written version of one tune, in thesession.org's order,
-// with the notation of the one in view drawn ahead of you. One engine behind two
-// faces — the tune drawer's staff (swipe / arrows page it in place) and the
-// SettingChooser sheet (the same list, full notation, "Use this setting").
+// with the notation of the one in view drawn ahead of you: the engine behind the
+// tune drawer's staff (swipe / arrows page it in place).
 //
 // The list is the settings Ceol holds (the tune preview, one cheap local call) and
 // then thesession.org's full list merged in (`backfill`). The backfill is a live call
 // to thesession.org with no server-side cache, and the drawer opens on every tune tap
 // across the site, so it is LAZY here: `ensureBackfill()` runs it once, when something
-// asks for it (the chooser right after load; the drawer on the first touch of the
-// staff or the first step). A step past the end while the backfill is still in flight
+// asks for it (the first touch of the staff or the first step). A step past the end while the backfill is still in flight
 // is kept and applied when the list grows.
 //
 // Paging has to feel instant, so the renders run ahead: the setting in view, then the

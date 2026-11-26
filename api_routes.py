@@ -13,6 +13,7 @@ from database import (
     get_db_connection,
     get_current_user_id,
     save_to_history,
+    key_echoes_setting,
     find_matching_tune,
     normalize_override_name,
     normalize_quotes,
@@ -2485,6 +2486,17 @@ def update_session_tune_details(session_path, tune_id):
                     get_current_user_id(),
                 ),
             )
+
+        # A key that only echoed the old setting's follows the new one.
+        if "setting_id" in data and "key" not in data:
+            cur.execute(
+                "SELECT setting_id, key FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                (session_id, tune_id),
+            )
+            old = cur.fetchone()
+            if old and key_echoes_setting(cur, tune_id, old[0], old[1]):
+                update_fields.append("key = %s")
+                update_values.append(None)
 
         # Save to history before making changes
         save_to_history(

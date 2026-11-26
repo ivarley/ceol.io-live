@@ -543,6 +543,32 @@ def close_db_pool():
             _pool = None
 
 
+def key_echoes_setting(cur, tune_id, setting_id, key):
+    """Is a layer's explicit key only a copy of its setting's key?
+
+    person_tune.key, session_tune.key and session_instance_tune.key_override are
+    NULL when the layer plays the tune in whatever key its setting is written in
+    (spec 037). One set to that same key says nothing more, so when the layer's
+    setting changes, such a key follows the new setting (it is cleared) rather than
+    pinning the old setting's key under the new one. A key that differs is a real
+    transposition and stays. A layer with no setting of its own plays the tune's
+    first (lowest id), so that is the setting its key is compared with."""
+    if not key or not tune_id:
+        return False
+    if setting_id:
+        cur.execute(
+            "SELECT key FROM tune_setting WHERE setting_id = %s AND tune_id = %s",
+            (setting_id, tune_id),
+        )
+    else:
+        cur.execute(
+            "SELECT key FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1",
+            (tune_id,),
+        )
+    row = cur.fetchone()
+    return bool(row) and row[0] == key
+
+
 def save_to_history(cur, table_name, operation, record_id, user_id=None):
     """Save a record to its history table before modification/deletion.
 

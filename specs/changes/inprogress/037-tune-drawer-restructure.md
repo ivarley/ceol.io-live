@@ -83,9 +83,8 @@ right on a phone, the **‹ ›** under it or **← →** on a desktop. The row 
 in view (*yours*, *The Cobblestone's*, *this night's*). The notes/abc tabs, the copy button and
 the thesession.org / abc-tools links all follow the setting in view.
 
-The engine is `frontend/src/tunesheet/settingpager.svelte.js` (`createSettingPager`), shared
-with the chooser sheet below; `ios/Ceol/Ceol/SettingPager.swift` (`SettingPagerModel`) is its
-twin. It lists the settings we hold at once (`GET /api/tunes/<id>/preview`, local and cheap)
+The engine is `frontend/src/tunesheet/settingpager.svelte.js` (`createSettingPager`);
+`ios/Ceol/Ceol/SettingPager.swift` (`SettingPagerModel`) is its twin. It lists the settings we hold at once (`GET /api/tunes/<id>/preview`, local and cheap)
 and merges thesession.org's full list in setting order (`GET /api/tunes/thesession/<id>/preview?full=1`)
 **lazily**: that is a live call to thesession.org with no server-side cache, and the drawer
 opens on every tune tap across the site, so it runs once, the first time something asks to
@@ -112,32 +111,41 @@ under it makes that the default:
 | not on my list and no session; signed out | (no button: paging is for looking) | — |
 
 A night's own override (`session_instance_tune.setting_override`) is deliberately **not** what
-the button writes from a night: the per-night setting is set from the History form's Change
-button, as before. The save happens at once, like the learn status; the server imports a
-setting only thesession.org has before saving it (`ensure_setting_held` /
-`_ensure_setting_local`: the ABC only; its images render on first view). Saved, the ★ moves,
-the button goes, and the staff stays on the setting just saved. The old under-staff line
-(*I play a different version* **[Change Setting]**) is gone on both platforms.
+the button writes from a night, and nothing in the apps edits it any more (below). The save
+happens at once, like the learn status; the server imports a setting only thesession.org has
+before saving it (`ensure_setting_held` / `_ensure_setting_local`: the ABC only; its images
+render on first view). Saved, the ★ moves, the button goes, and the staff stays on the setting
+just saved. The old under-staff line (*I play a different version* **[Change Setting]**) is
+gone on both platforms.
 
-### The setting chooser (BUILT, Oct 2026)
+**The key follows the setting.** A layer's key (`person_tune.key`, `session_tune.key`) is NULL
+when the layer plays the tune in whatever key its setting is written in; one set to that same
+key says nothing more. So when the button changes a layer's setting, a key on that layer that
+only echoed the old setting's is cleared (`database.key_echoes_setting`, applied by the
+`set_setting` op, `PUT /api/my-tunes/<id>`, `PUT /api/sessions/<path>/tunes/<id>` and the live
+logger's `_apply_chosen_setting`), and the drawer mirrors that in its key selects; a key that
+differs is a real transposition and stays.
 
-A setting is never typed in as a thesession.org number. Every form that sets one — the
-personal Configure form, the Details form, the History form — shows the current setting
-(`#5150`) with a **Change** button, which opens `SettingChooser.svelte` (a kit Sheet) for that
-layer: the same pager, showing each setting's **full** notation, with thesession.org's list
-fetched as soon as the held settings are in (the sheet IS the ask for the whole list), and
-**Use this setting** at the foot. The History form's row is the one way to set what a night
-played (`PUT /api/sessions/<path>/<instance>/tunes/<id>` `{setting_override}`; members, and
-only for a tune played that night). A setting thesession.org doesn't have for the tune is a
-404, and nothing is written.
+### The setting chooser (BUILT Oct 2026, RETIRED Nov 2026)
 
-The iOS app has the same chooser (`ios/Ceol/Ceol/SettingChooser.swift`) behind the same
-Change buttons, and the same paged notation card with the same button and rules
-(`TuneSheetBody`, `TunesViews.swift`); a tune opened from a night's log carries the night
-(`TuneRef.instanceID`). The native surface gained the `set_setting` op, the two session
-writes (setting only), `setting_override` on the tune payload, a schema for thesession.org's
-preview (`?full=1`) and a body for `render-abc` — all additive; paging the staff needed
-nothing new.
+The button under the paged staff is the one way to set a setting. The forms' setting rows
+(*I play setting* / *Our setting* / *We played setting* **[Change]**) and the chooser sheet
+they opened (`SettingChooser.svelte`, `SettingChooser.swift`: the same pager with full
+notation and **Use this setting**) are gone on both platforms, as is the add-a-tune pane's
+**Change Setting** (the search preview's own pager still prefills the setting there). A
+setting is never typed in as a thesession.org number.
+
+**What a night played is no longer edited.** Changing one night's setting after the fact was
+too cumbersome to be worth a control, and almost every `setting_override` in production was
+not an override at all: the old linking flows copied the session's setting onto every logged
+row (~10,000 rows equal to `session_tune.setting_id`, against ~160 that differed, nearly all
+old Mueller nights). `schema/068_clear_redundant_setting_overrides.sql` cleared the copies,
+each with a history row, so an override is set only where a night really differed. The one
+writer left is the live logger, which marks a row when the logger's explicit pick differs
+from a setting the session already prefers (`_apply_chosen_setting`). The night layer is still
+read — notation precedence, the *★ this night's* badge, `setting_override` on the tune
+payload — and `PUT /api/sessions/<path>/<instance>/tunes/<id>` `{setting_override}` stays in
+the native surface (additive only), unused by the apps.
 
 ## The name matcher
 
@@ -267,8 +275,8 @@ The Session tab and the History tab were asking the same question — *which pla
 I looking at?* — so they became one, with one scope control. The tab is called **History** rather
 than "At This Session" because the droplist can select scopes that aren't a session at all. The
 cost, accepted deliberately: "History" doesn't advertise that it's where you edit a session's
-alias/key/setting. That's tolerable because the session-level setting flow is likely to move to a
-carousel chooser (as in search) before long, and the key would blend into that.
+alias/key. That's tolerable because the setting is set from the staff itself (above), not from
+a form.
 
 ### The droplist IS the heading, and the ONE scope control
 

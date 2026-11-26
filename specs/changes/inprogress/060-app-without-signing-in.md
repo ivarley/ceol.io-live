@@ -122,7 +122,7 @@ These open what a guest reads, and nothing that changes data:
     render from ABC already in our database through our own ABC renderer, and make no
     outbound fetch, so they can't be used as an open proxy. Signed-out calls get the
     a rate limit of 60 a minute per address. That is twice the search's, because a pub's worth of guests can share one address.
-  - The tune sheet's setting chooser and the search preview for a local tune also read
+  - The tune sheet's settings pager and the search preview for a local tune also read
     `GET /api/tunes/<id>/preview`, so it opens the same way.
 - **What stays behind a login:**
   - `GET /api/tunes/thesession/<id>/preview` and `POST /api/tunes/render-abc`. The

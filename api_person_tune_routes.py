@@ -16,6 +16,7 @@ from models.person_tune import PersonTune
 from services.person_tune_service import PersonTuneService, UNSET, normalize_tags
 from services.thesession_sync_service import ThesessionSyncService
 from database import (
+    key_echoes_setting,
     get_db_connection,
     get_current_user_id,
     normalize_quotes,
@@ -1182,8 +1183,19 @@ def my_tunes_op():
                     except TuneImportError as e:
                         conn.rollback()
                         return jsonify({"success": False, "error": e.message}), e.status
+                # A key that only echoed the old setting's follows the new one.
                 cur.execute(
-                    """UPDATE person_tune SET setting_id=%s, last_modified_user_id=%s
+                    "SELECT setting_id, key FROM person_tune WHERE person_id=%s AND tune_id=%s",
+                    (person_id, tune_id),
+                )
+                old = cur.fetchone()
+                key_sql = (
+                    ", key=NULL"
+                    if old and key_echoes_setting(cur, tune_id, old[0], old[1])
+                    else ""
+                )
+                cur.execute(
+                    f"""UPDATE person_tune SET setting_id=%s{key_sql}, last_modified_user_id=%s
                        WHERE person_id=%s AND tune_id=%s""",
                     (setting_id, user_id, person_id, tune_id),
                 )

@@ -1,10 +1,14 @@
-"""The setting chooser's writes (the web drawer and the iOS tune sheet).
+"""The setting writes behind the paged staff (the web drawer and the iOS tune sheet).
 
-The chooser pages every setting thesession.org has for a tune, so the one picked is
+The staff pages every setting thesession.org has for a tune, so the one picked is
 often one we've never imported. Whichever layer it lands on — mine (the set_setting
-op), the session's, or one night's — the server imports it first: nothing may point at
-a setting we don't hold. A setting thesession.org doesn't have for the tune is refused,
-and nothing is written.
+op), the session's, or one night's (an endpoint the apps no longer use) — the server
+imports it first: nothing may point at a setting we don't hold. A setting
+thesession.org doesn't have for the tune is refused, and nothing is written.
+
+A layer's key follows its setting: NULL means "the setting's key", so a key that was
+only a copy of the old setting's is cleared with the change, and one that differs (a
+real transposition) stays.
 """
 import json
 import uuid
@@ -258,6 +262,61 @@ class TestMySetting:
             assert resp.status_code == 404
         assert _held(db_cursor, REMOTE_SETTING + 1) is None
 
+    def test_a_key_that_only_echoed_the_old_setting_follows_the_new_one(
+        self, client, authenticated_user, played, remote_setting, db_cursor, db_conn
+    ):
+        # No setting of my own means the tune's first; my key is that setting's.
+        db_cursor.execute(
+            "SELECT key FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1",
+            (played["tune_id"],),
+        )
+        first_key = db_cursor.fetchone()[0]
+        with authenticated_user as user:
+            _on_my_list(db_cursor, db_conn, user.person_id, played["tune_id"])
+            db_cursor.execute(
+                "UPDATE person_tune SET setting_id = NULL, key = %s WHERE person_id = %s AND tune_id = %s",
+                (first_key, user.person_id, played["tune_id"]),
+            )
+            db_conn.commit()
+            try:
+                resp, body = _op(
+                    client,
+                    type="set_setting",
+                    tune_id=played["tune_id"],
+                    setting_id=REMOTE_SETTING,
+                )
+                assert resp.status_code == 200 and body["success"] is True
+                db_cursor.execute(
+                    "SELECT setting_id, key FROM person_tune WHERE person_id = %s AND tune_id = %s",
+                    (user.person_id, played["tune_id"]),
+                )
+                assert db_cursor.fetchone() == (REMOTE_SETTING, None)
+
+                # A key of my own, not the setting's, is a transposition and stays.
+                db_cursor.execute(
+                    "UPDATE person_tune SET key = 'Fdorian' WHERE person_id = %s AND tune_id = %s",
+                    (user.person_id, played["tune_id"]),
+                )
+                db_conn.commit()
+                resp, body = _op(
+                    client,
+                    type="set_setting",
+                    tune_id=played["tune_id"],
+                    setting_id=played["held"],
+                )
+                assert resp.status_code == 200 and body["success"] is True
+                db_cursor.execute(
+                    "SELECT setting_id, key FROM person_tune WHERE person_id = %s AND tune_id = %s",
+                    (user.person_id, played["tune_id"]),
+                )
+                assert db_cursor.fetchone() == (played["held"], "Fdorian")
+            finally:
+                db_cursor.execute(
+                    "UPDATE person_tune SET key = NULL WHERE person_id = %s AND tune_id = %s",
+                    (user.person_id, played["tune_id"]),
+                )
+                db_conn.commit()
+
 
 class TestTheSessionsSetting:
     def test_an_admin_picks_one_only_thesession_has(
@@ -303,6 +362,69 @@ class TestTheSessionsSetting:
             (played["session_id"], played["tune_id"]),
         )
         assert db_cursor.fetchone()[0] == before
+
+    def test_a_key_that_only_echoed_the_old_setting_follows_the_new_one(
+        self, client, authenticated_user, played, remote_setting, db_cursor, db_conn
+    ):
+        db_cursor.execute(
+            "SELECT key FROM tune_setting WHERE setting_id = %s", (played["held"],)
+        )
+        held_key = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "SELECT key FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (played["session_id"], played["tune_id"]),
+        )
+        old_key = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "UPDATE session_tune SET setting_id = %s, key = %s WHERE session_id = %s AND tune_id = %s",
+            (played["held"], held_key, played["session_id"], played["tune_id"]),
+        )
+        db_conn.commit()
+        url = f"/api/sessions/{played['path']}/tunes/{played['tune_id']}"
+        try:
+            with authenticated_user as user:
+                _member(
+                    db_cursor,
+                    db_conn,
+                    played["session_id"],
+                    user.person_id,
+                    is_admin=True,
+                )
+                resp = client.put(
+                    url,
+                    data=json.dumps({"setting_id": REMOTE_SETTING}),
+                    content_type="application/json",
+                )
+                assert resp.status_code == 200, resp.data
+                db_cursor.execute(
+                    "SELECT setting_id, key FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                    (played["session_id"], played["tune_id"]),
+                )
+                assert db_cursor.fetchone() == (REMOTE_SETTING, None)
+
+                # The session's own key, not the setting's, stays.
+                db_cursor.execute(
+                    "UPDATE session_tune SET key = 'Fdorian' WHERE session_id = %s AND tune_id = %s",
+                    (played["session_id"], played["tune_id"]),
+                )
+                db_conn.commit()
+                resp = client.put(
+                    url,
+                    data=json.dumps({"setting_id": played["held"]}),
+                    content_type="application/json",
+                )
+                assert resp.status_code == 200, resp.data
+                db_cursor.execute(
+                    "SELECT setting_id, key FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                    (played["session_id"], played["tune_id"]),
+                )
+                assert db_cursor.fetchone() == (played["held"], "Fdorian")
+        finally:
+            db_cursor.execute(
+                "UPDATE session_tune SET key = %s WHERE session_id = %s AND tune_id = %s",
+                (old_key, played["session_id"], played["tune_id"]),
+            )
+            db_conn.commit()
 
 
 class TestOneNightsSetting:

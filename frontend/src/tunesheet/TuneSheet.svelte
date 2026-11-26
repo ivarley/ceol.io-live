@@ -84,7 +84,6 @@
     tagsEqual,
   } from './logic.js'
   import { STATUSES, STATUS_LABELS } from '../mylist.js'
-  import SettingChooser from './SettingChooser.svelte'
   import { createSettingPager } from './settingpager.svelte.js'
 
   // The tune type as the server sent it in English (the pill's CSS sets its case), the
@@ -473,7 +472,7 @@
   const isOffline = $derived(!onlineNow)
 
   // The Configure Save button covers ONLY the fields that still batch-save behind it
-  // (name alias / key; the setting saves from its chooser). Notes and tags moved to the always-visible panel and
+  // (name alias / key; the setting saves from the button under the staff). Notes and tags moved to the always-visible panel and
   // auto-save on blur, so they no longer make this dirty.
   const pcDirty = $derived.by(() => {
     if (!tune || !onList) return false
@@ -715,7 +714,6 @@
   export function show(rawCfg) {
     const cfg = normalizeShowConfig(rawCfg)
     config = cfg
-    chooserOpen = false
     errorRetry = null
     adding = false
     mySessionsState = 'idle'
@@ -820,7 +818,6 @@
   }
 
   export function close() {
-    chooserOpen = false
     pager?.dispose()
     pager = null
     clearTimeout(settleTimer)
@@ -866,7 +863,7 @@
   // still sees it open.
   function onKeydown(event) {
     if (!visible) return
-    if (chooserOpen || sessionPickerOpen || removeMyTunesOpen || removeSessionOpen) return
+    if (sessionPickerOpen || removeMyTunesOpen || removeSessionOpen) return
     if (event.key === 'Escape') {
       close()
       return
@@ -1684,14 +1681,12 @@
       })
   }
 
-  // ---- the setting chooser ------------------------------------------------------------
+  // ---- which version --------------------------------------------------------------------
   // Which written version a layer plays is picked by looking at them, not by typing a
-  // setting number: the chooser pages every setting of the tune with its full notation.
-  // It opens for one layer — mine, the session's, or one night's — and the pick saves
-  // at once, on its own, like the learn status (not behind a form's Save).
-  let chooserOpen = $state(false)
-  let chooserLayer = $state(null) // {kind: 'personal' | 'session' | 'instance', instanceId?}
-
+  // setting number: the staff pages every setting of the tune, and the button under it
+  // makes the one in view the layer's. The pick saves at once, on its own, like the
+  // learn status (not behind a form's Save). A layer is mine or the session's; what a
+  // night played is not edited here (the live logger marks a night whose pick differs).
   // The button under the paged staff offers the layer this view would set: at a
   // session (or one of its nights), the session's default — its admins — else mine,
   // when the tune is on my list. Neither: paging is for looking.
@@ -1741,39 +1736,16 @@
     )
   }
 
-  const isScopedInstance = (instanceId) => String(instanceId) === String(sessionScope?.instance ?? '')
-
-  // The setting a layer uses now — where the chooser opens, and the one it marks in use.
-  // A night with no setting of its own played the session's.
+  // The setting a layer uses now — the one the pager marks in use.
   function layerSettingId(layer) {
     if (!tune || !layer) return null
     if (layer.kind === 'personal') return (pts && pts.setting_id) || (inSession ? null : tune.setting_id) || null
-    if (layer.kind === 'session') return tune.setting_id || null
-    const own = isScopedInstance(layer.instanceId)
-      ? tune.setting_override
-      : editingInstance && String(scopeId) === String(layer.instanceId)
-        ? sessOriginals.setting_id
-        : null
-    return own || tune.setting_id || null
-  }
-  const chooserHeading = $derived(
-    !chooserLayer
-      ? ''
-      : chooserLayer.kind === 'personal'
-        ? t('Which version do you play?')
-        : chooserLayer.kind === 'session'
-          ? t('Which version does {name} play?', { name: sessionLabel })
-          : t('Which version was played that night?')
-  )
-
-  export function openChooser(layer) {
-    if (!tune || !layer || isOffline) return
-    chooserLayer = layer
-    chooserOpen = true
+    return tune.setting_id || null
   }
 
   // Where a layer's setting is written. Mine goes through the tunebook op (as the iOS
-  // app's does); the session's and a night's through their own rows.
+  // app's does); the session's through its own row. The server clears a key on that
+  // layer that only echoed the old setting's, so the key follows the setting.
   function settingWrite(layer, tuneId, settingId) {
     if (layer.kind === 'personal') {
       return {
@@ -1782,25 +1754,14 @@
         body: { op_id: crypto.randomUUID(), type: 'set_setting', tune_id: tuneId, setting_id: settingId },
       }
     }
-    const path = sessionScope.path
-    if (layer.kind === 'session') {
-      return { method: 'PUT', endpoint: `/api/sessions/${path}/tunes/${tuneId}`, body: { setting_id: settingId } }
-    }
     return {
       method: 'PUT',
-      endpoint: `/api/sessions/${path}/${layer.instanceId}/tunes/${tuneId}`,
-      body: { setting_override: settingId },
+      endpoint: `/api/sessions/${sessionScope.path}/tunes/${tuneId}`,
+      body: { setting_id: settingId },
     }
   }
 
-  // The chooser's pick: write it to the layer, then mirror it here. Resolves true when
-  // saved, which closes the chooser.
-  function chooseSetting(setting, fullImage) {
-    return writeSetting(chooserLayer, setting, fullImage)
-  }
-
-  // Write a setting to a layer (the chooser's pick, or the button under the staff),
-  // then mirror it here. A setting only thesession.org has is imported by the server
+  // Write a setting to a layer (the button under the staff), then mirror it here. A setting only thesession.org has is imported by the server
   // on the way (nothing may point at a setting we don't hold); its opening bars then
   // render on first view. Resolves true when saved.
   async function writeSetting(layer, setting, fullImage) {
@@ -1830,30 +1791,49 @@
   }
 
   // Mirror a saved pick onto the payload and the forms, and redraw the staff when it
-  // draws from the layer that changed (instance -> session -> mine, most specific wins).
+  // draws from the layer that changed (a night's own -> session -> mine, most specific
+  // wins). A key on the layer that only echoed the old setting's was cleared with it.
   function applyChosenSetting(layer, settingId, notation) {
     let drawn = false
     if (layer.kind === 'personal') {
+      const echoed = pts && pts.key && pts.key === settingKeyOf(pcOriginals.setting_id)
       if (pts) pts.setting_id = settingId
       pcOriginals.setting_id = settingId
+      if (echoed) {
+        pts.key = null
+        pcOriginals.key = ''
+        pcFields.key = ''
+      }
       if (!inSession) {
         tune.setting_id = settingId
         drawn = true
       }
-    } else if (layer.kind === 'session') {
+    } else {
+      const echoed = tune.key && tune.key === settingKeyOf(tune.setting_id)
       tune.setting_id = settingId
       dcOriginals.setting_id = settingId
       if (!editingInstance) sessOriginals.setting_id = settingId
+      if (echoed) {
+        tune.key = null
+        dcOriginals.key = ''
+        dcFields.key = ''
+        if (!editingInstance) {
+          sessOriginals.key = ''
+          sessFields.key = ''
+        }
+      }
       if (tune.session_scope) tune.session_scope.in_repertoire = true
       drawn = !tune.setting_override
-    } else {
-      if (isScopedInstance(layer.instanceId)) {
-        tune.setting_override = settingId
-        drawn = true
-      }
-      if (editingInstance && String(scopeId) === String(layer.instanceId)) sessOriginals.setting_id = settingId
     }
     if (drawn) showNotation(notation)
+  }
+  // The key a setting is written in, from the pager's list (every setting has one). A
+  // layer with no setting of its own plays the tune's first, the lowest id (the list is
+  // in id order), as the server reads it.
+  function settingKeyOf(settingId) {
+    const list = pager?.settings || []
+    const s = settingId ? list.find((x) => x.setting_id === settingId) : list[0]
+    return s?.key || (settingId && settingId === tune?.setting_id ? tune?.setting_key : null) || null
   }
 
   // ---- lazy notation render ------------------------------------------------------
@@ -2684,18 +2664,6 @@
                     />
                   </div>
                   <div class="configure-field-group-inline">
-                    <div class="configure-label">{t('I play setting:')}</div>
-                    <div class="configure-value setting-value" id="setting-value">
-                      {pcOriginals.setting_id ? `#${pcOriginals.setting_id}` : '—'}
-                      <button
-                        type="button"
-                        class="change-setting-btn"
-                        disabled={isOffline}
-                        onclick={() => openChooser({ kind: 'personal' })}>{t('Change')}</button
-                      >
-                    </div>
-                  </div>
-                  <div class="configure-field-group-inline">
                     <label class="configure-label" for="my-key-select">{t('I play this in:')}</label>
                     <select
                       id="my-key-select"
@@ -2809,18 +2777,6 @@
                         />
                       </div>
                       <div class="configure-field-group-inline">
-                        <div class="configure-label">{t('Our setting:')}</div>
-                        <div class="configure-value setting-value" id="dc-setting-value">
-                          {dcOriginals.setting_id ? `#${dcOriginals.setting_id}` : '—'}
-                          <button
-                            type="button"
-                            class="change-setting-btn"
-                            disabled={isOffline}
-                            onclick={() => openChooser({ kind: 'session' })}>{t('Change')}</button
-                          >
-                        </div>
-                      </div>
-                      <div class="configure-field-group-inline">
                         <label class="configure-label" for="dc-key-select">{t('We play this in:')}</label>
                         <select id="dc-key-select" class="configure-select" bind:value={dcFields.key}>
                           {#each MUSICAL_KEYS as key}
@@ -2847,10 +2803,6 @@
                       <div class="configure-field-group-inline">
                         <div class="configure-label">{t('We call this:')}</div>
                         <div class="configure-value">{dcOriginals.alias || '—'}</div>
-                      </div>
-                      <div class="configure-field-group-inline">
-                        <div class="configure-label">{t('Our setting:')}</div>
-                        <div class="configure-value">{dcOriginals.setting_id || '—'}</div>
                       </div>
                       <div class="configure-field-group-inline">
                         <div class="configure-label">{t('We play this in:')}</div>
@@ -2999,22 +2951,6 @@
                     />
                   </div>
                   <div class="configure-field-group-inline">
-                    <div class="configure-label">
-                      {editingInstance ? t('We played setting:') : t('Our setting:')}
-                    </div>
-                    <div class="configure-value setting-value" id="sess-setting-value">
-                      {sessOriginals.setting_id ? `#${sessOriginals.setting_id}` : '—'}
-                      <button
-                        type="button"
-                        class="change-setting-btn"
-                        disabled={isOffline}
-                        onclick={() =>
-                          openChooser(editingInstance ? { kind: 'instance', instanceId: scopeId } : { kind: 'session' })}
-                        >{t('Change')}</button
-                      >
-                    </div>
-                  </div>
-                  <div class="configure-field-group-inline">
                     <label class="configure-label" for="sess-key-select">
                       {editingInstance ? t('We played it in:') : t('We play this in:')}
                     </label>
@@ -3052,10 +2988,6 @@
                   <div class="configure-field-group-inline">
                     <div class="configure-label">{editingInstance ? t('We called it:') : t('We call this:')}</div>
                     <div class="configure-value">{sessOriginals.alias || '—'}</div>
-                  </div>
-                  <div class="configure-field-group-inline">
-                    <div class="configure-label">{editingInstance ? t('We played setting:') : t('Our setting:')}</div>
-                    <div class="configure-value">{sessOriginals.setting_id || '—'}</div>
                   </div>
                   <div class="configure-field-group-inline">
                     <div class="configure-label">{editingInstance ? t('We played it in:') : t('We play this in:')}</div>
@@ -3235,18 +3167,6 @@
 <!-- "At a different session ..." — re-scopes the whole drawer to another session I'm a
      member of, so I can see what THEY do with this tune. Visitor sessions are excluded:
      a session you dropped into once isn't one whose repertoire you have a view on. -->
-<!-- The setting chooser: every setting of the tune, full notation, for one layer. -->
-{#if tune}
-  <SettingChooser
-    bind:open={chooserOpen}
-    tuneId={tune.tune_id}
-    tuneName={displayName}
-    tuneType={tune.tune_type || ''}
-    currentSettingId={layerSettingId(chooserLayer)}
-    heading={chooserHeading}
-    onChoose={chooseSetting} />
-{/if}
-
 <SessionPicker
   bind:open={sessionPickerOpen}
   sessions={mySessions}

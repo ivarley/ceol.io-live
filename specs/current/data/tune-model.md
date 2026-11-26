@@ -70,7 +70,12 @@ Logged tune plays (the actual session log).
 - continues_set (boolean - true if continues previous tune in a set)
 - started_by_person_id (FK to person, nullable) - Who started the set
 - played_timestamp, inserted_timestamp
-- key_override (VARCHAR(20)), setting_override
+- key_override (VARCHAR(20)), setting_override — set only where the night differs from the
+  session: a key the night was played in that is not the setting's, a setting other than
+  `session_tune.setting_id` (the live logger marks the row when the logger's explicit pick
+  differs from a setting the session already prefers). Nothing else writes them: the per-night
+  setting editor is gone (spec 037, Nov 2026), and `068_clear_redundant_setting_overrides.sql`
+  cleared the copies of the session's setting the old linking flows left on every row.
 
 **Constraint**: tune_id IS NOT NULL OR name IS NOT NULL
 

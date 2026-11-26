@@ -1121,10 +1121,6 @@
     "ga": "Úsáid an chéad leagan",
     "review": true
   },
-  "If the session plays a specific setting of the tune, page through them and pick it.": {
-    "ga": "Má sheinntear leagan ar leith den fhonn ag an seisiún, téigh tríd na leaganacha agus roghnaigh é.",
-    "review": true
-  },
   "Matched a tag, not the name": {
     "ga": "Meaitseáil le clib, ní leis an ainm",
     "review": true
@@ -1151,6 +1147,10 @@
   },
   "Allowed": {
     "ga": "Ceadaithe",
+    "review": true
+  },
+  "If the session plays a specific setting of the tune, page the preview’s notation to it before picking the tune.": {
+    "ga": "Má sheinntear leagan ar leith den fhonn ag an seisiún, téigh trí nodaireacht an réamhamhairc chuige sula roghnaíonn tú an fonn.",
     "review": true
   }
 }

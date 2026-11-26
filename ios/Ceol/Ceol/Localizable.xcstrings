@@ -1817,6 +1817,7 @@
       }
     },
     "(the session's)": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3300,6 +3301,7 @@
       }
     },
     "Change Setting": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -3769,6 +3771,7 @@
       }
     },
     "Couldn't load the settings of this tune.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -5141,6 +5144,7 @@
       }
     },
     "I play setting:": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -6003,6 +6007,7 @@
       }
     },
     "Looking for settings on thesession.org…": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -6817,6 +6822,7 @@
       }
     },
     "No settings found for this tune.": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7307,6 +7313,7 @@
       }
     },
     "Notation for setting %lld": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -7689,6 +7696,7 @@
       }
     },
     "Our setting:": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -10485,6 +10493,7 @@
       }
     },
     "This is the one in use": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11088,6 +11097,7 @@
       }
     },
     "Use this setting": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11333,6 +11343,7 @@
       }
     },
     "We played setting:": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11504,6 +11515,7 @@
       }
     },
     "Which version do you play?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11514,6 +11526,7 @@
       }
     },
     "Which version does %@ play?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -11524,6 +11537,7 @@
       }
     },
     "Which version was played that night?": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {
@@ -12135,6 +12149,7 @@
       }
     },
     "in use": {
+      "extractionState": "stale",
       "localizations": {
         "ga": {
           "stringUnit": {

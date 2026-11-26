@@ -3,16 +3,15 @@
   // Add-to-session-tunes pane: the same shell + deep search as the My Tunes add pane
   // (mobile slide-in / desktop split pane), but scoped to a session's repertoire —
   // tunes already in THIS session dim and sort last, and the configure phase asks
-  // the session questions instead: alias ("we call this"), and under Advanced a
-  // specific setting (picked by looking at it, in the setting chooser: setting ids
-  // are numbered across all of thesession.org, so a typed "1" meant Cooley's) and
+  // the session questions instead: alias ("we call this"), and under Advanced the
+  // setting chosen by paging the preview's notation (picked by looking at it: setting
+  // ids are numbered across all of thesession.org, so a typed "1" meant Cooley's) and
   // the key the session plays it in. Bundled into the
   // sessionpage bundle as a child of its App, driven via bind:this + open().
   import { Chevron, Chip, ServerError, t, tn, tuneTypeName } from '../lib/index.js'
   import { failText } from './labels.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
-  import SettingChooser from '../tunesheet/SettingChooser.svelte'
   import { createPaneState } from './pane.svelte.js'
 
   // Same list the legacy add page offered.
@@ -33,8 +32,7 @@
   // Configure-phase state.
   let alias = $state('')
   let advancedOpen = $state(false)
-  let chosenSetting = $state(null) // {setting_id, key} from the chooser; null = the tune's first
-  let chooserOpen = $state(false)
+  let chosenSetting = $state(null) // {setting_id, key} from the preview's pager; null = the tune's first
   let keyChoice = $state('')
   let submitting = $state(false)
   let errorMsg = $state('')
@@ -73,7 +71,6 @@
     alias = ''
     advancedOpen = false
     chosenSetting = null
-    chooserOpen = false
     keyChoice = ''
     submitting = false
     errorMsg = ''
@@ -114,12 +111,6 @@
   function backToSearch() {
     picked = null
     errorMsg = ''
-  }
-
-  // ---- setting (Advanced) ----
-  async function chooseSetting(setting) {
-    chosenSetting = { setting_id: setting.setting_id, key: setting.key || null }
-    return true
   }
 
   async function submit() {
@@ -233,12 +224,11 @@
                     {t('The first setting')}
                   {/if}
                 </span>
-                <button type="button" class="mt-change" onclick={() => (chooserOpen = true)}>{t('Change Setting')}</button>
                 {#if chosenSetting}
                   <button type="button" class="mt-change" onclick={() => (chosenSetting = null)}>{t('Use the first setting')}</button>
                 {/if}
               </div>
-              <p class="mt-help">{t('If the session plays a specific setting of the tune, page through them and pick it.')}</p>
+              <p class="mt-help">{t('If the session plays a specific setting of the tune, page the preview’s notation to it before picking the tune.')}</p>
               <label class="mt-label" for="st-add-key">{t('Key (optional)')}</label>
               <select id="st-add-key" class="mt-setting" bind:value={keyChoice}>
                 <option value="">{t('(not specified)')}</option>
@@ -260,13 +250,3 @@
   </div>
 {/if}
 
-{#if picked}
-  <SettingChooser
-    bind:open={chooserOpen}
-    tuneId={picked.tune_id ?? picked.thesession_id}
-    tuneName={picked.name}
-    tuneType={picked.tune_type || ''}
-    currentSettingId={chosenSetting?.setting_id ?? null}
-    heading={sessionName ? t('Which version does {name} play?', { name: sessionName }) : t('Change Setting')}
-    onChoose={chooseSetting} />
-{/if}

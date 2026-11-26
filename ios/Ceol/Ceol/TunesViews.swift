@@ -406,7 +406,6 @@ struct TuneSheetBody: View {
     @State private var showNotationNotice = false
     @State private var notationNoticeDone = false
     @State private var notationFailed = false
-    @State private var chooser: SettingLayer?
     /// The tabs under the notation, as the web's (its Played With is the second half of
     /// History here); My List is the landing tab signed in, History otherwise, picked
     /// once the detail is here.
@@ -471,15 +470,6 @@ struct TuneSheetBody: View {
                 if let image = showFull ? (shownFull ?? shownIncipit) : shownIncipit { NotationFullScreen(image: image, name: tune.name) }
             }
             .onDisappear { pager?.dispose() }
-            .sheet(item: $chooser) { layer in
-                if let t = detail.value?.sessionTune {
-                    SettingChooser(
-                        tuneID: tune.id, tuneName: t.tuneName, tuneType: t.tuneType,
-                        heading: layer.heading(sessionName: sessionName(t)),
-                        current: settingInUse(layer, t)
-                    ) { await saveSetting($0, for: layer) }
-                }
-            }
     }
 
     /// Saves one op; true when the server took it.
@@ -679,11 +669,7 @@ struct TuneSheetBody: View {
                         TuneHistoryPane(
                         tune: tune, session: historySession(t), nights: nights(t),
                         counts: TuneHistoryCounts(here: t.timesPlayed, mine: t.memberPlayCount, all: t.globalPlayCount),
-                        scope: $historyScope,
-                        ownNight: tune.instanceID.flatMap { night in
-                            guard canEditInstance(t), let path = tune.sessionPath else { return nil }
-                            return (id: night, setting: t.settingOverride, change: { chooser = .night(path: path, instanceID: night) })
-                        }
+                        scope: $historyScope
                         ) { play in
                             // The night's log, in the Sessions tab, with this play
                             // highlighted: the sheet goes first, so the log is what you
@@ -748,8 +734,6 @@ struct TuneSheetBody: View {
             if configOpen {
                 fieldLabel(tr("I call this:"))
                 textField($myAlias, prompt: t.tuneName, id: "sheet.myAlias")
-                fieldLabel(tr("I play setting:"))
-                settingRow(mine(t)?["setting_id"]?.intValue ?? t.settingId, layer: .mine, id: "sheet.mySetting")
                 fieldLabel(tr("I play this in:"))
                 keyMenu($myKey, fallback: t.settingKey, id: "sheet.myKey")
                 formButtons(dirty: dirty, cancel: { myAlias = saved.alias; myKey = saved.key }) {
@@ -827,8 +811,6 @@ struct TuneSheetBody: View {
                 if editable {
                     fieldLabel(tr("We call this:"))
                     textField($sessAlias, prompt: t.tuneName, id: "sheet.sessAlias")
-                    fieldLabel(tr("Our setting:"))
-                    settingRow(t.settingId, layer: .session(path: session.path), id: "sheet.sessSetting")
                     fieldLabel(tr("We play this in:"))
                     keyMenu($sessKey, fallback: t.settingKey, id: "sheet.sessKey")
                     formButtons(dirty: sessAlias != saved.alias || sessKey != saved.key, cancel: { sessAlias = saved.alias; sessKey = saved.key }) {
@@ -841,7 +823,6 @@ struct TuneSheetBody: View {
                     }
                 } else {
                     if let alias = t.alias { factRow(tr("We call this:"), alias) }
-                    if let setting = t.settingId { factRow(tr("Our setting:"), "#\(setting)") }
                     if let key = t.key { factRow(tr("We play this in:"), key) }
                 }
             }
@@ -870,18 +851,6 @@ struct TuneSheetBody: View {
             .padding(.horizontal, 12).frame(height: 44)
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(CeolTokens.borderColor, lineWidth: 1))
             .accessibilityIdentifier(id)
-    }
-
-    /// The setting a layer uses, and Change, which opens the chooser on that layer.
-    private func settingRow(_ setting: Int?, layer: SettingLayer, id: String) -> some View {
-        HStack(spacing: 10) {
-            Text(setting.map { "#\($0)" } ?? tr("(not specified)")).font(.ceol(size: 16))
-                .foregroundStyle(setting == nil ? CeolTokens.textMuted : CeolTokens.textColor)
-            Spacer(minLength: 8)
-            Button("Change Setting") { chooser = layer }
-                .font(.ceol(size: 15, weight: .medium)).foregroundStyle(CeolTokens.primary)
-                .accessibilityIdentifier(id)
-        }
     }
 
     /// The web's key select: the empty row names what it falls back to.
@@ -1055,17 +1024,17 @@ struct TuneSheetBody: View {
         JSONValue(encoding: t.sessionScope)?["session_name"]?.stringValue ?? tr("this session")
     }
 
-    /// The setting a layer uses now. A night with no setting of its own played the session's.
+    /// The setting a layer uses now.
     private func settingInUse(_ layer: SettingLayer, _ t: Components.Schemas.TuneDetail.SessionTunePayload) -> Int? {
         switch layer {
         case .mine: return JSONValue(encoding: t.personTuneStatus)?["setting_id"]?.intValue ?? t.settingId
         case .session: return t.settingId
-        case .night: return t.settingOverride ?? t.settingId
         }
     }
 
     /// Writes the pick to its layer (the server imports a setting only thesession.org
-    /// has), then redraws the sheet. nil when saved, else what to say.
+    /// has, and clears a key on the layer that only echoed the old setting's), then
+    /// redraws the sheet. nil when saved, else what to say.
     private func saveSetting(_ settingID: Int, for layer: SettingLayer) async -> String? {
         let refused: String?
         do {
@@ -1080,14 +1049,6 @@ struct TuneSheetBody: View {
             case .session(let path):
                 switch try await model.auth.client.updateSessionTune(
                     path: .init(sessionPath: path, tuneId: tune.id), body: .json(.init(settingId: settingID)))
-                {
-                case .ok: refused = nil
-                case .default(_, let e): refused = (try? e.body.json)?.message ?? tr("That wasn't saved. Try again.")
-                }
-            case .night(let path, let night):
-                switch try await model.auth.client.updateSessionInstanceTune(
-                    path: .init(sessionPath: path, dateOrId: String(night), tuneId: tune.id),
-                    body: .json(.init(settingOverride: settingID)))
                 {
                 case .ok: refused = nil
                 case .default(_, let e): refused = (try? e.body.json)?.message ?? tr("That wasn't saved. Try again.")
@@ -1991,21 +1952,10 @@ enum TunesWords {
     }
 }
 
-/// Whose setting the chooser changes: yours, a session's, or one night's.
-enum SettingLayer: Identifiable, Hashable {
+/// Whose setting the button under the paged staff sets: yours, or a session's.
+enum SettingLayer: Hashable {
     case mine
     case session(path: String)
-    case night(path: String, instanceID: Int)
-
-    var id: Self { self }
-
-    func heading(sessionName: String) -> String {
-        switch self {
-        case .mine: tr("Which version do you play?")
-        case .session: tr("Which version does \(sessionName) play?")
-        case .night: tr("Which version was played that night?")
-        }
-    }
 }
 
 /// Your tags for a tune (spec 042), as the web's tag field: a chip with an ✕ for each,
